@@ -15,7 +15,8 @@ public partial class LoginWindow : Window
         // reads the saved preference itself. Same store, same resolution —
         // logging out and back in never flashes the wrong theme.
         var settings = SettingsStore.Load();
-        ColorTokens.ApplyTheme(ThemeDefinition.Resolve(settings.ThemeMode, SystemTheme.PrefersDark));
+        ColorTokens.ApplyTheme(
+            ThemeDefinition.Resolve(settings.ThemeMode, SystemTheme.PrefersDark, settings.ReducedContrast));
         ThemeResources.Apply(this, settings);
     }
 

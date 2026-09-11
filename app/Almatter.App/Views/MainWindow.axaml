@@ -1154,8 +1154,15 @@
                 HorizontalAlignment="Stretch" VerticalAlignment="Stretch" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"
                 Command="{Binding CloseSettingsCommand}" Background="Transparent" Content="" />
 
-        <Border Grid.Column="0" IsVisible="{Binding IsSettingsOpen}"
-                HorizontalAlignment="Stretch" VerticalAlignment="Bottom" Margin="12,0,12,66"
+        <!-- Spans into the conversation column and carries its own width
+             rather than stretching to the sidebar. Inside the sidebar the
+             content had ~228px to work with (280 wide, less margins and
+             padding) and the three-way theme picker needs ~234 — so the last
+             option was clipped. Worse, the sidebar is resizable down to
+             200px, which no amount of tightening would have survived. It
+             stays anchored bottom-left, next to the gear that opens it. -->
+        <Border Grid.Column="0" Grid.ColumnSpan="2" IsVisible="{Binding IsSettingsOpen}"
+                HorizontalAlignment="Left" VerticalAlignment="Bottom" Width="360" Margin="12,0,0,66"
                 Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource DividerStrongBrush}" BorderThickness="1"
                 CornerRadius="{DynamicResource SurfaceRadiusValue}" Padding="14" BoxShadow="{DynamicResource PopoverShadow}">
             <StackPanel Spacing="16">
@@ -1196,6 +1203,25 @@
                     </ItemsControl>
                     <TextBlock Text="« Système » suit le réglage clair/sombre de Windows."
                                FontSize="11.5" Foreground="{DynamicResource TextTertiaryBrush}" TextWrapping="Wrap" />
+
+                    <Button Classes="row-button" Command="{Binding ToggleReducedContrastCommand}" Margin="0,4,0,0">
+                        <Border Background="{DynamicResource BgPanelBrush}" CornerRadius="{DynamicResource RowRadiusValue}" Padding="10,8">
+                            <Grid ColumnDefinitions="*,Auto">
+                                <StackPanel Grid.Column="0" Spacing="1">
+                                    <TextBlock Text="Réduire le contraste" FontSize="12.5" />
+                                    <TextBlock Text="Texte et fonds plus doux, pour les longues sessions."
+                                               FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}" TextWrapping="Wrap" />
+                                </StackPanel>
+                                <Border Grid.Column="1" Width="18" Height="18" CornerRadius="4" BorderThickness="1.4"
+                                        VerticalAlignment="Center" Margin="10,0,0,0"
+                                        BorderBrush="{DynamicResource DividerStrongBrush}" Background="{Binding Settings.ReducedContrastCheckBrush}">
+                                    <Path IsVisible="{Binding Settings.ReducedContrast}" Data="M4 9l3 3 6-7"
+                                          Stroke="{DynamicResource OnAccentBrush}" StrokeThickness="1.6" StrokeLineCap="Round" StrokeJoin="Round"
+                                          Width="10" Height="10" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                </Border>
+                            </Grid>
+                        </Border>
+                    </Button>
                 </StackPanel>
 
                 <StackPanel Spacing="6">

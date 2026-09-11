@@ -1,3 +1,5 @@
+using System;
+
 namespace Almatter.App.Models;
 
 /// <summary>
@@ -125,10 +127,82 @@ public sealed class ThemeDefinition
     };
 
     /// <summary>Resolves the user's preference to an actual palette. System defers to whatever Windows currently reports.</summary>
-    public static ThemeDefinition Resolve(AppThemeMode mode, bool systemPrefersDark) => mode switch
+    public static ThemeDefinition Resolve(AppThemeMode mode, bool systemPrefersDark, bool reducedContrast = false)
     {
-        AppThemeMode.Light => Light,
-        AppThemeMode.Dark => Dark,
-        _ => systemPrefersDark ? Dark : Light,
+        var theme = mode switch
+        {
+            AppThemeMode.Light => Light,
+            AppThemeMode.Dark => Dark,
+            _ => systemPrefersDark ? Dark : Light,
+        };
+        return reducedContrast ? theme.Softened() : theme;
+    }
+
+    /// <summary>How far the surfaces move toward mid-grey: the light palette dims, the dark one lifts off pure black.</summary>
+    private const double SurfaceSoftening = 0.05;
+
+    /// <summary>How far the main text moves toward its own background.</summary>
+    private const double TextSoftening = 0.17;
+
+    /// <summary>
+    /// A gentler version of this palette for long reading sessions.
+    ///
+    /// Only the MAIN text is softened, plus the surfaces under it. Secondary
+    /// and tertiary text are deliberately left where they are: they are
+    /// already quiet, and dimming everything by the same amount flattens the
+    /// hierarchy and pushes secondary text below the 4,5:1 readability
+    /// threshold. Softening the peak alone brings the levels closer together,
+    /// which is what "less harsh" actually means.
+    ///
+    /// Measured on the two palettes: main text drops from 17,7:1 to 10,1:1
+    /// (light) and 14,9:1 to 10,0:1 (dark) — roughly VS Code's own defaults,
+    /// which is the comparison this was asked against — while secondary text
+    /// stays at 5,7:1 and 6,8:1.
+    ///
+    /// The accent is untouched: it has to stay recognisable as the accent.
+    /// AccentSoft and AccentInk follow automatically, since ColorTokens
+    /// derives them from whatever panel and text colors it is handed.
+    /// </summary>
+    public ThemeDefinition Softened() => new()
+    {
+        Name = Name,
+        IsDark = IsDark,
+        BgApp = TowardMidGrey(BgApp),
+        BgPanel = TowardMidGrey(BgPanel),
+        BgRail = TowardMidGrey(BgRail),
+        BgHover = TowardMidGrey(BgHover),
+        Divider = TowardMidGrey(Divider),
+        DividerStrong = TowardMidGrey(DividerStrong),
+        TextPrimary = Mix(TextPrimary, BgApp, TextSoftening),
+        TextSecondary = TextSecondary,
+        TextTertiary = TextTertiary,
+        CardBg = TowardMidGrey(CardBg),
+        AccentHex = AccentHex,
+        OnAccentHex = OnAccentHex,
+        DangerHex = DangerHex,
+        DangerSoftHex = DangerSoftHex,
+        DangerBorderHex = DangerBorderHex,
+        ScrimHex = ScrimHex,
+        PopoverShadow = PopoverShadow,
+        CardShadow = CardShadow,
+        PresenceOnlineHex = PresenceOnlineHex,
+        PresenceAwayHex = PresenceAwayHex,
+        PresenceDndHex = PresenceDndHex,
+        PresenceOfflineHex = PresenceOfflineHex,
+        RowRadius = RowRadius,
+        SurfaceRadius = SurfaceRadius,
     };
+
+    private static string TowardMidGrey(string hex) => Mix(hex, "#808080", SurfaceSoftening);
+
+    /// <summary>Blends two "#RRGGBB" strings. Alpha-prefixed values (the scrim) are never passed through here.</summary>
+    private static string Mix(string from, string to, double amount)
+    {
+        static int Channel(string hex, int index) => Convert.ToInt32(hex.Substring(1 + index * 2, 2), 16);
+
+        var r = (int)Math.Round(Channel(from, 0) + (Channel(to, 0) - Channel(from, 0)) * amount);
+        var g = (int)Math.Round(Channel(from, 1) + (Channel(to, 1) - Channel(from, 1)) * amount);
+        var b = (int)Math.Round(Channel(from, 2) + (Channel(to, 2) - Channel(from, 2)) * amount);
+        return $"#{r:X2}{g:X2}{b:X2}";
+    }
 }

@@ -34,6 +34,18 @@ public sealed partial class AppSettings : ObservableObject
     [ObservableProperty]
     public partial List<string> FavoriteOrder { get; set; } = [];
 
+    /// <summary>
+    /// Softens the palette for long reading sessions — see
+    /// ThemeDefinition.Softened. Applies to both themes: pure black on white
+    /// and pure white on black are both tiring after a few hours.
+    /// </summary>
+    [ObservableProperty]
+    public partial bool ReducedContrast { get; set; }
+
+    public IBrush ReducedContrastCheckBrush => ReducedContrast ? ColorTokens.Accent : Brushes.Transparent;
+
+    partial void OnReducedContrastChanged(bool value) => OnPropertyChanged(nameof(ReducedContrastCheckBrush));
+
     /// <summary>Whether a shared link gets an og:title/description/image preview card, or just renders as plain clickable text.</summary>
     [ObservableProperty]
     public partial bool ShowLinkPreviews { get; set; } = true;
