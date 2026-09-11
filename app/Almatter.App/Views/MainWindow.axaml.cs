@@ -59,10 +59,18 @@ public partial class MainWindow : Window
                 return;
             }
 
+            // Size and position are only meaningful in the normal state: a
+            // maximised window reports the screen, and restoring THAT as a
+            // normal window would leave no way to tell the two apart next
+            // launch. The maximised flag carries that on its own, and the
+            // stored size stays the one to un-maximise back to.
+            vm.Settings.WindowMaximised = WindowState == WindowState.Maximized;
             if (WindowState == WindowState.Normal)
             {
                 vm.Settings.WindowWidth = Width;
                 vm.Settings.WindowHeight = Height;
+                vm.Settings.WindowX = Position.X;
+                vm.Settings.WindowY = Position.Y;
             }
 
             // Saved whatever the window state: a sidebar dragged wider while
@@ -92,6 +100,7 @@ public partial class MainWindow : Window
 
             Width = vm.Settings.WindowWidth;
             Height = vm.Settings.WindowHeight;
+            RestoreWindowPlacement(vm);
 
             // Clamped rather than trusted: a settings.json edited by hand, or
             // written by a build whose bounds differed, shouldn't be able to
@@ -122,6 +131,9 @@ public partial class MainWindow : Window
 
             vm.ScrollToMessageRequested += (_, postId) =>
                 Dispatcher.UIThread.Post(() => ScrollToMessage(postId), DispatcherPriority.Background);
+
+            vm.MessagesAppended += (_, _) => FollowIfAtBottom(MessagesScroller);
+            vm.ThreadRepliesAppended += (_, _) => FollowIfAtBottom(ThreadScroller);
 
             vm.MentionReceived += (_, notification) =>
                 Dispatcher.UIThread.Post(() => ShowMentionNotification(notification));
@@ -903,10 +915,10 @@ public partial class MainWindow : Window
         vm.RunSearchCommand.Execute(null);
     }
 
-    /// <summary>The MenuItem inherits its DataContext from the link Button whose ContextFlyout it's declared in — that's the MessageTextSegment carrying the actual destination.</summary>
+    /// <summary>The MenuItem inherits its DataContext from the link Button whose ContextFlyout it is declared in — that is the LinkSegment carrying the actual destination.</summary>
     private static void OnCopyLinkClick(object? sender, RoutedEventArgs e)
     {
-        if (sender is not MenuItem { DataContext: MessageTextSegment segment })
+        if (sender is not MenuItem { DataContext: LinkSegment segment })
         {
             return;
         }
@@ -999,6 +1011,97 @@ public partial class MainWindow : Window
         {
             Services.TaskbarBadge.Update(handle, Services.TaskbarBadgeKind.None);
         }
+    }
+
+    /// <summary>
+    /// Puts the window back where it was closed — but only if that place
+    /// still exists. A position saved on a monitor that has since been
+    /// unplugged (or an external screen the laptop is no longer docked to)
+    /// would otherwise reopen the window off in coordinates with nothing to
+    /// display them, where it cannot be seen, moved or closed. Anything that
+    /// no longer overlaps an attached screen falls back to centring.
+    /// </summary>
+    private void RestoreWindowPlacement(MainViewModel vm)
+    {
+        var x = vm.Settings.WindowX;
+        var y = vm.Settings.WindowY;
+
+        if (!double.IsNaN(x) && !double.IsNaN(y) && IsOnAnAttachedScreen(x, y))
+        {
+            WindowStartupLocation = WindowStartupLocation.Manual;
+            Position = new PixelPoint((int)x, (int)y);
+        }
+        else
+        {
+            WindowStartupLocation = WindowStartupLocation.CenterScreen;
+        }
+
+        if (vm.Settings.WindowMaximised)
+        {
+            WindowState = WindowState.Maximized;
+        }
+    }
+
+    /// <summary>
+    /// True when the window's title bar would land somewhere visible. Tests
+    /// a band along the top edge rather than the whole window: a window
+    /// mostly off-screen is still perfectly usable as long as its title bar
+    /// can be grabbed, which is what a user would do to bring it back.
+    /// </summary>
+    private bool IsOnAnAttachedScreen(double x, double y)
+    {
+        var screens = Screens?.All;
+        if (screens is null || screens.Count == 0)
+        {
+            return false;
+        }
+
+        const int TitleBarBand = 40;
+        var titleBar = new PixelRect((int)x, (int)y, (int)Math.Max(1, Width), TitleBarBand);
+
+        foreach (var screen in screens)
+        {
+            if (screen.WorkingArea.Intersects(titleBar))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// How close to the bottom still counts as "reading the end of the
+    /// conversation". A few pixels of slack absorbs a partially-scrolled
+    /// last row, which would otherwise leave the view stuck one message
+    /// behind for good.
+    /// </summary>
+    private const double StickToBottomSlack = 24;
+
+    /// <summary>
+    /// Keeps the conversation pinned to the newest message when the reader
+    /// is already there — otherwise an arriving message lands just below the
+    /// visible area and has to be scrolled to by hand.
+    ///
+    /// The decision is made HERE, synchronously, and not in the posted
+    /// callback below: the messages have been added to the collection but
+    /// the layout pass has not run yet, so the scroller still reports the
+    /// extent it had before they arrived. That is exactly the "was the
+    /// reader at the bottom a moment ago?" question. Asking after layout
+    /// would compare against an extent that already grew, and the answer
+    /// would always be no.
+    /// </summary>
+    private static void FollowIfAtBottom(ScrollViewer scroller)
+    {
+        var distanceFromBottom = scroller.Extent.Height - scroller.Viewport.Height - scroller.Offset.Y;
+        if (distanceFromBottom > StickToBottomSlack)
+        {
+            // Reading further up — leave the view where the reader put it.
+            return;
+        }
+
+        // Posted so the new rows have been measured and laid out; scrolling
+        // to the end before that would aim at the old, shorter extent.
+        Dispatcher.UIThread.Post(() => scroller.ScrollToEnd(), DispatcherPriority.Background);
     }
 
     /// <summary>Reopens a fresh login screen (the remembered session is already cleared by the time this fires) and closes this window.</summary>

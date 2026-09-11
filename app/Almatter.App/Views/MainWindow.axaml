@@ -571,30 +571,32 @@
                                                                 <WrapPanel />
                                                             </ItemsPanelTemplate>
                                                         </ItemsControl.ItemsPanel>
-                                                        <ItemsControl.ItemTemplate>
-                                                            <DataTemplate DataType="models:MessageTextSegment">
-                                                                <Panel>
-                                                                    <SelectableTextBlock Text="{Binding Text}" TextWrapping="Wrap" IsVisible="{Binding IsPlainText}"
-                                                                              
-                                                                               FontSize="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.MessageFontSize}" />
-                                                                    <SelectableTextBlock Text="{Binding Text}" TextWrapping="Wrap" IsVisible="{Binding IsMention}"
-                                                                               Foreground="{DynamicResource AccentBrush}" FontWeight="SemiBold"
-                                                                              
-                                                                               FontSize="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.MessageFontSize}" />
-                                                                    <Button Classes="link-button" Content="{Binding Text}" IsVisible="{Binding IsLink}"
-                                                                           
-                                                                            FontSize="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.MessageFontSize}"
-                                                                            Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).OpenLinkCommand}"
-                                                                            CommandParameter="{Binding LinkUrl}">
-                                                                        <Button.ContextFlyout>
-                                                                            <MenuFlyout>
-                                                                                <MenuItem Header="Copier le lien" Click="OnCopyLinkClick" />
-                                                                            </MenuFlyout>
-                                                                        </Button.ContextFlyout>
-                                                                    </Button>
-                                                                </Panel>
+                                                        <!-- One control per segment, chosen by its type. The previous single
+                                                             template stacked a plain-text block, a mention block and a link
+                                                             button in a Panel and hid two of the three, so every chunk of
+                                                             every visible message built seven controls — a context menu
+                                                             among them — in order to show one. -->
+                                                        <ItemsControl.DataTemplates>
+                                                            <DataTemplate DataType="models:PlainTextSegment">
+                                                                <SelectableTextBlock Text="{Binding Text}" TextWrapping="Wrap" FontSize="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.MessageFontSize}" />
                                                             </DataTemplate>
-                                                        </ItemsControl.ItemTemplate>
+                                                            <DataTemplate DataType="models:MentionSegment">
+                                                                <SelectableTextBlock Text="{Binding Text}" TextWrapping="Wrap"
+                                                                                     Foreground="{DynamicResource AccentBrush}" FontWeight="SemiBold" FontSize="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.MessageFontSize}" />
+                                                            </DataTemplate>
+                                                            <DataTemplate DataType="models:LinkSegment">
+                                                                <Button Classes="link-button" Content="{Binding Text}"
+                                                                    FontSize="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.MessageFontSize}"
+                                                                    Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).OpenLinkCommand}"
+                                                                    CommandParameter="{Binding LinkUrl}">
+                                                                    <Button.ContextFlyout>
+                                                                        <MenuFlyout>
+                                                                            <MenuItem Header="Copier le lien" Click="OnCopyLinkClick" />
+                                                                        </MenuFlyout>
+                                                                    </Button.ContextFlyout>
+                                                                </Button>
+                                                            </DataTemplate>
+                                                        </ItemsControl.DataTemplates>
                                                     </ItemsControl>
                                                 </DataTemplate>
                                             </ItemsControl.ItemTemplate>
@@ -841,7 +843,7 @@
                     </Grid>
                 </Border>
 
-                <ScrollViewer Grid.Row="1">
+                <ScrollViewer Grid.Row="1" x:Name="ThreadScroller">
                     <StackPanel Margin="14">
 
                         <StackPanel>
@@ -898,24 +900,26 @@
                                                                 <WrapPanel />
                                                             </ItemsPanelTemplate>
                                                         </ItemsControl.ItemsPanel>
-                                                        <ItemsControl.ItemTemplate>
-                                                            <DataTemplate DataType="models:MessageTextSegment">
-                                                                <Panel>
-                                                                    <SelectableTextBlock Text="{Binding Text}" TextWrapping="Wrap" IsVisible="{Binding IsPlainText}"
-                                                                              
-                                                                               FontSize="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.MessageFontSize}" />
-                                                                    <SelectableTextBlock Text="{Binding Text}" TextWrapping="Wrap" IsVisible="{Binding IsMention}"
-                                                                               Foreground="{DynamicResource AccentBrush}" FontWeight="SemiBold"
-                                                                              
-                                                                               FontSize="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.MessageFontSize}" />
-                                                                    <Button Classes="link-button" Content="{Binding Text}" IsVisible="{Binding IsLink}"
-                                                                           
-                                                                            FontSize="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.MessageFontSize}"
-                                                                            Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).OpenLinkCommand}"
-                                                                            CommandParameter="{Binding LinkUrl}" />
-                                                                </Panel>
+                                                        <!-- One control per segment, chosen by its type. The previous single
+                                                             template stacked a plain-text block, a mention block and a link
+                                                             button in a Panel and hid two of the three, so every chunk of
+                                                             every visible message built seven controls — a context menu
+                                                             among them — in order to show one. -->
+                                                        <ItemsControl.DataTemplates>
+                                                            <DataTemplate DataType="models:PlainTextSegment">
+                                                                <SelectableTextBlock Text="{Binding Text}" TextWrapping="Wrap" FontSize="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.MessageFontSize}" />
                                                             </DataTemplate>
-                                                        </ItemsControl.ItemTemplate>
+                                                            <DataTemplate DataType="models:MentionSegment">
+                                                                <SelectableTextBlock Text="{Binding Text}" TextWrapping="Wrap"
+                                                                                     Foreground="{DynamicResource AccentBrush}" FontWeight="SemiBold" FontSize="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.MessageFontSize}" />
+                                                            </DataTemplate>
+                                                            <DataTemplate DataType="models:LinkSegment">
+                                                                <Button Classes="link-button" Content="{Binding Text}"
+                                                                    FontSize="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.MessageFontSize}"
+                                                                    Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).OpenLinkCommand}"
+                                                                    CommandParameter="{Binding LinkUrl}" />
+                                                            </DataTemplate>
+                                                        </ItemsControl.DataTemplates>
                                                     </ItemsControl>
                                                 </DataTemplate>
                                             </ItemsControl.ItemTemplate>
@@ -1012,24 +1016,26 @@
                                                                         <WrapPanel />
                                                                     </ItemsPanelTemplate>
                                                                 </ItemsControl.ItemsPanel>
-                                                                <ItemsControl.ItemTemplate>
-                                                                    <DataTemplate DataType="models:MessageTextSegment">
-                                                                        <Panel>
-                                                                            <SelectableTextBlock Text="{Binding Text}" TextWrapping="Wrap" IsVisible="{Binding IsPlainText}"
-                                                                                      
-                                                                                       FontSize="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.MessageFontSize}" />
-                                                                            <SelectableTextBlock Text="{Binding Text}" TextWrapping="Wrap" IsVisible="{Binding IsMention}"
-                                                                                       Foreground="{DynamicResource AccentBrush}" FontWeight="SemiBold"
-                                                                                      
-                                                                                       FontSize="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.MessageFontSize}" />
-                                                                            <Button Classes="link-button" Content="{Binding Text}" IsVisible="{Binding IsLink}"
-                                                                                   
-                                                                                    FontSize="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.MessageFontSize}"
-                                                                                    Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).OpenLinkCommand}"
-                                                                                    CommandParameter="{Binding LinkUrl}" />
-                                                                        </Panel>
+                                                                <!-- One control per segment, chosen by its type. The previous single
+                                                                     template stacked a plain-text block, a mention block and a link
+                                                                     button in a Panel and hid two of the three, so every chunk of
+                                                                     every visible message built seven controls — a context menu
+                                                                     among them — in order to show one. -->
+                                                                <ItemsControl.DataTemplates>
+                                                                    <DataTemplate DataType="models:PlainTextSegment">
+                                                                        <SelectableTextBlock Text="{Binding Text}" TextWrapping="Wrap" FontSize="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.MessageFontSize}" />
                                                                     </DataTemplate>
-                                                                </ItemsControl.ItemTemplate>
+                                                                    <DataTemplate DataType="models:MentionSegment">
+                                                                        <SelectableTextBlock Text="{Binding Text}" TextWrapping="Wrap"
+                                                                                             Foreground="{DynamicResource AccentBrush}" FontWeight="SemiBold" FontSize="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.MessageFontSize}" />
+                                                                    </DataTemplate>
+                                                                    <DataTemplate DataType="models:LinkSegment">
+                                                                        <Button Classes="link-button" Content="{Binding Text}"
+                                                                            FontSize="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.MessageFontSize}"
+                                                                            Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).OpenLinkCommand}"
+                                                                            CommandParameter="{Binding LinkUrl}" />
+                                                                    </DataTemplate>
+                                                                </ItemsControl.DataTemplates>
                                                             </ItemsControl>
                                                         </DataTemplate>
                                                     </ItemsControl.ItemTemplate>

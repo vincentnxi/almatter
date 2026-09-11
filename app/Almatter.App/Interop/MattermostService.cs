@@ -371,6 +371,34 @@ public sealed class MattermostService
         return data.Channels;
     }
 
+    /// <summary>
+    /// A cheap "has anything changed?" probe, so the polling loop doesn't
+    /// re-read (and re-marshal, and re-deserialize) an entire channel every
+    /// couple of seconds just to discover that nothing moved. Measured on a
+    /// 455-message channel: ~0.06 ms and a handful of bytes here, against
+    /// ~2.3 ms and 150 KB for the full read.
+    /// </summary>
+    public async Task<(long, long, long, long, long)> GetChannelRevisionAsync(string channelId)
+    {
+        var request = new JsonObject
+        {
+            ["command"] = "get_channel_revision",
+            ["channel_id"] = channelId,
+        };
+        return (await CallAsync<RevisionData>(request)).AsKey();
+    }
+
+    /// <summary>Same probe for the open thread panel.</summary>
+    public async Task<(long, long, long, long, long)> GetThreadRevisionAsync(string rootId)
+    {
+        var request = new JsonObject
+        {
+            ["command"] = "get_thread_revision",
+            ["root_id"] = rootId,
+        };
+        return (await CallAsync<RevisionData>(request)).AsKey();
+    }
+
     /// <summary>Users anywhere on the team — "start a conversation with anyone". An empty <paramref name="term"/> lists the team instead of searching.</summary>
     public async Task<List<UserDto>> SearchTeamUsersAsync(string baseUrl, string token, string teamId, string term)
     {

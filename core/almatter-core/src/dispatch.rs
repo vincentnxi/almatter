@@ -310,6 +310,14 @@ enum Request {
         channel_id: String,
         user_id: String,
     },
+    /// Cheap "has this channel changed?" probe for the UI's polling loop —
+    /// a fingerprint, not the content. See Database::channel_revision.
+    GetChannelRevision {
+        channel_id: String,
+    },
+    GetThreadRevision {
+        root_id: String,
+    },
     /// Users anywhere on the team — the "start a conversation" panel. An
     /// empty `term` lists the team instead of searching. Warms the user
     /// cache with whatever comes back, same as SearchUsers.
@@ -320,6 +328,12 @@ enum Request {
         term: String,
     },
 }
+
+/// How many posts a channel keeps locally. The cache is a "make the app
+/// feel instant and work offline" store, not an archive: the server remains
+/// the history. Left unbounded, every cached read, poll tick and channel
+/// switch grew a little more expensive forever.
+const CHANNEL_HISTORY_LIMIT: i64 = 1_000;
 
 pub async fn dispatch(request_json: &str, db: &'static Mutex<Database>) -> String {
     let response = handle(request_json, db).await;
@@ -430,6 +444,11 @@ async fn handle(request_json: &str, db: &'static Mutex<Database>) -> Value {
                     for post in &posts {
                         cache.upsert_post(post)?;
                     }
+                    // Opportunistic, and here rather than on every single
+                    // insert: opening a channel is already the moment the
+                    // user waits for its contents, and it is the only point
+                    // where an unbounded backlog actually matters.
+                    cache.prune_channel_posts(&channel_id, CHANNEL_HISTORY_LIMIT)?;
                     Ok(())
                 });
                 json!({ "posts": posts })
@@ -836,6 +855,34 @@ async fn handle(request_json: &str, db: &'static Mutex<Database>) -> Value {
             .join_channel(&channel_id, &user_id)
             .await
             .map(|()| json!({ "joined": true }))
+            .map_err(|e| e.to_string()),
+        Request::GetChannelRevision { channel_id } => db
+            .lock()
+            .expect("cache db mutex poisoned")
+            .channel_revision(&channel_id)
+            .map(|r| {
+                json!({
+                    "count": r.posts,
+                    "last_create_at": r.last_create_at,
+                    "last_edit_at": r.last_edit_at,
+                    "reactions": r.reactions,
+                    "last_reaction_seq": r.last_reaction_seq
+                })
+            })
+            .map_err(|e| e.to_string()),
+        Request::GetThreadRevision { root_id } => db
+            .lock()
+            .expect("cache db mutex poisoned")
+            .thread_revision(&root_id)
+            .map(|r| {
+                json!({
+                    "count": r.posts,
+                    "last_create_at": r.last_create_at,
+                    "last_edit_at": r.last_edit_at,
+                    "reactions": r.reactions,
+                    "last_reaction_seq": r.last_reaction_seq
+                })
+            })
             .map_err(|e| e.to_string()),
         Request::SearchTeamUsers { base_url, token, team_id, term } => MattermostClient::new(base_url)
             .with_token(token)

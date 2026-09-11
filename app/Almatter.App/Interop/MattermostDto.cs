@@ -154,6 +154,25 @@ public sealed class PublicChannelDto
     [JsonPropertyName("total_msg_count")] public long TotalMsgCount { get; set; }
 }
 
+/// <summary>
+/// A cheap fingerprint of a channel's (or thread's) cached contents — what
+/// the polling loop compares instead of re-reading every message. See
+/// MattermostService.GetChannelRevisionAsync.
+/// </summary>
+internal sealed class RevisionData
+{
+    [JsonPropertyName("count")] public long Count { get; set; }
+    [JsonPropertyName("last_create_at")] public long LastCreateAt { get; set; }
+    [JsonPropertyName("last_edit_at")] public long LastEditAt { get; set; }
+
+    /// <summary>Reaction count and the highest local write stamp. Posts don't change when someone reacts, so without these a live reaction would be cached and never shown.</summary>
+    [JsonPropertyName("reactions")] public long Reactions { get; set; }
+    [JsonPropertyName("last_reaction_seq")] public long LastReactionSeq { get; set; }
+
+    public (long, long, long, long, long) AsKey() =>
+        (Count, LastCreateAt, LastEditAt, Reactions, LastReactionSeq);
+}
+
 internal sealed class PublicChannelsData
 {
     [JsonPropertyName("channels")] public List<PublicChannelDto> Channels { get; set; } = [];

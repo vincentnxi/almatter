@@ -1,5 +1,6 @@
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Mutex;
+use std::time::Duration;
 
 use futures_util::{SinkExt, StreamExt};
 use serde::Deserialize;
@@ -40,6 +41,10 @@ struct EventEnvelope {
 #[derive(Deserialize)]
 struct EventData {
     post: Option<String>,
+    /// Set on reaction_added / reaction_removed: the reaction itself,
+    /// JSON-encoded. It carries the post id, so applying it needs no extra
+    /// round trip to fetch the message.
+    reaction: Option<String>,
     /// Present only when this post mentions someone — a JSON-encoded array
     /// of the mentioned users' ids.
     mentions: Option<String>,
@@ -53,7 +58,41 @@ struct Broadcast {
     channel_id: Option<String>,
 }
 
+/// One `reaction_added`/`reaction_removed` payload.
+#[derive(Deserialize)]
+struct ReactionEvent {
+    post_id: String,
+    user_id: String,
+    emoji_name: String,
+}
+
 static STARTED: AtomicBool = AtomicBool::new(false);
+
+/// Set by `stop` so the reconnect loop can tell a deliberate shutdown
+/// (logout) from a connection that merely dropped — one must stay down, the
+/// other must come back.
+static SHUTDOWN: AtomicBool = AtomicBool::new(false);
+
+/// Bumped by every `start`. A reconnect loop carries the generation it was
+/// born with and retires the moment a newer one exists. SHUTDOWN alone is
+/// not enough: logging out during a backoff sleep, then straight back in,
+/// clears SHUTDOWN before the sleeping loop wakes — it would reconnect
+/// under the old token alongside the new loop, and every live message would
+/// be handled (and notified) twice.
+static GENERATION: AtomicU64 = AtomicU64::new(0);
+
+/// How long to wait before the first reconnect attempt, and the ceiling the
+/// backoff climbs to. A laptop waking up or a Wi-Fi change should recover in
+/// about a second; a server that is genuinely down should not be hammered.
+const RECONNECT_MIN: Duration = Duration::from_secs(1);
+const RECONNECT_MAX: Duration = Duration::from_secs(60);
+
+/// Mattermost's own clients ping on this cadence, and for the same reason:
+/// servers and the proxies in front of them close connections that look
+/// idle. Without it the socket dies quietly after a few minutes of silence —
+/// which is exactly how a "Connection reset without closing handshake"
+/// shows up in the log.
+const HEARTBEAT: Duration = Duration::from_secs(30);
 
 /// The live connection's outbound half — `None` until `run` has connected
 /// (or after it's dropped), so `send_typing` before login/while offline is
@@ -71,6 +110,7 @@ static WS_STOP: Mutex<Option<mpsc::UnboundedSender<()>>> = Mutex::new(None);
 /// switching accounts) left the old session's connection running forever
 /// under its now-stale token, with no new one for whoever logs in next.
 pub fn stop() {
+    SHUTDOWN.store(true, Ordering::SeqCst);
     if let Some(tx) = WS_STOP.lock().expect("ws stop mutex poisoned").take() {
         let _ = tx.send(());
     }
@@ -108,27 +148,63 @@ pub fn start(base_url: String, token: String, user_id: String, db: &'static Mute
     if STARTED.swap(true, Ordering::SeqCst) {
         return;
     }
+    SHUTDOWN.store(false, Ordering::SeqCst);
+    let generation = GENERATION.fetch_add(1, Ordering::SeqCst) + 1;
     tokio::spawn(async move {
-        // A dropped connection just ends this task for now; the app keeps
-        // working off the cache. Automatic reconnection is future work.
-        if let Err(e) = run(base_url, token, user_id, db).await {
-            crate::db::log("ws", &format!("connection ended: {e}"));
+        // A dropped connection is the normal case, not the exception: a
+        // laptop sleeping, a Wi-Fi hop, a proxy timing the socket out. Left
+        // unhandled it is silent — the UI keeps reading its cache and looks
+        // fine while live messages, and every mention notification with
+        // them, quietly stop arriving. So reconnect, backing off so a server
+        // that is genuinely down is not hammered.
+        let mut backoff = RECONNECT_MIN;
+        loop {
+            match run(base_url.clone(), token.clone(), user_id.clone(), db).await {
+                Ok(Ended::ByRequest) => break,
+                Ok(Ended::Dropped) => {
+                    // It connected and ran, so the server is reachable and
+                    // the credentials work: start over from the short delay.
+                    backoff = RECONNECT_MIN;
+                }
+                Err(e) => crate::db::log("ws", &format!("connection ended: {e}")),
+            }
+
+            if SHUTDOWN.load(Ordering::SeqCst) || GENERATION.load(Ordering::SeqCst) != generation {
+                break;
+            }
+            crate::db::log("ws", &format!("reconnecting in {}s", backoff.as_secs()));
+            tokio::time::sleep(backoff).await;
+            if SHUTDOWN.load(Ordering::SeqCst) || GENERATION.load(Ordering::SeqCst) != generation {
+                break;
+            }
+            backoff = (backoff * 2).min(RECONNECT_MAX);
+        }
+        crate::db::log("ws", "reconnect loop finished");
+        // Only the newest loop owns the flag — an outgoing one must not
+        // clear it out from under its replacement.
+        if GENERATION.load(Ordering::SeqCst) == generation {
+            STARTED.store(false, Ordering::SeqCst);
         }
     });
 }
 
-async fn run(base_url: String, token: String, user_id: String, db: &'static Mutex<Database>) -> Result<(), WsError> {
+/// Why a connection attempt came back — the reconnect loop has to tell a
+/// deliberate logout from a socket that simply died.
+enum Ended {
+    ByRequest,
+    Dropped,
+}
+
+async fn run(base_url: String, token: String, user_id: String, db: &'static Mutex<Database>) -> Result<Ended, WsError> {
     let url = websocket_url(&base_url);
     crate::db::log("ws", &format!("connecting to {url}"));
     let (stream, _response) = match tokio_tungstenite::connect_async(&url).await {
         Ok(connected) => connected,
         Err(e) => {
             crate::db::log("ws", &format!("connect failed: {e}"));
-            // Never got as far as registering WS_SENDER/WS_STOP, but STARTED
-            // was already set by `start` before this task was spawned — undo
-            // that so a later `start` call can actually retry instead of
-            // silently no-opping forever.
-            STARTED.store(false, Ordering::SeqCst);
+            // STARTED stays set: the reconnect loop above owns it and is
+            // about to try again. Clearing it here would let a concurrent
+            // `start` open a second, competing connection.
             return Err(e.into());
         }
     };
@@ -153,6 +229,11 @@ async fn run(base_url: String, token: String, user_id: String, db: &'static Mute
     let client = MattermostClient::new(base_url).with_token(token);
 
     let mut event_count = 0u64;
+    let mut ended = Ended::Dropped;
+    // Fires immediately on its first tick, so consume that one now and let
+    // the real cadence start a full interval from here.
+    let mut heartbeat = tokio::time::interval(HEARTBEAT);
+    heartbeat.tick().await;
     loop {
         tokio::select! {
             item = read.next() => {
@@ -164,12 +245,36 @@ async fn run(base_url: String, token: String, user_id: String, db: &'static Mute
                         }
                         handle_event(&text, &user_id, &client, db).await;
                     }
+                    // The stream is split, so tungstenite cannot answer a
+                    // server ping by itself — its automatic pong would have
+                    // to go out through the write half, which lives here.
+                    // Unanswered pings are read as a dead peer and the
+                    // server hangs up.
+                    Some(Ok(Message::Ping(payload))) => {
+                        if write.send(Message::Pong(payload)).await.is_err() {
+                            break;
+                        }
+                    }
+                    Some(Ok(Message::Close(_))) => {
+                        crate::db::log("ws", "server closed the connection");
+                        break;
+                    }
                     Some(Ok(_)) => {}
                     Some(Err(e)) => {
                         crate::db::log("ws", &format!("stream error: {e}"));
                         break;
                     }
                     None => break,
+                }
+            }
+            _ = heartbeat.tick() => {
+                // Keeps the socket visibly alive to the server and to
+                // whatever proxy sits in between, and fails fast when the
+                // link is already gone — a send error here is how a
+                // half-open connection gets noticed at all.
+                if write.send(Message::Ping(Vec::new())).await.is_err() {
+                    crate::db::log("ws", "heartbeat failed, connection is gone");
+                    break;
                 }
             }
             outgoing = rx.recv() => {
@@ -180,6 +285,7 @@ async fn run(base_url: String, token: String, user_id: String, db: &'static Mute
             }
             _ = stop_rx.recv() => {
                 crate::db::log("ws", "stopped (logout)");
+                ended = Ended::ByRequest;
                 break;
             }
         }
@@ -187,13 +293,12 @@ async fn run(base_url: String, token: String, user_id: String, db: &'static Mute
     crate::db::log("ws", &format!("stream ended after {event_count} events"));
     *WS_SENDER.lock().expect("ws sender mutex poisoned") = None;
     *WS_STOP.lock().expect("ws stop mutex poisoned") = None;
-    // Whether this ended by an explicit `stop()` or the connection just
-    // dropped on its own, nothing is listening anymore — a later `start`
-    // must be able to open a fresh connection rather than see a stale
-    // "already running" flag and silently no-op.
-    STARTED.store(false, Ordering::SeqCst);
+    // STARTED deliberately stays set: the reconnect loop in `start` owns it
+    // for the whole lifetime of the retry sequence, and clears it only once
+    // it gives up or is told to stop. Clearing it here would let a
+    // concurrent `start` open a second connection alongside the retry.
 
-    Ok(())
+    Ok(ended)
 }
 
 fn truncate(s: &str, max: usize) -> &str {
@@ -207,12 +312,58 @@ async fn handle_event(text: &str, user_id: &str, client: &MattermostClient, db: 
     let Ok(envelope) = serde_json::from_str::<EventEnvelope>(text) else {
         return;
     };
-    if envelope.event.as_deref() == Some("typing") {
-        handle_typing_event(&envelope, user_id, db);
-        return;
-    }
-    if envelope.event.as_deref() != Some("posted") {
-        return;
+    match envelope.event.as_deref() {
+        Some("typing") => {
+            handle_typing_event(&envelope, user_id, db);
+            return;
+        }
+        // Someone else corrected a message. Without this the old text sat
+        // there, "(modifié)" and all, until the channel was reopened.
+        Some("post_edited") => {
+            if let Some(post) = envelope.data.as_ref().and_then(|d| d.post.as_deref())
+                .and_then(|json| serde_json::from_str::<Post>(json).ok())
+            {
+                let cache = db.lock().expect("cache db mutex poisoned");
+                if let Err(e) = cache.update_post_text(&post.id, &post.message, post.edit_at) {
+                    crate::db::log("ws", &format!("failed to apply an edit: {e}"));
+                }
+            }
+            return;
+        }
+        // Same story for a deletion: the message stayed on screen.
+        Some("post_deleted") => {
+            if let Some(post) = envelope.data.as_ref().and_then(|d| d.post.as_deref())
+                .and_then(|json| serde_json::from_str::<Post>(json).ok())
+            {
+                let cache = db.lock().expect("cache db mutex poisoned");
+                if let Err(e) = cache.delete_post(&post.id) {
+                    crate::db::log("ws", &format!("failed to apply a deletion: {e}"));
+                }
+            }
+            return;
+        }
+        // Someone reacted. The payload carries the post id, the user and
+        // the emoji, so this is a direct cache write with no refetch — which
+        // is what makes it cheap enough to apply on every event.
+        Some("reaction_added") | Some("reaction_removed") => {
+            let added = envelope.event.as_deref() == Some("reaction_added");
+            if let Some(reaction) = envelope.data.as_ref().and_then(|d| d.reaction.as_deref())
+                .and_then(|json| serde_json::from_str::<ReactionEvent>(json).ok())
+            {
+                let cache = db.lock().expect("cache db mutex poisoned");
+                let result = if added {
+                    cache.add_cached_reaction(&reaction.post_id, &reaction.emoji_name, &reaction.user_id)
+                } else {
+                    cache.remove_cached_reaction(&reaction.post_id, &reaction.emoji_name, &reaction.user_id)
+                };
+                if let Err(e) = result {
+                    crate::db::log("ws", &format!("failed to apply a reaction: {e}"));
+                }
+            }
+            return;
+        }
+        Some("posted") => {}
+        _ => return,
     }
     let Some(data) = envelope.data.as_ref() else {
         return;
@@ -344,6 +495,134 @@ mod tests {
         let posts = cache.cached_posts_for_channel("c1").unwrap();
         assert_eq!(posts.len(), 1);
         assert_eq!(posts[0].message, "hi");
+    }
+
+    /// An edit must change the text and nothing else. The trap is reusing
+    /// `upsert_post`, which replaces reactions and files from whatever it is
+    /// handed — and a live edit event carries no metadata, so every reaction
+    /// on the message would silently disappear.
+    #[tokio::test]
+    async fn handle_event_applies_an_edit_without_losing_reactions() {
+        use crate::models::{PostMetadata, Reaction};
+
+        let db: &'static Mutex<Database> =
+            Box::leak(Box::new(Mutex::new(Database::open_in_memory().unwrap())));
+        let client = MattermostClient::new("http://127.0.0.1:1");
+
+        db.lock()
+            .unwrap()
+            .upsert_post(&Post {
+                id: "p1".into(),
+                channel_id: "c1".into(),
+                root_id: "".into(),
+                user_id: "u1".into(),
+                message: "typo heer".into(),
+                create_at: 1000,
+                reply_count: 0,
+                edit_at: 0,
+                metadata: PostMetadata {
+                    reactions: vec![Reaction { user_id: "u2".into(), emoji_name: "+1".into() }],
+                    ..Default::default()
+                },
+            })
+            .unwrap();
+
+        let edited = json!({
+            "id": "p1", "channel_id": "c1", "user_id": "u1",
+            "message": "typo here", "create_at": 1000, "edit_at": 2000
+        });
+        handle_event(
+            &json!({ "event": "post_edited", "data": { "post": edited.to_string() } }).to_string(),
+            "me",
+            &client,
+            db,
+        )
+        .await;
+
+        let cache = db.lock().unwrap();
+        let posts = cache.cached_posts_for_channel("c1").unwrap();
+        assert_eq!(posts.len(), 1);
+        assert_eq!(posts[0].message, "typo here");
+        assert_eq!(posts[0].edit_at, 2000);
+        assert_eq!(posts[0].metadata.reactions.len(), 1, "the edit must not wipe reactions");
+    }
+
+    /// A reaction event carries the reaction, not the message — so it must
+    /// be applied without refetching the post, and must leave the post's
+    /// own text alone.
+    #[tokio::test]
+    async fn handle_event_applies_a_reaction_from_someone_else() {
+        let db: &'static Mutex<Database> =
+            Box::leak(Box::new(Mutex::new(Database::open_in_memory().unwrap())));
+        let client = MattermostClient::new("http://127.0.0.1:1");
+
+        let post = json!({
+            "id": "p1", "channel_id": "c1", "user_id": "u1", "message": "ship it", "create_at": 1000
+        });
+        handle_event(
+            &json!({ "event": "posted", "data": { "post": post.to_string() } }).to_string(),
+            "me",
+            &client,
+            db,
+        )
+        .await;
+
+        let reaction = json!({ "post_id": "p1", "user_id": "u2", "emoji_name": "tada" });
+        handle_event(
+            &json!({ "event": "reaction_added", "data": { "reaction": reaction.to_string() } }).to_string(),
+            "me",
+            &client,
+            db,
+        )
+        .await;
+
+        {
+            let cache = db.lock().unwrap();
+            let posts = cache.cached_posts_for_channel("c1").unwrap();
+            assert_eq!(posts[0].metadata.reactions.len(), 1);
+            assert_eq!(posts[0].metadata.reactions[0].emoji_name, "tada");
+            assert_eq!(posts[0].message, "ship it", "the message itself must be untouched");
+        }
+
+        handle_event(
+            &json!({ "event": "reaction_removed", "data": { "reaction": reaction.to_string() } }).to_string(),
+            "me",
+            &client,
+            db,
+        )
+        .await;
+
+        let cache = db.lock().unwrap();
+        let posts = cache.cached_posts_for_channel("c1").unwrap();
+        assert!(posts[0].metadata.reactions.is_empty());
+    }
+
+    #[tokio::test]
+    async fn handle_event_applies_a_deletion() {
+        let db: &'static Mutex<Database> =
+            Box::leak(Box::new(Mutex::new(Database::open_in_memory().unwrap())));
+        let client = MattermostClient::new("http://127.0.0.1:1");
+
+        let post = json!({
+            "id": "p1", "channel_id": "c1", "user_id": "u1", "message": "oops", "create_at": 1000
+        });
+        handle_event(
+            &json!({ "event": "posted", "data": { "post": post.to_string() } }).to_string(),
+            "me",
+            &client,
+            db,
+        )
+        .await;
+        assert_eq!(db.lock().unwrap().cached_posts_for_channel("c1").unwrap().len(), 1);
+
+        handle_event(
+            &json!({ "event": "post_deleted", "data": { "post": post.to_string() } }).to_string(),
+            "me",
+            &client,
+            db,
+        )
+        .await;
+        assert!(db.lock().unwrap().cached_posts_for_channel("c1").unwrap().is_empty());
     }
 
     #[tokio::test]

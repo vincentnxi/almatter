@@ -52,4 +52,39 @@ public sealed partial class AppSettings : ObservableObject
 
     [ObservableProperty]
     public partial double WindowHeight { get; set; } = 800;
+
+    /// <summary>
+    /// Where the window was, in screen coordinates. NaN means "never saved"
+    /// — the first launch, which centres itself instead. The restore checks
+    /// this against the screens actually attached: a position saved on a
+    /// monitor that is no longer there would put the window somewhere the
+    /// user cannot see or reach.
+    /// </summary>
+    [ObservableProperty]
+    public partial double WindowX { get; set; } = double.NaN;
+
+    [ObservableProperty]
+    public partial double WindowY { get; set; } = double.NaN;
+
+    /// <summary>Closed while maximised — reopen that way, at the size it would return to when un-maximised.</summary>
+    [ObservableProperty]
+    public partial bool WindowMaximised { get; set; }
+
+    /// <summary>
+    /// The channel or conversation being read at last close, reopened on the
+    /// next launch. Ignored when it no longer exists (left, archived, or a
+    /// different account), falling back to the first channel as before.
+    /// </summary>
+    [ObservableProperty]
+    public partial string LastChannelId { get; set; } = "";
+
+    /// <summary>Collapsed/expanded state of the three sidebar sections.</summary>
+    [ObservableProperty]
+    public partial bool FavoritesExpanded { get; set; } = true;
+
+    [ObservableProperty]
+    public partial bool ChannelsExpanded { get; set; } = true;
+
+    [ObservableProperty]
+    public partial bool DirectMessagesExpanded { get; set; } = true;
 }

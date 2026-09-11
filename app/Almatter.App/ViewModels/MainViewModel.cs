@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
@@ -30,17 +30,34 @@ public partial class MainViewModel : ViewModelBase
     private List<ChannelDto> _loadedChannels = [];
     /// <summary>Direct-message channel id -> the other participant's display name (DM channels don't carry a useful display_name of their own).</summary>
     private Dictionary<string, string> _dmDisplayNames = [];
-    /// <summary>Channel ids favorited via the server's own preferences store — mirrors the official clients rather than being an Almatter-only flag.</summary>
+    /// <summary>Channel ids favorited via the server's own preferences store â€” mirrors the official clients rather than being an Almatter-only flag.</summary>
     private HashSet<string> _favoriteChannelIds = [];
     private string? _activeChannelId;
-    /// <summary>Set once the team is known (cache or network) — search needs it, since Mattermost search is scoped per team.</summary>
+    /// <summary>Set once the team is known (cache or network) â€” search needs it, since Mattermost search is scoped per team.</summary>
     private string? _teamId;
-    private List<string> _lastRenderedPostIds = [];
+    /// <summary>
+    /// What the message list currently shows, as "id:edit_at" per message.
+    /// The edit stamp is part of the key on purpose: keyed on id alone, a
+    /// message edited by someone else compared equal and stayed stale on
+    /// screen until the channel was reopened.
+    /// </summary>
+    private List<string> _lastRenderedPostKeys = [];
+
+    /// <summary>
+    /// The cheap fingerprint of the active channel as of the last poll tick,
+    /// with the channel it belongs to. Lets the loop skip re-reading (and
+    /// re-marshalling, and re-deserializing) every message just to find out
+    /// that nothing moved â€” the overwhelmingly common case.
+    /// </summary>
+    private (string ChannelId, (long, long, long, long, long) Revision)? _lastChannelRevision;
+
+    /// <summary>Same, for the open thread panel.</summary>
+    private (string RootId, (long, long, long, long, long) Revision)? _lastThreadRevision;
     private List<string> _lastRenderedOutboxIds = [];
     private bool _pollingStarted;
     private CancellationTokenSource? _pollingCts;
     /// <summary>
-    /// True right after jumping to a message from search — the list is showing
+    /// True right after jumping to a message from search â€” the list is showing
     /// a window around that (possibly old) message rather than the channel's
     /// live tail, so the polling loop below must not silently swap it back to
     /// "the most recent messages" a couple of seconds later. Cleared on the
@@ -60,11 +77,11 @@ public partial class MainViewModel : ViewModelBase
     [ObservableProperty]
     public partial string ActiveChannelTopic { get; set; } = "";
 
-    /// <summary>"X est en train d'écrire…" above the composer — empty when nobody currently is. Refreshed by the poll loop, cleared immediately on channel switch so it doesn't briefly show the previous channel's typers.</summary>
+    /// <summary>"X est en train d'Ã©crireâ€¦" above the composer â€” empty when nobody currently is. Refreshed by the poll loop, cleared immediately on channel switch so it doesn't briefly show the previous channel's typers.</summary>
     [ObservableProperty]
     public partial string TypingIndicatorText { get; set; } = "";
 
-    /// <summary>Only true while there is nothing at all to show yet — a cache hit skips straight past this.</summary>
+    /// <summary>Only true while there is nothing at all to show yet â€” a cache hit skips straight past this.</summary>
     [ObservableProperty]
     public partial bool IsLoading { get; set; } = true;
 
@@ -75,15 +92,39 @@ public partial class MainViewModel : ViewModelBase
     [ObservableProperty]
     public partial string ComposeText { get; set; } = "";
 
-    /// <summary>Bound to the thread panel's reply TextBox — kept separate so switching threads doesn't lose a half-typed main-composer message.</summary>
+    /// <summary>Bound to the thread panel's reply TextBox â€” kept separate so switching threads doesn't lose a half-typed main-composer message.</summary>
     [ObservableProperty]
     public partial string ThreadComposeText { get; set; } = "";
 
     private DateTime _lastComposerTypingSentAt = DateTime.MinValue;
     private DateTime _lastThreadTypingSentAt = DateTime.MinValue;
 
-    /// <summary>Matches how often Mattermost's own clients re-send a typing ping while you keep typing — see GetTypingUsers' TYPING_TTL_MILLIS on the receive side for the corresponding expiry window.</summary>
+    /// <summary>Matches how often Mattermost's own clients re-send a typing ping while you keep typing â€” see GetTypingUsers' TYPING_TTL_MILLIS on the receive side for the corresponding expiry window.</summary>
     private static readonly TimeSpan TypingResendInterval = TimeSpan.FromSeconds(2);
+
+    /// <summary>
+    /// How often the UI checks the cache for anything new. This is what sets
+    /// the delay between a message landing on the WebSocket and the app
+    /// showing it (or raising its notification) â€” the official client is
+    /// push-based and effectively instant, so any interval here is a visible
+    /// handicap.
+    ///
+    /// It was two seconds when a tick meant re-reading, re-marshalling and
+    /// re-deserializing every message in the channel: ~6 ms and 150 KB of
+    /// JSON, too much to run often. With the change probe an idle tick is
+    /// 0,35 ms of cache reads and a few hundred bytes, so most of that
+    /// saving is better spent on responsiveness than banked.
+    /// </summary>
+    private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(400);
+
+    /// <summary>
+    /// Retrying queued messages is a NETWORK call, unlike everything else in
+    /// the loop, so it keeps its own slower cadence â€” otherwise speeding the
+    /// loop up would have it hammering an unreachable server every 400 ms.
+    /// </summary>
+    private static readonly TimeSpan OutboxFlushInterval = TimeSpan.FromSeconds(5);
+
+    private DateTime _lastOutboxFlushAt = DateTime.MinValue;
 
     partial void OnComposeTextChanged(string value)
     {
@@ -115,7 +156,7 @@ public partial class MainViewModel : ViewModelBase
         }
         catch
         {
-            // Best-effort — the only thing that depends on this is someone else's "is typing" indicator, nothing on this end.
+            // Best-effort â€” the only thing that depends on this is someone else's "is typing" indicator, nothing on this end.
         }
     }
 
@@ -126,28 +167,28 @@ public partial class MainViewModel : ViewModelBase
     public ObservableCollection<PendingAttachmentItem> ThreadPendingAttachments { get; } = [];
 
     /// <summary>
-    /// Set by MainWindow's code-behind to the platform file picker — the
+    /// Set by MainWindow's code-behind to the platform file picker â€” the
     /// ViewModel can't reach <c>IStorageProvider</c> itself, since that's
     /// tied to the window (<c>TopLevel</c>), not the DataContext. Returns
     /// the chosen local paths, empty if the user cancelled.
     /// </summary>
     public Func<Task<IReadOnlyList<string>>>? PickFilesAsync { get; set; }
 
-    /// <summary>Search panel — opened via the magnifying-glass icon in the channel header.</summary>
+    /// <summary>Search panel â€” opened via the magnifying-glass icon in the channel header.</summary>
     [ObservableProperty]
     public partial bool IsSearchOpen { get; set; }
 
     [ObservableProperty]
     public partial string SearchQuery { get; set; } = "";
 
-    /// <summary>True once a non-empty search has actually run — distinguishes "nothing typed yet" from "searched, found nothing" for the empty-state message.</summary>
+    /// <summary>True once a non-empty search has actually run â€” distinguishes "nothing typed yet" from "searched, found nothing" for the empty-state message.</summary>
     [ObservableProperty]
     public partial bool HasSearched { get; set; }
 
     [ObservableProperty]
     public partial bool HasSearchResults { get; set; }
 
-    /// <summary>Drives the "Aucun résultat" empty state — distinct from simply "not searched yet".</summary>
+    /// <summary>Drives the "Aucun rÃ©sultat" empty state â€” distinct from simply "not searched yet".</summary>
     public bool NoSearchResults => HasSearched && !HasSearchResults;
 
     partial void OnHasSearchedChanged(bool value) => OnPropertyChanged(nameof(NoSearchResults));
@@ -155,7 +196,7 @@ public partial class MainViewModel : ViewModelBase
 
     public ObservableCollection<SearchResultItem> SearchResults { get; } = [];
 
-    /// <summary>Browse-and-join panel — opened via the + next to the CANAUX section header.</summary>
+    /// <summary>Browse-and-join panel â€” opened via the + next to the CANAUX section header.</summary>
     [ObservableProperty]
     public partial bool IsBrowseChannelsOpen { get; set; }
 
@@ -177,7 +218,7 @@ public partial class MainViewModel : ViewModelBase
 
     /// <summary>
     /// The empty state. Deliberately false while loading or on an error, so
-    /// "aucun canal" never shows on top of a spinner or an error message —
+    /// "aucun canal" never shows on top of a spinner or an error message â€”
     /// three different situations that would otherwise read the same.
     /// </summary>
     public bool NoBrowseChannelResults =>
@@ -187,7 +228,7 @@ public partial class MainViewModel : ViewModelBase
     partial void OnIsBrowsingChannelsChanged(bool value) => OnPropertyChanged(nameof(NoBrowseChannelResults));
     partial void OnBrowseChannelsErrorChanged(string? value) => OnPropertyChanged(nameof(NoBrowseChannelResults));
 
-    /// <summary>"Start a conversation" panel — opened via the + next to the MESSAGES PRIVÉS section header.</summary>
+    /// <summary>"Start a conversation" panel â€” opened via the + next to the MESSAGES PRIVÃ‰S section header.</summary>
     [ObservableProperty]
     public partial bool IsNewConversationOpen { get; set; }
 
@@ -210,14 +251,14 @@ public partial class MainViewModel : ViewModelBase
     partial void OnIsSearchingPeopleChanged(bool value) => OnPropertyChanged(nameof(NoPeopleResults));
     partial void OnNewConversationErrorChanged(string? value) => OnPropertyChanged(nameof(NoPeopleResults));
 
-    /// <summary>Whether the thread panel is showing a thread right now — opened by clicking a message's reply count.</summary>
+    /// <summary>Whether the thread panel is showing a thread right now â€” opened by clicking a message's reply count.</summary>
     [ObservableProperty]
     public partial bool IsThreadOpen { get; set; }
 
     [ObservableProperty]
     public partial MessageItem? ThreadRootMessage { get; set; }
 
-    /// <summary>Collapsible sidebar sections — collapsing "Canaux" gives "Messages privés" more room, and vice versa.</summary>
+    /// <summary>Collapsible sidebar sections â€” collapsing "Canaux" gives "Messages privÃ©s" more room, and vice versa.</summary>
     [ObservableProperty]
     public partial bool IsChannelsSectionExpanded { get; set; } = true;
 
@@ -227,16 +268,16 @@ public partial class MainViewModel : ViewModelBase
     [ObservableProperty]
     public partial bool IsFavoritesSectionExpanded { get; set; } = true;
 
-    /// <summary>Settings panel — opened via the gear icon at the bottom of the sidebar.</summary>
+    /// <summary>Settings panel â€” opened via the gear icon at the bottom of the sidebar.</summary>
     [ObservableProperty]
     public partial bool IsSettingsOpen { get; set; }
 
-    /// <summary>Status picker — opened by clicking your own name/avatar at the bottom of the sidebar.</summary>
+    /// <summary>Status picker â€” opened by clicking your own name/avatar at the bottom of the sidebar.</summary>
     [ObservableProperty]
     public partial bool IsStatusPickerOpen { get; set; }
 
     /// <summary>
-    /// This user's own presence — defaults to Online since that's what a
+    /// This user's own presence â€” defaults to Online since that's what a
     /// freshly-authenticated Mattermost session starts as server-side; the
     /// real value is fetched once the session is up (see LoadAsync) and
     /// updated locally the moment the user picks a new one, without waiting
@@ -249,7 +290,7 @@ public partial class MainViewModel : ViewModelBase
     {
         PresenceStatus.Online => "Disponible",
         PresenceStatus.Away => "Absent",
-        PresenceStatus.DoNotDisturb => "Ne pas déranger",
+        PresenceStatus.DoNotDisturb => "Ne pas dÃ©ranger",
         _ => "Hors ligne",
     };
 
@@ -261,7 +302,7 @@ public partial class MainViewModel : ViewModelBase
         OnPropertyChanged(nameof(MyPresenceBrush));
     }
 
-    /// <summary>Reaction picker — opened via the "+" button next to a message's reactions.</summary>
+    /// <summary>Reaction picker â€” opened via the "+" button next to a message's reactions.</summary>
     [ObservableProperty]
     public partial bool IsEmojiPickerOpen { get; set; }
 
@@ -277,7 +318,7 @@ public partial class MainViewModel : ViewModelBase
     public string CurrentUserDisplayName => _session.User.DisplayName;
     public string CurrentUserInitials => _session.User.Initials;
 
-    /// <summary>Own avatar shown at the bottom of the sidebar — same fetch-once-and-cache mechanism as message authors' avatars.</summary>
+    /// <summary>Own avatar shown at the bottom of the sidebar â€” same fetch-once-and-cache mechanism as message authors' avatars.</summary>
     [ObservableProperty]
     public partial IBrush? MyAvatarImageBrush { get; set; }
 
@@ -285,7 +326,7 @@ public partial class MainViewModel : ViewModelBase
 
     /// <summary>
     /// Raised whenever the active channel's message list has just been
-    /// (re)painted from a channel switch or the initial load — never from
+    /// (re)painted from a channel switch or the initial load â€” never from
     /// the background poll picking up new messages in an already-open
     /// channel, so scrolling to the newest message doesn't yank the view
     /// out from under someone who's scrolled up reading history.
@@ -295,7 +336,22 @@ public partial class MainViewModel : ViewModelBase
     public event EventHandler? ScrollMessagesToEndRequested;
 
     /// <summary>
-    /// Raised after jumping to a specific message (from a search result) —
+    /// Raised when live messages were appended to the end of an already-
+    /// painted list — not on a channel switch or a jump, which paint from
+    /// scratch and scroll themselves. The view decides whether to follow:
+    /// only when the reader was already at the bottom, so scrolling up to
+    /// read history isn't yanked away by someone else typing.
+    /// </summary>
+    public event EventHandler? MessagesAppended;
+
+    /// <summary>The thread panel's counterpart to <see cref="MessagesAppended"/>.</summary>
+    public event EventHandler? ThreadRepliesAppended;
+
+    /// <summary>What the thread panel currently shows, same "id, edit stamp, reactions" key as the main list.</summary>
+    private List<string> _lastRenderedThreadKeys = [];
+
+    /// <summary>
+    /// Raised after jumping to a specific message (from a search result) â€”
     /// carries the message's id. MainWindow's code-behind scrolls that
     /// specific row into view, since it may be nowhere near the end of
     /// what's currently painted.
@@ -313,15 +369,15 @@ public partial class MainViewModel : ViewModelBase
     /// <summary>Raised right after ComposeText is loaded with a message to edit, so MainWindow's code-behind can focus the composer and put the caret at the end.</summary>
     public event EventHandler? EditComposerRequested;
 
-    /// <summary>Raised right after selecting a channel/DM, so MainWindow's code-behind can focus the main composer — no extra click needed before typing.</summary>
+    /// <summary>Raised right after selecting a channel/DM, so MainWindow's code-behind can focus the main composer â€” no extra click needed before typing.</summary>
     public event EventHandler? ComposerFocusRequested;
 
-    /// <summary>Raised right after opening a thread (via "X réponses" or the reply-arrow button), so MainWindow's code-behind can focus the thread reply composer.</summary>
+    /// <summary>Raised right after opening a thread (via "X rÃ©ponses" or the reply-arrow button), so MainWindow's code-behind can focus the thread reply composer.</summary>
     public event EventHandler? ThreadComposerFocusRequested;
 
     /// <summary>
     /// Raised when a @mention suggestion is accepted (click or Enter/Tab)
-    /// — carries the chosen username. Replacing the "@partial" token with
+    /// â€” carries the chosen username. Replacing the "@partial" token with
     /// it needs the composer TextBox's actual caret/text, which the
     /// ViewModel doesn't have direct access to, so MainWindow's code-behind
     /// does the text surgery in response to this.
@@ -338,7 +394,7 @@ public partial class MainViewModel : ViewModelBase
     public ObservableCollection<MessageItem> Messages { get; } = [];
     public ObservableCollection<MessageItem> ThreadReplies { get; } = [];
 
-    /// <summary>The composer's @mention autocomplete popup — shared between the main and thread composers (only one can be focused at a time); see MentionPopupIsForThread for which one is currently showing it.</summary>
+    /// <summary>The composer's @mention autocomplete popup â€” shared between the main and thread composers (only one can be focused at a time); see MentionPopupIsForThread for which one is currently showing it.</summary>
     public ObservableCollection<MentionSuggestionItem> MentionSuggestions { get; } = [];
 
     public ObservableCollection<FontChoiceOption> FontChoiceOptions { get; } =
@@ -352,7 +408,7 @@ public partial class MainViewModel : ViewModelBase
         new()
         {
             Choice = AppFontChoice.System,
-            Name = "Système",
+            Name = "SystÃ¨me",
             Preview = AppFonts.Resolve(AppFontChoice.System),
         },
     ];
@@ -369,7 +425,7 @@ public partial class MainViewModel : ViewModelBase
         new()
         {
             Mode = AppThemeMode.System,
-            Name = "Système",
+            Name = "SystÃ¨me",
             IconData = "M12 3a9 9 0 0 0 0 18zM12 3a9 9 0 0 1 0 18",
         },
         new()
@@ -387,14 +443,14 @@ public partial class MainViewModel : ViewModelBase
     ];
 
     /// <summary>
-    /// Raised whenever the theme/accent changes — MainWindow's code-behind
+    /// Raised whenever the theme/accent changes â€” MainWindow's code-behind
     /// applies the full window-resource palette, font and shape tokens in
     /// response, since the ViewModel has no view to touch itself.
     /// </summary>
     public event EventHandler? ThemeResourcesChanged;
 
     /// <summary>
-    /// Raised after the remembered session is cleared — MainWindow's
+    /// Raised after the remembered session is cleared â€” MainWindow's
     /// code-behind reopens a fresh login screen and closes itself in
     /// response, since the ViewModel has no way to manage windows itself.
     /// </summary>
@@ -403,7 +459,7 @@ public partial class MainViewModel : ViewModelBase
     public ObservableCollection<EmojiPickerItem> StandardEmojiOptions { get; } = new(
         EmojiShortcodes.PickerEntries.Select(e => new EmojiPickerItem { Name = e.Shortcode, Glyph = e.Glyph }));
 
-    /// <summary>The server's custom emoji — loaded (cache-first, then network) the first time the picker opens.</summary>
+    /// <summary>The server's custom emoji â€” loaded (cache-first, then network) the first time the picker opens.</summary>
     public ObservableCollection<EmojiPickerItem> CustomEmojiOptions { get; } = [];
 
     public MainViewModel(Session session)
@@ -419,6 +475,19 @@ public partial class MainViewModel : ViewModelBase
         }
 
         Settings = SettingsStore.Load();
+
+        // Restore the shape the app was left in. The remembered channel is
+        // only a preference here: both load paths check it still exists
+        // before honouring it, so leaving a channel (or signing in as
+        // someone else) falls back to the first one as before.
+        IsFavoritesSectionExpanded = Settings.FavoritesExpanded;
+        IsChannelsSectionExpanded = Settings.ChannelsExpanded;
+        IsDirectMessagesSectionExpanded = Settings.DirectMessagesExpanded;
+        if (!string.IsNullOrEmpty(Settings.LastChannelId))
+        {
+            _activeChannelId = Settings.LastChannelId;
+        }
+
         ApplyTheme();
         RefreshFontChoiceSelection();
         RefreshFontSizeSelection();
@@ -445,7 +514,7 @@ public partial class MainViewModel : ViewModelBase
 
     /// <summary>
     /// Cache-first: paints instantly from whatever's already in SQLite (if
-    /// anything), then refreshes from the network — which also keeps the
+    /// anything), then refreshes from the network â€” which also keeps the
     /// cache warm for next time, courtesy of almatter-core's dispatcher.
     /// </summary>
     public async Task LoadAsync()
@@ -482,7 +551,7 @@ public partial class MainViewModel : ViewModelBase
         _ = ResolveMyAvatarAsync();
 
         // A dropped connection just means the app keeps working off what's
-        // in the cache — but the *start* call itself is awaited (not fired
+        // in the cache â€” but the *start* call itself is awaited (not fired
         // and forgotten) and logged, since a swallowed exception here would
         // otherwise look identical to "the socket connected but nothing is
         // arriving" from the outside.
@@ -496,7 +565,7 @@ public partial class MainViewModel : ViewModelBase
             CrashLogger.Write("websocket", ex);
         }
 
-        // Best-effort — MyStatus just keeps its Online default if this fails.
+        // Best-effort â€” MyStatus just keeps its Online default if this fails.
         try
         {
             var statuses = await _service.GetStatusesAsync(_session.BaseUrl, _session.Token, [_session.User.Id]);
@@ -540,7 +609,7 @@ public partial class MainViewModel : ViewModelBase
             {
                 try
                 {
-                    await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken);
+                    await Task.Delay(PollInterval, cancellationToken);
                 }
                 catch (OperationCanceledException)
                 {
@@ -554,11 +623,12 @@ public partial class MainViewModel : ViewModelBase
                 }
                 catch
                 {
-                    // Transient cache read hiccup — try again next tick.
+                    // Transient cache read hiccup â€” try again next tick.
                 }
 
-                if (outbox.Count > 0)
+                if (outbox.Count > 0 && DateTime.UtcNow - _lastOutboxFlushAt >= OutboxFlushInterval)
                 {
+                    _lastOutboxFlushAt = DateTime.UtcNow;
                     try
                     {
                         // No-op server-side if we're still offline; a genuine
@@ -567,7 +637,7 @@ public partial class MainViewModel : ViewModelBase
                     }
                     catch
                     {
-                        // Still offline — try again next tick.
+                        // Still offline â€” try again at the next flush window.
                     }
                 }
 
@@ -577,7 +647,7 @@ public partial class MainViewModel : ViewModelBase
                 }
                 catch
                 {
-                    // Transient cache read hiccup — try again next tick.
+                    // Transient cache read hiccup â€” try again next tick.
                 }
 
                 try
@@ -589,8 +659,8 @@ public partial class MainViewModel : ViewModelBase
                     }
                     foreach (var mention in mentions)
                     {
-                        // Already looking at that channel — no need to interrupt.
-                        // Muted — the whole point is no notification for it.
+                        // Already looking at that channel â€” no need to interrupt.
+                        // Muted â€” the whole point is no notification for it.
                         var isMuted = _loadedChannels.FirstOrDefault(c => c.Id == mention.ChannelId)?.IsMuted ?? false;
                         if (mention.ChannelId != _activeChannelId && !isMuted)
                         {
@@ -626,21 +696,37 @@ public partial class MainViewModel : ViewModelBase
                 }
                 catch
                 {
-                    // Transient cache read hiccup — try again next tick.
+                    // Transient cache read hiccup â€” try again next tick.
                 }
 
                 try
                 {
-                    var posts = await _service.GetCachedPostsAsync(channelId);
-                    var ids = posts.OrderBy(p => p.CreateAt).Select(p => p.Id).ToList();
                     var pendingIds = outbox
                         .Where(o => o.ChannelId == channelId && o.RootId is null)
                         .OrderBy(o => o.CreatedAt)
                         .Select(o => o.LocalId)
                         .ToList();
 
+                    // Ask what changed before asking for the content. On a
+                    // 455-message channel the probe is ~0.06 ms against
+                    // ~2.3 ms and 150 KB for the full read, and on a quiet
+                    // channel it is the only thing this tick does.
+                    var revision = await _service.GetChannelRevisionAsync(channelId);
+                    if (channelId == _activeChannelId
+                        && _lastChannelRevision is { } seen
+                        && seen.ChannelId == channelId
+                        && seen.Revision == revision
+                        && pendingIds.SequenceEqual(_lastRenderedOutboxIds))
+                    {
+                        continue;
+                    }
+                    _lastChannelRevision = (channelId, revision);
+
+                    var posts = await _service.GetCachedPostsAsync(channelId);
+                    var keys = posts.OrderBy(p => p.CreateAt).Select(p => $"{p.Id}:{p.EditAt}").ToList();
+
                     if (channelId != _activeChannelId ||
-                        (ids.SequenceEqual(_lastRenderedPostIds) && pendingIds.SequenceEqual(_lastRenderedOutboxIds)))
+                        (keys.SequenceEqual(_lastRenderedPostKeys) && pendingIds.SequenceEqual(_lastRenderedOutboxIds)))
                     {
                         continue;
                     }
@@ -656,7 +742,7 @@ public partial class MainViewModel : ViewModelBase
                         {
                             await PopulateMessagesWithOutboxAsync(channelId, posts, authors);
                             // A message arriving live while this channel is
-                            // already open has effectively been seen — without
+                            // already open has effectively been seen â€” without
                             // this, the sidebar badge refresh above would show
                             // it as unread until the channel is re-opened.
                             MarkChannelViewed(channelId);
@@ -665,7 +751,7 @@ public partial class MainViewModel : ViewModelBase
                 }
                 catch
                 {
-                    // Transient cache read hiccup — try again next tick.
+                    // Transient cache read hiccup â€” try again next tick.
                 }
 
                 var openRootId = _openThreadRootId;
@@ -675,6 +761,19 @@ public partial class MainViewModel : ViewModelBase
                 }
                 try
                 {
+                    // Same probe-before-read as the channel above.
+                    var threadRevision = await _service.GetThreadRevisionAsync(openRootId);
+                    var threadPendingUnchanged =
+                        outbox.Count(o => o.RootId == openRootId) == ThreadReplies.Count(r => r.IsPending);
+                    if (_lastThreadRevision is { } seenThread
+                        && seenThread.RootId == openRootId
+                        && seenThread.Revision == threadRevision
+                        && threadPendingUnchanged)
+                    {
+                        continue;
+                    }
+                    _lastThreadRevision = (openRootId, threadRevision);
+
                     var threadPosts = await _service.GetCachedThreadAsync(openRootId);
                     if (openRootId != _openThreadRootId || threadPosts.Count == 0)
                     {
@@ -705,14 +804,14 @@ public partial class MainViewModel : ViewModelBase
                 }
                 catch
                 {
-                    // Transient cache read hiccup — try again next tick.
+                    // Transient cache read hiccup â€” try again next tick.
                 }
             }
         });
     }
 
     /// <summary>
-    /// Stops the background polling loop — called on logout so the old
+    /// Stops the background polling loop â€” called on logout so the old
     /// session's ViewModel doesn't keep polling (and, worse, flushing the
     /// outbox and drawing tray notifications) forever with a token that no
     /// longer belongs to whoever is using the app next.
@@ -738,12 +837,12 @@ public partial class MainViewModel : ViewModelBase
             authorName = "Quelqu'un";
         }
 
-        // A DM's "channel label" is the other participant's name — the same
+        // A DM's "channel label" is the other participant's name â€” the same
         // person as the author, so appending it would just repeat itself.
         var channel = _loadedChannels.FirstOrDefault(c => c.Id == mention.ChannelId);
         var channelLabel = channel is null || channel.Type == "D" ? null : ChannelDisplayName(channel);
-        var title = channelLabel is null ? authorName : $"{authorName} · {channelLabel}";
-        var text = mention.Message.Length > 140 ? mention.Message[..140] + "…" : mention.Message;
+        var title = channelLabel is null ? authorName : $"{authorName} Â· {channelLabel}";
+        var text = mention.Message.Length > 140 ? mention.Message[..140] + "â€¦" : mention.Message;
 
         var notification = new MentionNotification
         {
@@ -777,6 +876,7 @@ public partial class MainViewModel : ViewModelBase
         }
 
         _activeChannelId = channelId;
+        Settings.LastChannelId = channelId;
         _viewingJumpedMessage = false;
         foreach (var item in Channels.Concat(FavoriteChannels))
         {
@@ -819,7 +919,7 @@ public partial class MainViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Bound to "Envoyer un message" in a message's avatar popover — opens
+    /// Bound to "Envoyer un message" in a message's avatar popover â€” opens
     /// (or resolves the existing) 1:1 DM with that author and switches to
     /// it. The server call is idempotent (returns the existing channel if
     /// one's already there), so this doesn't need to check first.
@@ -849,7 +949,7 @@ public partial class MainViewModel : ViewModelBase
         }
 
         // A brand-new DM's own display_name is useless (see
-        // PopulateDirectMessagesAsync's doc comment) — resolve the real one
+        // PopulateDirectMessagesAsync's doc comment) â€” resolve the real one
         // straight from the already-known author, rather than waiting for
         // the next full channel refresh to populate it.
         var user = (await _service.GetCachedUsersAsync([userId])).FirstOrDefault();
@@ -861,7 +961,7 @@ public partial class MainViewModel : ViewModelBase
         await SelectChannelAsync(channel.Id);
     }
 
-    /// <summary>Bound to a message's "X réponses" link. Same cache-first-then-network shape as everything else here.</summary>
+    /// <summary>Bound to a message's "X rÃ©ponses" link. Same cache-first-then-network shape as everything else here.</summary>
     [RelayCommand]
     private async Task OpenThreadAsync(string rootId)
     {
@@ -875,6 +975,7 @@ public partial class MainViewModel : ViewModelBase
         ThreadComposerFocusRequested?.Invoke(this, EventArgs.Empty);
         ThreadRootMessage = null;
         ThreadReplies.Clear();
+        _lastRenderedThreadKeys = [];
 
         var paintedFromCache = await TryPaintThreadFromCacheAsync(rootId);
 
@@ -882,7 +983,7 @@ public partial class MainViewModel : ViewModelBase
         {
             var posts = await _service.GetThreadAsync(_session.BaseUrl, _session.Token, rootId);
             // Empty means the root was deleted (or otherwise no longer
-            // available) server-side — nothing to paint over whatever the
+            // available) server-side â€” nothing to paint over whatever the
             // cache already showed (or the empty panel, if it didn't).
             if (rootId == _openThreadRootId && posts.Count > 0)
             {
@@ -900,7 +1001,7 @@ public partial class MainViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Bound to the main composer's send button / Enter key — doubles as
+    /// Bound to the main composer's send button / Enter key â€” doubles as
     /// "save" when the composer is currently loaded with an edit (see
     /// StartEditMessage) rather than a new message.
     /// </summary>
@@ -931,7 +1032,7 @@ public partial class MainViewModel : ViewModelBase
             }
             catch (MattermostServiceException ex)
             {
-                // Left in edit mode on failure — ComposeText keeps the edit, the user can just retry.
+                // Left in edit mode on failure â€” ComposeText keeps the edit, the user can just retry.
                 ErrorMessage = ex.Message;
             }
             return;
@@ -983,8 +1084,8 @@ public partial class MainViewModel : ViewModelBase
 
     /// <summary>
     /// Opens the platform file picker (via the code-behind-supplied
-    /// callback) and uploads whatever was chosen right away — before the
-    /// message itself is sent — so the composer can show a real filename
+    /// callback) and uploads whatever was chosen right away â€” before the
+    /// message itself is sent â€” so the composer can show a real filename
     /// chip and the eventual send is just attaching an id that already
     /// exists server-side, not waiting on the upload too.
     /// </summary>
@@ -1022,7 +1123,7 @@ public partial class MainViewModel : ViewModelBase
 
     /// <summary>
     /// Fires the send at the core, which either posts it right away or
-    /// queues it in the offline outbox — either way this repaints
+    /// queues it in the offline outbox â€” either way this repaints
     /// immediately from the cache rather than waiting for the next
     /// 2-second poll tick, so a pending bubble (or the confirmed post)
     /// shows up instantly. A genuine server-side rejection (not a
@@ -1052,7 +1153,7 @@ public partial class MainViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Bound to the up-arrow key in the (empty) main composer — the same
+    /// Bound to the up-arrow key in the (empty) main composer â€” the same
     /// shortcut the official client uses to jump straight into editing the
     /// last thing you sent, without hunting for it in the list.
     /// </summary>
@@ -1068,7 +1169,7 @@ public partial class MainViewModel : ViewModelBase
         }
     }
 
-    /// <summary>Loaded into the composer while editing — see StartEditMessage.</summary>
+    /// <summary>Loaded into the composer while editing â€” see StartEditMessage.</summary>
     [ObservableProperty]
     public partial bool IsEditingMessage { get; set; }
 
@@ -1076,7 +1177,7 @@ public partial class MainViewModel : ViewModelBase
 
     /// <summary>
     /// Loads a message into the main composer for editing, in place of
-    /// typing a new one — SendMessageCommand notices IsEditingMessage and
+    /// typing a new one â€” SendMessageCommand notices IsEditingMessage and
     /// saves instead of sending. Editing happens in the composer rather
     /// than inline in the conversation on purpose: an inline edit box used
     /// to change that row's height, and with the message list virtualized,
@@ -1110,7 +1211,7 @@ public partial class MainViewModel : ViewModelBase
         ComposeText = "";
     }
 
-    /// <summary>A reply shows both inline in the main list and in the thread panel, each its own separate MessageItem for the same post — this touches whichever of those exist, not just one.</summary>
+    /// <summary>A reply shows both inline in the main list and in the thread panel, each its own separate MessageItem for the same post â€” this touches whichever of those exist, not just one.</summary>
     private void ApplyEditedTextEverywhere(string postId, string newText)
     {
         if (Messages.FirstOrDefault(m => m.Id == postId) is { } inMain)
@@ -1143,7 +1244,7 @@ public partial class MainViewModel : ViewModelBase
         }
     }
 
-    /// <summary>The message a delete is about to be confirmed for — set by RequestDeleteMessage, read by the confirmation panel.</summary>
+    /// <summary>The message a delete is about to be confirmed for â€” set by RequestDeleteMessage, read by the confirmation panel.</summary>
     [ObservableProperty]
     public partial bool IsDeleteConfirmOpen { get; set; }
 
@@ -1197,7 +1298,7 @@ public partial class MainViewModel : ViewModelBase
         }
 
         // A reply shows both inline in the main list and in the thread
-        // panel — each holds its own separate MessageItem instance for the
+        // panel â€” each holds its own separate MessageItem instance for the
         // same underlying post, so this removes by id from both rather than
         // just the one instance that was actually clicked.
         if (Messages.FirstOrDefault(m => m.Id == item.Id) is { } inMain)
@@ -1215,14 +1316,14 @@ public partial class MainViewModel : ViewModelBase
         }
     }
 
-    /// <summary>Open while there's an @mention query in flight or with results to show — see MentionPopupIsForThread for which composer it belongs to.</summary>
+    /// <summary>Open while there's an @mention query in flight or with results to show â€” see MentionPopupIsForThread for which composer it belongs to.</summary>
     [ObservableProperty]
     public partial bool IsMentionPopupOpen { get; set; }
 
     [ObservableProperty]
     public partial int MentionSelectedIndex { get; set; }
 
-    /// <summary>True while the open popup belongs to the thread reply composer rather than the main one — only one composer is ever focused at a time, so this is what tells the two popup regions in XAML apart.</summary>
+    /// <summary>True while the open popup belongs to the thread reply composer rather than the main one â€” only one composer is ever focused at a time, so this is what tells the two popup regions in XAML apart.</summary>
     [ObservableProperty]
     public partial bool MentionPopupIsForThread { get; set; }
 
@@ -1254,7 +1355,7 @@ public partial class MainViewModel : ViewModelBase
     /// <summary>
     /// Called by MainWindow's code-behind whenever the composer's text or
     /// caret moves in or out of an "@partial" token (see
-    /// MentionTextHelper.TryGetMentionQuery) — searches the active
+    /// MentionTextHelper.TryGetMentionQuery) â€” searches the active
     /// channel's members matching query and populates MentionSuggestions.
     /// A cancellation token guards against an earlier, slower search
     /// resolving after a newer one and clobbering its (more current) results.
@@ -1278,7 +1379,7 @@ public partial class MainViewModel : ViewModelBase
         }
         catch (MattermostServiceException)
         {
-            // Best-effort — a transient failure just means no suggestions this keystroke, not a disruption to typing.
+            // Best-effort â€” a transient failure just means no suggestions this keystroke, not a disruption to typing.
             return;
         }
 
@@ -1341,6 +1442,12 @@ public partial class MainViewModel : ViewModelBase
     [RelayCommand]
     private void ToggleChannelsSection() => IsChannelsSectionExpanded = !IsChannelsSectionExpanded;
 
+    // Persisted as they change rather than at close: these survive a crash
+    // that way, and AppSettings saves itself on every property change.
+    partial void OnIsFavoritesSectionExpandedChanged(bool value) => Settings.FavoritesExpanded = value;
+    partial void OnIsChannelsSectionExpandedChanged(bool value) => Settings.ChannelsExpanded = value;
+    partial void OnIsDirectMessagesSectionExpandedChanged(bool value) => Settings.DirectMessagesExpanded = value;
+
     [RelayCommand]
     private void ToggleDirectMessagesSection() => IsDirectMessagesSectionExpanded = !IsDirectMessagesSectionExpanded;
 
@@ -1350,7 +1457,7 @@ public partial class MainViewModel : ViewModelBase
     /// <summary>
     /// Called from MainWindow's code-behind when a channel/DM row is
     /// dragged onto the Favoris zone (isFavorite: true) or back onto the
-    /// regular Canaux/Messages privés zone (isFavorite: false) — drag-and-drop
+    /// regular Canaux/Messages privÃ©s zone (isFavorite: false) â€” drag-and-drop
     /// replaced the earlier star-button toggle, which is why this takes an
     /// explicit target state rather than flipping the current one.
     /// </summary>
@@ -1380,7 +1487,7 @@ public partial class MainViewModel : ViewModelBase
             _favoriteChannelIds.Remove(channelId);
         }
 
-        // A cheap local repaint from what's already loaded — no network round trip needed.
+        // A cheap local repaint from what's already loaded â€” no network round trip needed.
         var visibleChannels = _loadedChannels.Where(c => c.IsPublicOrPrivate).OrderBy(c => c.DisplayName).ToList();
         PopulateChannels(visibleChannels, _activeChannelId ?? "");
         await PopulateDirectMessagesAsync(_loadedChannels, allowNetwork: false);
@@ -1388,7 +1495,7 @@ public partial class MainViewModel : ViewModelBase
 
     /// <summary>
     /// Called from MainWindow's code-behind after a long-press-drag within
-    /// Favoris — moves the dragged item to sit right before/after the drop
+    /// Favoris â€” moves the dragged item to sit right before/after the drop
     /// target, in whichever of FavoriteChannels/FavoriteDirectMessages both
     /// ids actually belong to (dragging a channel onto a DM row, or vice
     /// versa, is simply a no-op). The resulting order is saved locally,
@@ -1447,7 +1554,7 @@ public partial class MainViewModel : ViewModelBase
         return -1;
     }
 
-    /// <summary>Favorites follow Settings.FavoriteOrder; anything not yet in that list keeps its natural (display-name/recency) order, appended at the end — OrderBy is a stable sort, so ties preserve input order.</summary>
+    /// <summary>Favorites follow Settings.FavoriteOrder; anything not yet in that list keeps its natural (display-name/recency) order, appended at the end â€” OrderBy is a stable sort, so ties preserve input order.</summary>
     private IEnumerable<T> OrderByFavoritePosition<T>(List<T> favorites) where T : IChannelListItem
     {
         var order = Settings.FavoriteOrder;
@@ -1471,10 +1578,10 @@ public partial class MainViewModel : ViewModelBase
     private void CloseStatusPicker() => IsStatusPickerOpen = false;
 
     /// <summary>
-    /// Bound to each option in the status picker — <paramref name="status"/>
+    /// Bound to each option in the status picker â€” <paramref name="status"/>
     /// is one of Mattermost's own status strings ("online"/"away"/"dnd"/
     /// "offline"), so no extra mapping is needed at the call site. Updates
-    /// locally right away rather than waiting on the network round trip —
+    /// locally right away rather than waiting on the network round trip â€”
     /// presence is a low-stakes, purely cosmetic value, and an optimistic
     /// update reads as instant the same way the official client's does.
     /// </summary>
@@ -1495,13 +1602,13 @@ public partial class MainViewModel : ViewModelBase
         }
         catch (MattermostServiceException)
         {
-            // Best-effort — the local UI already reflects the choice; a
+            // Best-effort â€” the local UI already reflects the choice; a
             // failed round trip just means it could revert to the server's
             // idea of the status next time presence is refreshed.
         }
     }
 
-    /// <summary>Clears the remembered session — MainWindow's code-behind takes it from here (fresh login screen, closes this window).</summary>
+    /// <summary>Clears the remembered session â€” MainWindow's code-behind takes it from here (fresh login screen, closes this window).</summary>
     [RelayCommand]
     private async Task LogOutAsync()
     {
@@ -1512,7 +1619,7 @@ public partial class MainViewModel : ViewModelBase
         }
         catch (MattermostServiceException)
         {
-            // Best-effort — worst case the old connection lingers until it
+            // Best-effort â€” worst case the old connection lingers until it
             // drops on its own; nothing else depends on this succeeding.
         }
         SessionStore.Clear();
@@ -1542,7 +1649,7 @@ public partial class MainViewModel : ViewModelBase
 
         if (_teamId is null)
         {
-            BrowseChannelsError = "Équipe inconnue — reconnectez-vous.";
+            BrowseChannelsError = "Ã‰quipe inconnue â€” reconnectez-vous.";
             return;
         }
 
@@ -1592,7 +1699,7 @@ public partial class MainViewModel : ViewModelBase
         NewConversationError = null;
         PeopleResults.Clear();
 
-        // Setting this fires SearchPeopleAsync via OnNewConversationQueryChanged —
+        // Setting this fires SearchPeopleAsync via OnNewConversationQueryChanged â€”
         // but only if the value actually changes, so an already-empty query
         // (the usual case) needs the explicit call below.
         if (NewConversationQuery.Length == 0)
@@ -1611,7 +1718,7 @@ public partial class MainViewModel : ViewModelBase
     private CancellationTokenSource? _peopleSearchCts;
 
     /// <summary>
-    /// Searches the whole team, server-side, on every keystroke — unlike the
+    /// Searches the whole team, server-side, on every keystroke â€” unlike the
     /// channel browser, the directory is too big to hold locally and filter.
     /// A cancellation token guards against a slower earlier search landing
     /// after a newer one and replacing more current results.
@@ -1682,7 +1789,7 @@ public partial class MainViewModel : ViewModelBase
         await OpenDirectMessageWithAsync(item.UserId);
     }
 
-    /// <summary>Filters the already-fetched list as the user types — no round trip, the whole list is in memory.</summary>
+    /// <summary>Filters the already-fetched list as the user types â€” no round trip, the whole list is in memory.</summary>
     private void ApplyBrowseChannelsFilter()
     {
         var query = BrowseChannelsQuery.Trim();
@@ -1742,7 +1849,7 @@ public partial class MainViewModel : ViewModelBase
     /// <summary>
     /// Bound to the search box's Enter key. Cache-first (instant, but only
     /// covers whatever's already been cached) then a real server-side
-    /// search across the whole team's full history — same shape as every
+    /// search across the whole team's full history â€” same shape as every
     /// other cache-then-network read in this class.
     /// </summary>
     [RelayCommand]
@@ -1807,7 +1914,7 @@ public partial class MainViewModel : ViewModelBase
             }
             catch
             {
-                // A missing author just shows as "Utilisateur inconnu" below — not worth failing the whole search over.
+                // A missing author just shows as "Utilisateur inconnu" below â€” not worth failing the whole search over.
             }
         }
 
@@ -1831,7 +1938,7 @@ public partial class MainViewModel : ViewModelBase
         HasSearchResults = SearchResults.Count > 0;
     }
 
-    /// <summary>Bound to a search result row — jumps to that exact message and closes the search panel.</summary>
+    /// <summary>Bound to a search result row â€” jumps to that exact message and closes the search panel.</summary>
     [RelayCommand]
     private async Task OpenSearchResultAsync(SearchResultItem result)
     {
@@ -1839,7 +1946,7 @@ public partial class MainViewModel : ViewModelBase
         await JumpToMessageAsync(result.ChannelId, result.PostId);
     }
 
-    /// <summary>Bound to a reply's quoted-root preview — same jump/highlight behavior as a search result, just already knowing which channel and post.</summary>
+    /// <summary>Bound to a reply's quoted-root preview â€” same jump/highlight behavior as a search result, just already knowing which channel and post.</summary>
     [RelayCommand]
     private Task JumpToQuotedMessage(MessageItem item)
     {
@@ -1852,7 +1959,7 @@ public partial class MainViewModel : ViewModelBase
 
     /// <summary>
     /// Unlike SelectChannelAsync, this always re-fetches even if the target
-    /// channel is already open — "already open" doesn't mean this specific
+    /// channel is already open â€” "already open" doesn't mean this specific
     /// message is currently painted, since the channel view normally only
     /// shows the most recent page.
     /// </summary>
@@ -1927,11 +2034,11 @@ public partial class MainViewModel : ViewModelBase
         }
         catch
         {
-            // A malformed or unsupported URL just doesn't open — no crash.
+            // A malformed or unsupported URL just doesn't open â€” no crash.
         }
     }
 
-    /// <summary>Bound to a click on a message attachment: downloads it (once — cached to disk after that), then opens it with the OS's own default handler for that file type.</summary>
+    /// <summary>Bound to a click on a message attachment: downloads it (once â€” cached to disk after that), then opens it with the OS's own default handler for that file type.</summary>
     [RelayCommand]
     private async Task OpenAttachmentAsync(AttachmentItem attachment)
     {
@@ -1952,7 +2059,7 @@ public partial class MainViewModel : ViewModelBase
         }
         catch
         {
-            // No app associated with this file type, or the OS declined to open it — not worth an app-wide error banner.
+            // No app associated with this file type, or the OS declined to open it â€” not worth an app-wide error banner.
         }
         finally
         {
@@ -1960,7 +2067,7 @@ public partial class MainViewModel : ViewModelBase
         }
     }
 
-    /// <summary>Toggles the current user's own reaction on a message — clicking a reaction pill you already reacted with removes it.</summary>
+    /// <summary>Toggles the current user's own reaction on a message â€” clicking a reaction pill you already reacted with removes it.</summary>
     [RelayCommand]
     private async Task ToggleReactionAsync(ReactionItem reaction)
     {
@@ -1977,7 +2084,7 @@ public partial class MainViewModel : ViewModelBase
         }
     }
 
-    /// <summary>Bound to a message's "+" button — opens the emoji picker targeting that specific message.</summary>
+    /// <summary>Bound to a message's "+" button â€” opens the emoji picker targeting that specific message.</summary>
     [RelayCommand]
     private async Task OpenEmojiPickerAsync(string postId)
     {
@@ -1989,7 +2096,7 @@ public partial class MainViewModel : ViewModelBase
     [RelayCommand]
     private void CloseEmojiPicker() => IsEmojiPickerOpen = false;
 
-    /// <summary>Bound to a swatch in the emoji picker — adds that reaction to whichever message opened the picker.</summary>
+    /// <summary>Bound to a swatch in the emoji picker â€” adds that reaction to whichever message opened the picker.</summary>
     [RelayCommand]
     private async Task PickEmojiAsync(string emojiName)
     {
@@ -2042,7 +2149,7 @@ public partial class MainViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Cache-first, then network — loaded once per session, the first time
+    /// Cache-first, then network â€” loaded once per session, the first time
     /// either the picker opens or a message with a custom-emoji reaction is
     /// built. The task itself (not just a bool flag) is cached so that
     /// several callers racing to trigger the first load all await the same
@@ -2071,7 +2178,7 @@ public partial class MainViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            // Offline or the server rejected it — the cached (possibly empty) list stands.
+            // Offline or the server rejected it â€” the cached (possibly empty) list stands.
             CrashLogger.Write("custom emoji: network list fetch failed", ex);
         }
     }
@@ -2100,7 +2207,7 @@ public partial class MainViewModel : ViewModelBase
 
     /// <summary>
     /// Resolves a message reaction's emoji, if it's not one of the standard
-    /// set — almost always a server custom emoji, whose image is fetched
+    /// set â€” almost always a server custom emoji, whose image is fetched
     /// (and shared with the picker's own swatch, via the same bitmap cache)
     /// rather than the ":name:" text fallback staying up forever.
     /// </summary>
@@ -2112,12 +2219,12 @@ public partial class MainViewModel : ViewModelBase
         }
 
         await EnsureCustomEmojiLoadedAsync();
-        // A reaction not found here is completely normal — most reactions use
+        // A reaction not found here is completely normal â€” most reactions use
         // a standard emoji EmojiShortcodes doesn't happen to list by name,
-        // not a real custom-server one — so it stays as the ":name:" text
+        // not a real custom-server one â€” so it stays as the ":name:" text
         // fallback with nothing logged. (This used to log unconditionally,
         // rebuilding and disk-writing the full ~200-name known list on every
-        // occurrence — for a channel with many such reactions, that alone
+        // occurrence â€” for a channel with many such reactions, that alone
         // was a significant, entirely avoidable source of per-render lag.)
         if (_customEmojiIdByName.TryGetValue(reaction.EmojiName, out var emojiId))
         {
@@ -2128,7 +2235,7 @@ public partial class MainViewModel : ViewModelBase
     /// <summary>
     /// Shared by every kind of image fetch (custom emoji, avatars): opening
     /// a channel with a lot of reaction/author variety used to fire one
-    /// fetch per distinct image all at once — dozens of simultaneous new
+    /// fetch per distinct image all at once â€” dozens of simultaneous new
     /// connections, each paying its own connection-setup cost, which in
     /// aggregate was slow enough to delay unrelated concurrent work sharing
     /// the same pool (the channel's own message fetch included). Capping how
@@ -2163,7 +2270,7 @@ public partial class MainViewModel : ViewModelBase
                 // A cached file that fails to decode is almost certainly left over
                 // from an earlier race between two concurrent downloads of the same
                 // emoji (fixed on the core side, but an already-corrupted file on
-                // disk stays corrupted forever otherwise) — delete it and let the
+                // disk stays corrupted forever otherwise) â€” delete it and let the
                 // core fetch a fresh copy once rather than failing on this emoji
                 // for the rest of the session.
                 CrashLogger.Write($"custom emoji: decode failed for {emojiId} at {path}, retrying once", ex);
@@ -2176,7 +2283,7 @@ public partial class MainViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            // That one swatch/reaction just stays blank — not worth surfacing as an app-wide error.
+            // That one swatch/reaction just stays blank â€” not worth surfacing as an app-wide error.
             CrashLogger.Write($"custom emoji: gave up on {emojiId}", ex);
             return null;
         }
@@ -2186,7 +2293,7 @@ public partial class MainViewModel : ViewModelBase
         }
     }
 
-    /// <summary>Same shape as GetCustomEmojiBitmapAsync, for a user's profile picture — shared cache/throttle, keyed by user id instead of emoji id.</summary>
+    /// <summary>Same shape as GetCustomEmojiBitmapAsync, for a user's profile picture â€” shared cache/throttle, keyed by user id instead of emoji id.</summary>
     private async Task<Bitmap?> GetAvatarBitmapAsync(string userId)
     {
         if (_avatarImageCache.TryGetValue(userId, out var cached))
@@ -2210,7 +2317,7 @@ public partial class MainViewModel : ViewModelBase
             {
                 // Same reasoning as GetCustomEmojiBitmapAsync: a corrupt cached
                 // file from an earlier interrupted download stays corrupt
-                // forever otherwise — delete it and retry once.
+                // forever otherwise â€” delete it and retry once.
                 CrashLogger.Write($"avatar: decode failed for {userId} at {path}, retrying once", ex);
                 TryDeleteFile(path);
                 path = await _service.GetUserAvatarPathAsync(_session.BaseUrl, _session.Token, userId);
@@ -2231,7 +2338,7 @@ public partial class MainViewModel : ViewModelBase
         }
     }
 
-    /// <summary>Same shape as GetAvatarBitmapAsync, for a link preview's og:image — cached per source URL rather than per user id.</summary>
+    /// <summary>Same shape as GetAvatarBitmapAsync, for a link preview's og:image â€” cached per source URL rather than per user id.</summary>
     private async Task<Bitmap?> GetLinkPreviewImageBitmapAsync(string url)
     {
         if (_linkPreviewImageCache.TryGetValue(url, out var cached))
@@ -2275,12 +2382,12 @@ public partial class MainViewModel : ViewModelBase
 
     /// <summary>
     /// A message's first "opengraph" embed (its data.title/description/
-    /// image), if the server generated one — null for a message with no
+    /// image), if the server generated one â€” null for a message with no
     /// link, or one whose link had nothing useful to show. The image (if
     /// any) resolves asynchronously afterward; the card itself always
     /// reserves the same fixed-height area for it up front (see
     /// MainWindow.axaml) so that arriving later never changes this row's
-    /// height — the same virtualized-list jump concern as everywhere else
+    /// height â€” the same virtualized-list jump concern as everywhere else
     /// something resolves after the initial paint.
     /// </summary>
     private LinkPreviewItem? BuildLinkPreview(PostDto post)
@@ -2323,7 +2430,7 @@ public partial class MainViewModel : ViewModelBase
     [RelayCommand]
     private void ToggleLinkPreviews() => Settings.ShowLinkPreviews = !Settings.ShowLinkPreviews;
 
-    /// <summary>Fire-and-forget from a message's construction — resolves the author's real avatar in the background and applies it once ready, without holding up painting the message itself.</summary>
+    /// <summary>Fire-and-forget from a message's construction â€” resolves the author's real avatar in the background and applies it once ready, without holding up painting the message itself.</summary>
     private async Task ResolveMessageAvatarAsync(MessageItem item, string userId)
     {
         if (await GetAvatarBitmapAsync(userId) is { } bitmap)
@@ -2357,7 +2464,7 @@ public partial class MainViewModel : ViewModelBase
         }
         catch
         {
-            // Best-effort cleanup — if this fails, the retry below will just fail too, same as before.
+            // Best-effort cleanup â€” if this fails, the retry below will just fail too, same as before.
         }
     }
 
@@ -2366,7 +2473,7 @@ public partial class MainViewModel : ViewModelBase
 
     /// <summary>
     /// Re-resolves the palette against the OS setting. Called when Windows
-    /// flips light/dark underneath a "System" preference — a no-op for an
+    /// flips light/dark underneath a "System" preference â€” a no-op for an
     /// explicit Clair/Sombre choice, so it's safe to wire unconditionally.
     /// </summary>
     public void RefreshSystemTheme()
@@ -2463,6 +2570,7 @@ public partial class MainViewModel : ViewModelBase
         IsThreadOpen = false;
         ThreadRootMessage = null;
         ThreadReplies.Clear();
+        _lastRenderedThreadKeys = [];
     }
 
     private async Task<bool> TryPaintThreadFromCacheAsync(string rootId)
@@ -2484,14 +2592,14 @@ public partial class MainViewModel : ViewModelBase
         }
     }
 
-    /// <summary>`posts` is the root plus its replies, oldest first — the root sorts first since replies must come after it.</summary>
+    /// <summary>`posts` is the root plus its replies, oldest first â€” the root sorts first since replies must come after it.</summary>
     private async Task PopulateThreadAsync(List<PostDto> posts)
     {
         var authorIds = posts.Select(p => p.UserId).Distinct();
         var authors = (await _service.GetCachedUsersAsync(authorIds)).ToDictionary(u => u.Id);
         if (authors.Count < authorIds.Count())
         {
-            // Cache didn't have everyone yet (e.g. this thread was never fetched before) — resolve for real.
+            // Cache didn't have everyone yet (e.g. this thread was never fetched before) â€” resolve for real.
             var missing = authorIds.Where(id => !authors.ContainsKey(id));
             foreach (var user in await _service.GetUsersAsync(_session.BaseUrl, _session.Token, missing))
             {
@@ -2523,16 +2631,64 @@ public partial class MainViewModel : ViewModelBase
             return item;
         }
 
-        // The root never counts as a continuation of anything — it's always
+        // The root never counts as a continuation of anything â€” it's always
         // shown with its own full header, visually separate from the reply list.
         ThreadRootMessage = ToMessageItem(posts[0], previous: null);
-        ThreadReplies.Clear();
-        MessageItem? previousReply = null;
-        foreach (var reply in posts.Skip(1))
+
+        // Same reconciliation as the main message list, for the same two
+        // reasons: not rebuilding every reply when one arrives, and being
+        // able to tell an append from a repaint so the panel can follow the
+        // newest reply only when the reader is already at the bottom.
+        var replies = posts.Skip(1).ToList();
+        var keys = replies.Select(RenderKey).ToList();
+
+        while (ThreadReplies.Count > 0 && ThreadReplies[^1].IsPending)
         {
+            ThreadReplies.RemoveAt(ThreadReplies.Count - 1);
+        }
+
+        var keptCount = 0;
+        if (ThreadReplies.Count == _lastRenderedThreadKeys.Count
+            && keys.Count >= ThreadReplies.Count
+            && _lastRenderedThreadKeys.Select(PostIdOfKey).SequenceEqual(keys.Take(ThreadReplies.Count).Select(PostIdOfKey)))
+        {
+            keptCount = ThreadReplies.Count;
+            for (var i = 0; i < keptCount; i++)
+            {
+                if (_lastRenderedThreadKeys[i] == keys[i])
+                {
+                    continue;
+                }
+                if (EditPartOfKey(_lastRenderedThreadKeys[i]) != EditPartOfKey(keys[i]))
+                {
+                    ThreadReplies[i].ApplyEditedText(replies[i].Message);
+                }
+                if (ReactionPartOfKey(_lastRenderedThreadKeys[i]) != ReactionPartOfKey(keys[i]))
+                {
+                    ReplaceReactionsInPlace(ThreadReplies[i], replies[i]);
+                }
+            }
+        }
+        else
+        {
+            ThreadReplies.Clear();
+        }
+
+        _lastRenderedThreadKeys = keys;
+
+        var appended = false;
+        MessageItem? previousReply = ThreadReplies.Count > 0 ? ThreadReplies[^1] : null;
+        foreach (var reply in replies.Skip(keptCount))
+        {
+            appended = true;
             var item = ToMessageItem(reply, previousReply);
             ThreadReplies.Add(item);
             previousReply = item;
+        }
+
+        if (appended && keptCount > 0)
+        {
+            ThreadRepliesAppended?.Invoke(this, EventArgs.Empty);
         }
     }
 
@@ -2553,7 +2709,7 @@ public partial class MainViewModel : ViewModelBase
             }
             catch
             {
-                // A cold cache just starts empty — the network refresh below fills it in.
+                // A cold cache just starts empty â€” the network refresh below fills it in.
             }
 
             var allChannels = await _service.GetCachedChannelsAsync(team.Id);
@@ -2566,16 +2722,28 @@ public partial class MainViewModel : ViewModelBase
                 return false;
             }
 
+            // Reopen on whatever was being read last time, when it's still
+            // there. Checked against every channel, not just the public and
+            // private ones, since it could well be a direct message.
+            var target = _activeChannelId is not null && allChannels.Any(c => c.Id == _activeChannelId)
+                ? allChannels.First(c => c.Id == _activeChannelId)
+                : firstChannel;
+
             TeamName = team.DisplayName;
-            PopulateChannels(visibleChannels, firstChannel.Id);
+            PopulateChannels(visibleChannels, target.Id);
             await PopulateDirectMessagesAsync(allChannels, allowNetwork: false);
-            ActiveChannelName = ChannelDisplayName(firstChannel);
+            ActiveChannelName = ChannelDisplayName(target);
             ActiveChannelTopic = "";
             TypingIndicatorText = "";
-            _activeChannelId = firstChannel.Id;
-            MarkChannelViewed(firstChannel.Id);
+            _activeChannelId = target.Id;
+            // Also recorded here, not just on an explicit click: otherwise a
+            // session where the user never switched channels would forget
+            // what they were reading, and the fallback would silently
+            // replace a remembered channel that has genuinely gone away.
+            Settings.LastChannelId = target.Id;
+            MarkChannelViewed(target.Id);
 
-            return await TryPaintMessagesFromCacheAsync(firstChannel.Id);
+            return await TryPaintMessagesFromCacheAsync(target.Id);
         }
         catch
         {
@@ -2588,7 +2756,7 @@ public partial class MainViewModel : ViewModelBase
     {
         try
         {
-            // Posts and outbox are independent reads — fetch them concurrently
+            // Posts and outbox are independent reads â€” fetch them concurrently
             // instead of paying for two sequential FFI round trips.
             var postsTask = _service.GetCachedPostsAsync(channelId);
             var outboxTask = _service.GetCachedOutboxAsync();
@@ -2618,7 +2786,7 @@ public partial class MainViewModel : ViewModelBase
         var team = teams.FirstOrDefault();
         if (team is null)
         {
-            throw new MattermostServiceException("Aucune équipe trouvée pour ce compte.");
+            throw new MattermostServiceException("Aucune Ã©quipe trouvÃ©e pour ce compte.");
         }
         _teamId = team.Id;
         TeamName = team.DisplayName;
@@ -2639,11 +2807,11 @@ public partial class MainViewModel : ViewModelBase
         var firstChannel = visibleChannels.FirstOrDefault();
         if (firstChannel is null)
         {
-            throw new MattermostServiceException("Aucun canal trouvé pour cette équipe.");
+            throw new MattermostServiceException("Aucun canal trouvÃ© pour cette Ã©quipe.");
         }
 
         // Keep whatever channel the user is already looking at (they may have
-        // clicked away from the first channel while this refresh was in flight) —
+        // clicked away from the first channel while this refresh was in flight) â€”
         // checked against every channel, not just public/private, since that
         // "current" channel could well be a DM.
         var targetChannelId = _activeChannelId is not null && allChannels.Any(c => c.Id == _activeChannelId)
@@ -2657,6 +2825,7 @@ public partial class MainViewModel : ViewModelBase
         ActiveChannelTopic = "";
         TypingIndicatorText = "";
         _activeChannelId = targetChannelId;
+        Settings.LastChannelId = targetChannelId;
         MarkChannelViewed(targetChannelId);
 
         var posts = await _service.GetPostsAsync(_session.BaseUrl, _session.Token, targetChannelId);
@@ -2674,7 +2843,7 @@ public partial class MainViewModel : ViewModelBase
     /// <summary>
     /// Keeps the sidebar's bold/badge state live: a message arriving via the
     /// WebSocket for a channel that isn't open right now only ever updates
-    /// the cache (see almatter-core's ws.rs), never the sidebar directly —
+    /// the cache (see almatter-core's ws.rs), never the sidebar directly â€”
     /// this is what actually notices and repaints it, cheaply skipped when
     /// nothing about any channel's counts has actually changed.
     /// </summary>
@@ -2750,7 +2919,7 @@ public partial class MainViewModel : ViewModelBase
     /// <summary>
     /// Clears a channel's unread badge the moment it's opened: zeroes it
     /// out locally (in the visible items and in the retained DTO, so a
-    /// later repaint from already-loaded data — e.g. a favorite drag —
+    /// later repaint from already-loaded data â€” e.g. a favorite drag â€”
     /// doesn't resurrect the old count) immediately, then tells the server
     /// in the background so the next real fetch agrees.
     /// </summary>
@@ -2784,13 +2953,13 @@ public partial class MainViewModel : ViewModelBase
         _ = MarkChannelViewedOnServerAsync(channelId);
     }
 
-    /// <summary>Raised whenever aggregate unread state (see HasUnreadRegularMessages/TotalPriorityUnreadCount) might have changed — MainWindow's code-behind uses this to update the taskbar overlay badge, since that's a Win32 handle the ViewModel has no access to.</summary>
+    /// <summary>Raised whenever aggregate unread state (see HasUnreadRegularMessages/TotalPriorityUnreadCount) might have changed â€” MainWindow's code-behind uses this to update the taskbar overlay badge, since that's a Win32 handle the ViewModel has no access to.</summary>
     public event EventHandler? UnreadBadgeStateChanged;
 
-    /// <summary>True when some channel/DM has an unread message that isn't itself a mention/DM — those get the numbered badge instead, this one just a plain dot.</summary>
+    /// <summary>True when some channel/DM has an unread message that isn't itself a mention/DM â€” those get the numbered badge instead, this one just a plain dot.</summary>
     public bool HasUnreadRegularMessages { get; private set; }
 
-    /// <summary>Total unread mentions + DM messages across every channel/DM (Favoris included) — drives the taskbar's numbered overlay badge.</summary>
+    /// <summary>Total unread mentions + DM messages across every channel/DM (Favoris included) â€” drives the taskbar's numbered overlay badge.</summary>
     public int TotalPriorityUnreadCount { get; private set; }
 
     private void RefreshUnreadAggregates()
@@ -2841,7 +3010,7 @@ public partial class MainViewModel : ViewModelBase
         }
         catch
         {
-            // Best-effort — the badge already cleared locally; a failure here
+            // Best-effort â€” the badge already cleared locally; a failure here
             // just means it could reappear on the next real fetch, no worse
             // than not having this call at all.
         }
@@ -2852,7 +3021,7 @@ public partial class MainViewModel : ViewModelBase
 
     /// <summary>
     /// Mattermost direct-message channels don't carry a useful display_name
-    /// of their own — a 1:1 DM channel's `name` is literally
+    /// of their own â€” a 1:1 DM channel's `name` is literally
     /// "{userId1}__{userId2}" (sorted), so the other participant's id is
     /// derived from that rather than an extra per-channel members call. A
     /// group DM's `name` isn't parseable this way, so its participant list
@@ -2862,7 +3031,7 @@ public partial class MainViewModel : ViewModelBase
     private async Task PopulateDirectMessagesAsync(List<ChannelDto> allChannels, bool allowNetwork)
     {
         // Mattermost creates the DM/GM channel record the moment a
-        // conversation is opened, before any message is actually sent —
+        // conversation is opened, before any message is actually sent â€”
         // total_msg_count is what tells an unused one apart from a real one.
         // Most recent activity first, like every real chat client.
         var dmChannels = allChannels
@@ -3039,10 +3208,10 @@ public partial class MainViewModel : ViewModelBase
         RefreshUnreadAggregates();
     }
 
-    /// <summary>"Less than two minutes" per an explicit request — the same window every grouping site below uses.</summary>
+    /// <summary>"Less than two minutes" per an explicit request â€” the same window every grouping site below uses.</summary>
     private const long ContinuationWindowMillis = 2 * 60 * 1000;
 
-    /// <summary>True when a message immediately follows one from the same author less than two minutes ago — the header (avatar/name) is skipped for it, official-client style.</summary>
+    /// <summary>True when a message immediately follows one from the same author less than two minutes ago â€” the header (avatar/name) is skipped for it, official-client style.</summary>
     private static bool IsContinuationOf(MessageItem? previous, string authorUserId, long createAtMillis) =>
         previous is not null
         && previous.AuthorUserId == authorUserId
@@ -3051,20 +3220,74 @@ public partial class MainViewModel : ViewModelBase
     private void PopulateMessages(List<PostDto> posts, Dictionary<string, UserDto> authors)
     {
         // Thread replies are shown inline too (not just in the thread panel)
-        // so nothing gets missed just by not having a thread open — marked
+        // so nothing gets missed just by not having a thread open â€” marked
         // with an accent bar so their thread membership is still visible.
         var ordered = posts.OrderBy(p => p.CreateAt).ToList();
-        // For resolving a reply's quoted-root preview below — only from
+        // For resolving a reply's quoted-root preview below â€” only from
         // what's already in this same batch (see QuotedAuthorName's doc
         // comment for why this is never resolved later/asynchronously).
         var postsById = ordered.ToDictionary(p => p.Id);
 
-        _lastRenderedPostIds = ordered.Select(p => p.Id).ToList();
+        var keys = ordered.Select(RenderKey).ToList();
 
-        Messages.Clear();
-        MessageItem? previous = null;
-        foreach (var post in ordered)
+        // Pending bubbles always sit at the end and are re-appended by the
+        // caller straight after, so drop them before reconciling the real
+        // ones â€” otherwise they'd break the prefix comparison below.
+        while (Messages.Count > 0 && Messages[^1].IsPending)
         {
+            Messages.RemoveAt(Messages.Count - 1);
+        }
+
+        // The overwhelmingly common update is "one more message arrived":
+        // everything already on screen is still there, unchanged, in the
+        // same order. Rebuilding the whole list for that discarded and
+        // recreated every MessageItem (455 of them on a busy channel), fired
+        // an avatar lookup per message, and made the virtualizing panel tear
+        // down and re-realize its rows â€” visible as a hitch mid-read. When
+        // the new list starts with exactly what's already shown, append the
+        // tail instead and leave the rest untouched.
+        // Matched on message id alone, not on the whole key: an edited
+        // message keeps its place in the list, so it should be updated where
+        // it sits rather than forcing everything to be rebuilt around it.
+        var keptCount = 0;
+        if (Messages.Count == _lastRenderedPostKeys.Count
+            && keys.Count >= Messages.Count
+            && _lastRenderedPostKeys.Select(PostIdOfKey).SequenceEqual(keys.Take(Messages.Count).Select(PostIdOfKey)))
+        {
+            keptCount = Messages.Count;
+
+            // Same id, something else about it moved. Text and reactions are
+            // compared separately so a reaction never forces the text to be
+            // reset (which would throw away the parsed-and-cached line split
+            // for nothing), and neither forces a rebuild of the list.
+            for (var i = 0; i < keptCount; i++)
+            {
+                if (_lastRenderedPostKeys[i] == keys[i])
+                {
+                    continue;
+                }
+                if (EditPartOfKey(_lastRenderedPostKeys[i]) != EditPartOfKey(keys[i]))
+                {
+                    Messages[i].ApplyEditedText(ordered[i].Message);
+                }
+                if (ReactionPartOfKey(_lastRenderedPostKeys[i]) != ReactionPartOfKey(keys[i]))
+                {
+                    ReplaceReactionsInPlace(Messages[i], ordered[i]);
+                }
+            }
+        }
+        else
+        {
+            Messages.Clear();
+        }
+
+        _lastRenderedPostKeys = keys;
+
+        var appended = false;
+        MessageItem? previous = Messages.Count > 0 ? Messages[^1] : null;
+        foreach (var post in ordered.Skip(keptCount))
+        {
+            appended = true;
             authors.TryGetValue(post.UserId, out var author);
 
             string? quotedAuthorName = null;
@@ -3101,6 +3324,57 @@ public partial class MainViewModel : ViewModelBase
             Messages.Add(item);
             previous = item;
         }
+
+        // Only an append onto an existing list is "new traffic arriving".
+        // A from-scratch repaint (channel switch, jump to a search result)
+        // has its own scrolling to do and must not be overridden.
+        if (appended && keptCount > 0)
+        {
+            MessagesAppended?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    /// <summary>
+    /// Everything about a message that the view renders and that can change
+    /// under it without the message itself being replaced: its edit stamp
+    /// and its reactions. Compared field by field so each change updates
+    /// only what it affects. The separator is a control character precisely
+    /// because no id, emoji name or user id can contain one.
+    /// </summary>
+    private static string RenderKey(PostDto post)
+    {
+        var reactions = string.Join(
+            ",",
+            post.Metadata.Reactions
+                .Select(r => $"{r.EmojiName}={r.UserId}")
+                .OrderBy(r => r, StringComparer.Ordinal));
+        return $"{post.Id}{post.EditAt}{reactions}";
+    }
+
+    private static string PostIdOfKey(string key) => PartOfKey(key, 0);
+    private static string EditPartOfKey(string key) => PartOfKey(key, 1);
+    private static string ReactionPartOfKey(string key) => PartOfKey(key, 2);
+
+    private static string PartOfKey(string key, int index)
+    {
+        var parts = key.Split('');
+        return index < parts.Length ? parts[index] : "";
+    }
+
+    /// <summary>
+    /// Swaps a message's reaction pills for a fresh set without touching
+    /// anything else about the row â€” what makes someone else's reaction
+    /// appear live instead of on the next channel switch.
+    /// </summary>
+    private void ReplaceReactionsInPlace(MessageItem item, PostDto post)
+    {
+        var fresh = BuildReactions(post);
+        item.Reactions.Clear();
+        foreach (var reaction in fresh)
+        {
+            item.Reactions.Add(reaction);
+        }
+        item.NotifyReactionsChanged();
     }
 
     /// <summary>Paints the confirmed posts, then appends any still-queued outbox messages for this channel so a pending send doesn't vanish until it's actually flushed.</summary>
@@ -3205,21 +3479,21 @@ public partial class MainViewModel : ViewModelBase
     private static string BuildTypingIndicatorText(List<string> names) => names.Count switch
     {
         0 => "",
-        1 => $"{names[0]} est en train d'écrire…",
-        2 => $"{names[0]} et {names[1]} sont en train d'écrire…",
-        _ => "Plusieurs personnes sont en train d'écrire…",
+        1 => $"{names[0]} est en train d'Ã©crireâ€¦",
+        2 => $"{names[0]} et {names[1]} sont en train d'Ã©crireâ€¦",
+        _ => "Plusieurs personnes sont en train d'Ã©crireâ€¦",
     };
 
-    /// <summary>Search results can span months, so — unlike the plain message list — the date matters, not just the time.</summary>
+    /// <summary>Search results can span months, so â€” unlike the plain message list â€” the date matters, not just the time.</summary>
     private static string FormatSearchResultTime(long createAtMillis) =>
         DateTimeOffset.FromUnixTimeMilliseconds(createAtMillis).ToLocalTime().ToString("dd/MM/yy HH:mm");
 
-    /// <summary>A single-line, length-capped preview for a reply's quoted-root block — a citation, not the full message.</summary>
+    /// <summary>A single-line, length-capped preview for a reply's quoted-root block â€” a citation, not the full message.</summary>
     private static string TruncateQuote(string text)
     {
         const int maxLength = 120;
         var singleLine = string.Join(' ', text.Split('\n', StringSplitOptions.RemoveEmptyEntries)).Trim();
-        return singleLine.Length > maxLength ? singleLine[..maxLength].TrimEnd() + "…" : singleLine;
+        return singleLine.Length > maxLength ? singleLine[..maxLength].TrimEnd() + "â€¦" : singleLine;
     }
 
     private static string AvatarColorFor(string userId)

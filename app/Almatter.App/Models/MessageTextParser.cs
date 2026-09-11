@@ -44,36 +44,36 @@ public static partial class MessageTextParser
         {
             if (match.Index > lastIndex)
             {
-                segments.Add(new MessageTextSegment { Text = text[lastIndex..match.Index], IsLink = false });
+                segments.Add(new PlainTextSegment { Text = text[lastIndex..match.Index] });
             }
 
             if (match.Groups[1].Success)
             {
-                segments.Add(new MessageTextSegment { Text = UnescapeLabel(match.Groups[1].Value), IsLink = true, LinkUrl = match.Groups[2].Value });
+                segments.Add(new LinkSegment { Text = UnescapeLabel(match.Groups[1].Value), LinkUrl = match.Groups[2].Value });
                 lastIndex = match.Index + match.Length;
             }
             else if (match.Groups[4].Success)
             {
-                segments.Add(new MessageTextSegment { Text = "@" + match.Groups[4].Value, IsMention = true });
+                segments.Add(new MentionSegment { Text = "@" + match.Groups[4].Value });
                 lastIndex = match.Index + match.Length;
             }
             else
             {
                 // Trailing punctuation is usually sentence punctuation, not part of the URL itself.
                 var url = match.Groups[3].Value.TrimEnd('.', ',', ')', ']', '>', '!', '?', ';', ':');
-                segments.Add(new MessageTextSegment { Text = url, IsLink = true, LinkUrl = url });
+                segments.Add(new LinkSegment { Text = url, LinkUrl = url });
                 lastIndex = match.Index + url.Length;
             }
         }
 
         if (lastIndex < text.Length)
         {
-            segments.Add(new MessageTextSegment { Text = text[lastIndex..], IsLink = false });
+            segments.Add(new PlainTextSegment { Text = text[lastIndex..] });
         }
 
         if (segments.Count == 0)
         {
-            segments.Add(new MessageTextSegment { Text = text, IsLink = false });
+            segments.Add(new PlainTextSegment { Text = text });
         }
 
         return segments;
