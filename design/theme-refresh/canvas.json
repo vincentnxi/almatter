@@ -1,0 +1,31 @@
+{
+  "artboards": [
+    { "file": "Main.dc.html", "x": 0, "y": 0, "w": 1280, "h": 800, "title": "Clair" },
+    { "file": "Dark.dc.html", "x": 1400, "y": 0, "w": 1280, "h": 800, "title": "Sombre" },
+    { "file": "Tokens.dc.html", "x": 0, "y": 960, "w": 1280, "h": 1260, "title": "Jetons" }
+  ],
+  "annotations": [
+    {
+      "id": "note-palette",
+      "x": 0,
+      "y": -190,
+      "w": 620,
+      "text": "Clair — la conversation passe sur un blanc franc (#FCFCFD) au lieu de #FAFAFA, la barre latérale sur un gris légèrement froid.\n\nAujourd'hui les trois fonds (#FAFAFA / #F3F3F3 / #EAEAEA) sont presque identiques et ternes ; ici l'échelle est nette et la carte blanche ressort vraiment."
+    },
+    {
+      "id": "note-dark",
+      "x": 1400,
+      "y": -190,
+      "w": 620,
+      "text": "Sombre — l'accent DOIT changer de valeur : le bleu #005FB8 du thème clair devient illisible sur fond sombre, d'où #4C9DF5.\n\nC'est le seul vrai changement d'architecture : le modèle actuel n'a qu'un accent unique pour tous les thèmes."
+    },
+    {
+      "id": "note-tokens",
+      "x": 1400,
+      "y": 960,
+      "w": 620,
+      "text": "Typographie unifiée : une seule famille pour toute l'app, Segoe UI Variable. Open Sans (police du client officiel Mattermost, utilisée aujourd'hui pour les noms de canaux ET pour les messages) a une approche nettement plus large — c'est l'écart entre lettres qui gênait. Corps de message remonté à 14,5 pour compenser la hauteur d'œil plus basse de Segoe.\n\nDeux propositions à valider ou rejeter :\n\n1. Nom de canal en 13,5 au lieu de 16. Aujourd'hui la navigation est typographiquement plus forte que le contenu des messages (14) — hiérarchie inversée.\n\n2. Un état de survol sur les lignes de la barre latérale. Il n'y en a aucun actuellement : le gabarit de bouton supprime explicitement le retour visuel au survol."
+    }
+  ],
+  "launch": { "view": "canvas" }
+}

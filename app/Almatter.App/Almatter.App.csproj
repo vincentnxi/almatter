@@ -1,0 +1,46 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\almatter-logo.ico</ApplicationIcon>
+    <!-- Only for System.Windows.Forms.NotifyIcon — a real Windows tray icon
+         and balloon/toast notification for mentions, which Avalonia has no
+         built-in equivalent for. -->
+    <UseWindowsForms>true</UseWindowsForms>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Folder Include="Models\" />
+    <AvaloniaResource Include="Assets\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Rust core, built separately: `cargo build` (Debug config here) or
+         a release-mode Cargo build (Release config) in ../../core. Picks
+         the matching Cargo profile's DLL so a Release build doesn't
+         silently ship without almatter_ffi.dll (or with a stale Debug
+         one) just because only a debug artifact happened to exist on disk. -->
+    <None Include="..\..\core\target\release\almatter_ffi.dll" Condition="'$(Configuration)' == 'Release' AND Exists('..\..\core\target\release\almatter_ffi.dll')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>almatter_ffi.dll</Link>
+    </None>
+    <None Include="..\..\core\target\debug\almatter_ffi.dll" Condition="'$(Configuration)' != 'Release' AND Exists('..\..\core\target\debug\almatter_ffi.dll')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>almatter_ffi.dll</Link>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="12.1.2" />
+    <PackageReference Include="Avalonia.Desktop" Version="12.1.2" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.2" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="12.1.2" />
+    <PackageReference Include="AvaloniaUI.DiagnosticsSupport" Version="2.2.3">
+      <IncludeAssets Condition="'$(Configuration)' != 'Debug'">None</IncludeAssets>
+      <PrivateAssets Condition="'$(Configuration)' != 'Debug'">All</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+  </ItemGroup>
+</Project>

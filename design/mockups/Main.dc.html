@@ -1,0 +1,284 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    :root{
+      --c-bg:#FAFAFA; --c-panel:#F3F3F3; --c-rail:#EAEAEA;
+      --c-border:#E1E1E1; --c-border-strong:#D6D6D6;
+      --c-text:#1A1A1A; --c-text-2:#5C5C5C; --c-text-3:#8A8A8A;
+      --c-accent:#005FB8; --c-accent-soft:#E7F1FB; --c-accent-ink:#0B4E93;
+      --c-danger:#C42B1C; --c-online:#0E8A0E; --c-away:#DF9A00; --c-offline:#A6A4A2;
+      --font:'Segoe UI Variable','Segoe UI',system-ui,-apple-system,BlinkMacSystemFont,sans-serif;
+    }
+    *{box-sizing:border-box;}
+    html,body{margin:0;padding:0;}
+    body{font-family:var(--font);color:var(--c-text);}
+    a{color:var(--c-accent);text-decoration:none;} a:hover{color:var(--c-accent-ink);}
+    .icon{display:block;flex:none;}
+    .avatar{border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:600;flex:none;}
+    .presence{width:10px;height:10px;border-radius:50%;border:2px solid var(--c-panel);flex:none;}
+    .truncate{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  </style>
+</helmet>
+
+<div style="width:1440px;height:900px;display:flex;background:var(--c-bg);font-size:13px;line-height:1.4;overflow:hidden;">
+
+  <!-- TEAM RAIL -->
+  <div style="width:56px;flex:none;background:var(--c-rail);border-right:1px solid var(--c-border);display:flex;flex-direction:column;align-items:center;padding:12px 0;gap:8px;">
+    <div style="width:40px;height:40px;border-radius:10px;background:var(--c-accent);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;box-shadow:0 0 0 2px var(--c-accent-soft) inset;position:relative;">
+      WM
+      <div style="position:absolute;left:-8px;top:8px;width:3px;height:24px;border-radius:2px;background:var(--c-accent);"></div>
+    </div>
+    <div style="width:40px;height:40px;border-radius:10px;background:#DDD9D3;color:#5C5650;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;">DE</div>
+    <div style="width:40px;height:40px;border-radius:10px;background:#D8DEE6;color:#4A5568;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;">OP</div>
+    <div style="width:32px;height:32px;border-radius:8px;border:1px dashed var(--c-border-strong);color:var(--c-text-3);display:flex;align-items:center;justify-content:center;margin-top:4px;">
+      <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+    </div>
+  </div>
+
+  <!-- SIDEBAR -->
+  <div style="width:280px;flex:none;background:var(--c-panel);border-right:1px solid var(--c-border);display:flex;flex-direction:column;">
+    <div style="padding:14px 14px 8px 14px;display:flex;align-items:center;gap:6px;">
+      <div style="font-weight:700;font-size:14.5px;" class="truncate">Acme Corp</div>
+      <svg class="icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--c-text-2)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+    </div>
+    <div style="padding:0 12px 12px 12px;">
+      <div style="display:flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--c-border);border-radius:6px;padding:6px 10px;color:var(--c-text-3);">
+        <svg class="icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+        <span>Rechercher</span>
+      </div>
+    </div>
+
+    <div style="flex:1;overflow:auto;padding:0 8px 12px 8px;">
+
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 8px 4px 8px;color:var(--c-text-3);font-size:11px;font-weight:700;letter-spacing:.04em;">
+        <div style="display:flex;align-items:center;gap:4px;">
+          <svg class="icon" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+          CANAUX
+        </div>
+        <svg class="icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:6px;color:var(--c-text-2);">
+        <svg class="icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 4l-1 16M16 4l-1 16M4 9h16M3 15h16"/></svg>
+        <span class="truncate">annonces</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:6px;background:var(--c-accent-soft);position:relative;">
+        <div style="position:absolute;left:-8px;top:6px;bottom:6px;width:3px;border-radius:2px;background:var(--c-accent);"></div>
+        <svg class="icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--c-accent-ink)" stroke-width="1.8"><path d="M9 4l-1 16M16 4l-1 16M4 9h16M3 15h16"/></svg>
+        <span class="truncate" style="font-weight:700;color:var(--c-accent-ink);flex:1;">general</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:6px;">
+        <svg class="icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--c-text)" stroke-width="1.8"><path d="M9 4l-1 16M16 4l-1 16M4 9h16M3 15h16"/></svg>
+        <span class="truncate" style="font-weight:700;flex:1;">produit</span>
+        <div style="background:var(--c-danger);color:#fff;border-radius:9px;min-width:17px;height:17px;font-size:10.5px;font-weight:700;display:flex;align-items:center;justify-content:center;padding:0 4px;">3</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:6px;color:var(--c-text-2);">
+        <svg class="icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 018 0v3"/></svg>
+        <span class="truncate">direction</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:6px;color:var(--c-text-2);">
+        <svg class="icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 4l-1 16M16 4l-1 16M4 9h16M3 15h16"/></svg>
+        <span class="truncate">random</span>
+      </div>
+
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 8px 4px 8px;color:var(--c-text-3);font-size:11px;font-weight:700;letter-spacing:.04em;">
+        <div style="display:flex;align-items:center;gap:4px;">
+          <svg class="icon" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+          MESSAGES PRIVÉS
+        </div>
+        <svg class="icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;">
+        <div style="position:relative;">
+          <div class="avatar" style="width:22px;height:22px;font-size:9.5px;background:#8752A3;">CL</div>
+          <div class="presence" style="position:absolute;right:-2px;bottom:-2px;background:var(--c-online);"></div>
+        </div>
+        <span class="truncate" style="font-weight:700;flex:1;">Camille Leroux</span>
+        <div style="width:7px;height:7px;border-radius:50%;background:var(--c-accent);"></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;color:var(--c-text-2);">
+        <div style="position:relative;">
+          <div class="avatar" style="width:22px;height:22px;font-size:9.5px;background:#3B7A57;">TN</div>
+          <div class="presence" style="position:absolute;right:-2px;bottom:-2px;background:var(--c-away);"></div>
+        </div>
+        <span class="truncate">Thomas Noël</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;color:var(--c-text-2);">
+        <div style="position:relative;">
+          <div class="avatar" style="width:22px;height:22px;font-size:9.5px;background:#B0554B;">SM</div>
+          <div class="presence" style="position:absolute;right:-2px;bottom:-2px;background:var(--c-offline);"></div>
+        </div>
+        <span class="truncate">Sophie Marchand</span>
+      </div>
+    </div>
+
+    <div style="border-top:1px solid var(--c-border);padding:10px 12px;display:flex;align-items:center;gap:8px;">
+      <div style="position:relative;">
+        <div class="avatar" style="width:28px;height:28px;font-size:11px;background:var(--c-accent);">VH</div>
+        <div class="presence" style="position:absolute;right:-2px;bottom:-2px;background:var(--c-online);"></div>
+      </div>
+      <div style="flex:1;min-width:0;">
+        <div class="truncate" style="font-weight:700;">Vous</div>
+        <div class="truncate" style="color:var(--c-text-2);font-size:11.5px;">Disponible</div>
+      </div>
+      <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--c-text-2)" stroke-width="1.7"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.9l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.9-.3 1.7 1.7 0 00-1 1.6V21a2 2 0 11-4 0v-.2a1.7 1.7 0 00-1-1.5 1.7 1.7 0 00-1.9.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.9 1.7 1.7 0 00-1.6-1H3a2 2 0 110-4h.2a1.7 1.7 0 001.5-1 1.7 1.7 0 00-.3-1.9l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.9.3H9a1.7 1.7 0 001-1.6V3a2 2 0 114 0v.2a1.7 1.7 0 001 1.5 1.7 1.7 0 001.9-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.9V9a1.7 1.7 0 001.6 1H21a2 2 0 110 4h-.2a1.7 1.7 0 00-1.5 1z"/></svg>
+    </div>
+  </div>
+
+  <!-- MAIN CONVERSATION -->
+  <div style="flex:1;min-width:0;display:flex;flex-direction:column;background:var(--c-bg);">
+    <div style="height:52px;flex:none;border-bottom:1px solid var(--c-border);display:flex;align-items:center;padding:0 16px;gap:10px;">
+      <svg class="icon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--c-text)" stroke-width="1.8"><path d="M9 4l-1 16M16 4l-1 16M4 9h16M3 15h16"/></svg>
+      <div style="font-weight:700;font-size:15px;">produit</div>
+      <div style="width:1px;height:16px;background:var(--c-border-strong);"></div>
+      <div class="truncate" style="color:var(--c-text-2);flex:1;">Roadmap, specs et suivi des livraisons</div>
+      <div style="display:flex;align-items:center;gap:6px;color:var(--c-text-2);">
+        <svg class="icon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+        <div style="display:flex;align-items:center;gap:4px;padding:5px 8px;border-radius:6px;">
+          <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
+          <span>8</span>
+        </div>
+        <svg class="icon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 17l-5 3 1-6-4-4h6l2-6 2 6h6l-4 4 1 6z" opacity="0"/><path d="M17 3l2 2-9 9-4 1 1-4 9-9z"/></svg>
+      </div>
+    </div>
+
+    <div style="flex:1;overflow:auto;padding:14px 20px;display:flex;flex-direction:column;gap:2px;">
+
+      <div style="display:flex;align-items:center;gap:10px;margin:6px 0 10px 0;color:var(--c-text-3);font-size:11.5px;font-weight:700;">
+        <div style="flex:1;height:1px;background:var(--c-border);"></div>
+        Aujourd'hui
+        <div style="flex:1;height:1px;background:var(--c-border);"></div>
+      </div>
+
+      <div style="display:flex;gap:10px;padding:6px 8px;border-radius:6px;">
+        <div class="avatar" style="width:36px;height:36px;font-size:13px;background:#3B7A57;flex:none;">TN</div>
+        <div style="min-width:0;flex:1;">
+          <div style="display:flex;align-items:baseline;gap:8px;">
+            <span style="font-weight:700;">Thomas Noël</span>
+            <span style="color:var(--c-text-3);font-size:11.5px;">9:14</span>
+          </div>
+          <div style="margin-top:1px;">La beta v0.9 est prête pour tests, j'ai poussé le build sur le partage.</div>
+          <div style="display:flex;align-items:center;gap:6px;margin-top:8px;background:#fff;border:1px solid var(--c-border);border-radius:8px;padding:8px 10px;max-width:340px;">
+            <svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--c-text-2)" stroke-width="1.6"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>
+            <div style="min-width:0;">
+              <div class="truncate" style="font-weight:600;font-size:12.5px;">winmatt-beta-0.9.zip</div>
+              <div style="color:var(--c-text-3);font-size:11px;">18,4 Mo</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:10px;padding:6px 8px;border-radius:6px;background:#F0F6FC;">
+        <div class="avatar" style="width:36px;height:36px;font-size:13px;background:var(--c-accent);flex:none;">VH</div>
+        <div style="min-width:0;flex:1;">
+          <div style="display:flex;align-items:baseline;gap:8px;">
+            <span style="font-weight:700;">Vous</span>
+            <span style="color:var(--c-text-3);font-size:11.5px;">9:26</span>
+          </div>
+          <div style="margin-top:1px;">Merci <span style="color:var(--c-accent-ink);font-weight:600;background:var(--c-accent-soft);border-radius:4px;padding:0 3px;">@Thomas</span> — je regarde ça cet après-midi.</div>
+          <div style="display:flex;gap:6px;margin-top:6px;">
+            <div style="display:flex;align-items:center;gap:4px;background:var(--c-accent-soft);border:1px solid var(--c-accent);border-radius:12px;padding:2px 8px;font-size:12px;">👍 <span style="color:var(--c-accent-ink);font-weight:600;">2</span></div>
+            <div style="display:flex;align-items:center;gap:4px;background:#fff;border:1px solid var(--c-border);border-radius:12px;padding:2px 8px;font-size:12px;color:var(--c-text-2);">🎉 <span style="font-weight:600;">1</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:10px;padding:6px 8px;border-radius:6px;">
+        <div class="avatar" style="width:36px;height:36px;font-size:13px;background:#8752A3;flex:none;">CL</div>
+        <div style="min-width:0;flex:1;">
+          <div style="display:flex;align-items:baseline;gap:8px;">
+            <span style="font-weight:700;">Camille Leroux</span>
+            <span style="color:var(--c-text-3);font-size:11.5px;">9:31</span>
+          </div>
+          <div style="margin-top:1px;">On garde la recherche locale comme priorité pour la prochaine itération ?</div>
+          <div style="display:flex;align-items:center;gap:6px;margin-top:8px;color:var(--c-text-2);font-size:12px;">
+            <div style="display:flex;">
+              <div class="avatar" style="width:18px;height:18px;font-size:8px;background:var(--c-accent);border:2px solid var(--c-bg);">VH</div>
+              <div class="avatar" style="width:18px;height:18px;font-size:8px;background:#3B7A57;border:2px solid var(--c-bg);margin-left:-6px;">TN</div>
+            </div>
+            <a href="#">3 réponses</a>
+            <span style="color:var(--c-text-3);">· dernière il y a 4 min</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <div style="flex:none;padding:10px 20px 16px 20px;">
+      <div style="border:1px solid var(--c-border-strong);border-radius:10px;background:#fff;">
+        <div style="padding:10px 12px 6px 12px;color:var(--c-text-3);">Écrire dans #produit…</div>
+        <div style="display:flex;align-items:center;gap:10px;padding:6px 10px 10px 10px;color:var(--c-text-2);">
+          <svg class="icon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M21.4 11.1L12.2 20.3a5 5 0 01-7.1-7.1l9-9a3.5 3.5 0 015 5l-9 9a2 2 0 01-2.8-2.8l8.1-8.1"/></svg>
+          <svg class="icon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M8.5 14.5s1.5 2 3.5 2 3.5-2 3.5-2M9 9h.01M15 9h.01" stroke-linecap="round"/></svg>
+          <div style="flex:1;"></div>
+          <div style="width:30px;height:30px;border-radius:7px;background:var(--c-accent);display:flex;align-items:center;justify-content:center;">
+            <svg class="icon" width="15" height="15" viewBox="0 0 24 24" fill="#fff" stroke="none"><path d="M3 11l18-8-8 18-2.5-7.5L3 11z"/></svg>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- THREAD PANEL -->
+  <div style="width:320px;flex:none;background:var(--c-bg);border-left:1px solid var(--c-border);display:flex;flex-direction:column;">
+    <div style="height:52px;flex:none;border-bottom:1px solid var(--c-border);display:flex;align-items:center;padding:0 14px;gap:8px;">
+      <div style="font-weight:700;flex:1;">Fil de discussion</div>
+      <span style="color:var(--c-text-3);font-size:12px;">produit</span>
+      <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--c-text-2)" stroke-width="1.8" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </div>
+    <div style="flex:1;overflow:auto;padding:14px;">
+      <div style="display:flex;gap:8px;">
+        <div class="avatar" style="width:30px;height:30px;font-size:11px;background:#8752A3;flex:none;">CL</div>
+        <div style="min-width:0;">
+          <div style="display:flex;align-items:baseline;gap:6px;">
+            <span style="font-weight:700;font-size:12.5px;">Camille Leroux</span>
+            <span style="color:var(--c-text-3);font-size:11px;">9:31</span>
+          </div>
+          <div style="margin-top:1px;font-size:13px;">On garde la recherche locale comme priorité pour la prochaine itération ?</div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;margin:14px 0;color:var(--c-text-3);font-size:11.5px;">
+        <div style="flex:1;height:1px;background:var(--c-border);"></div>
+        3 réponses
+        <div style="flex:1;height:1px;background:var(--c-border);"></div>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:14px;">
+        <div class="avatar" style="width:30px;height:30px;font-size:11px;background:var(--c-accent);flex:none;">VH</div>
+        <div style="min-width:0;">
+          <div style="display:flex;align-items:baseline;gap:6px;">
+            <span style="font-weight:700;font-size:12.5px;">Vous</span>
+            <span style="color:var(--c-text-3);font-size:11px;">9:33</span>
+          </div>
+          <div style="margin-top:1px;font-size:13px;">Oui, ça reste le cœur du mode hors-ligne.</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:14px;">
+        <div class="avatar" style="width:30px;height:30px;font-size:11px;background:#3B7A57;flex:none;">TN</div>
+        <div style="min-width:0;">
+          <div style="display:flex;align-items:baseline;gap:6px;">
+            <span style="font-weight:700;font-size:12.5px;">Thomas Noël</span>
+            <span style="color:var(--c-text-3);font-size:11px;">9:40</span>
+          </div>
+          <div style="margin-top:1px;font-size:13px;">Parfait, je bloque du temps dessus.</div>
+        </div>
+      </div>
+    </div>
+    <div style="flex:none;padding:10px 14px 14px 14px;">
+      <div style="border:1px solid var(--c-border-strong);border-radius:10px;background:#fff;padding:8px 10px;color:var(--c-text-3);font-size:12.5px;">
+        Répondre au fil…
+      </div>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

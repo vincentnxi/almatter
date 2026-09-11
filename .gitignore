@@ -1,0 +1,18 @@
+# Rust
+/core/target/
+**/*.rs.bk
+
+# .NET / Avalonia
+[Bb]in/
+[Oo]bj/
+*.user
+
+# Design canvas: generated payload, rebuilt from the .dc.html sources + canvas.json
+design/mockups/winmatt-mockups.html
+design/theme-refresh/almatter-themes.html
+
+# Editors / OS
+.vs/
+.idea/
+*.swp
+Thumbs.db

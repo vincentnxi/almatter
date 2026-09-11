@@ -1,0 +1,61 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Almatter.App.ViewModels"
+        xmlns:conv="using:Avalonia.Data.Converters"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="420" d:DesignHeight="480"
+        x:Class="Almatter.App.Views.LoginWindow"
+        x:DataType="vm:LoginViewModel"
+        Icon="/Assets/almatter-logo.ico"
+        Title="Almatter — Connexion"
+        Width="420" Height="480" CanResize="False"
+        WindowStartupLocation="CenterScreen"
+        FontFamily="{DynamicResource AppFontFamily}"
+        FontSize="13">
+
+    <Design.DataContext>
+        <vm:LoginViewModel />
+    </Design.DataContext>
+
+    <!-- Light-palette values only so the XAML previewer has something to
+         draw: the real ones are pushed in by ThemeResources.Apply from the
+         code-behind, before this window is ever shown. -->
+    <Window.Resources>
+        <SolidColorBrush x:Key="DividerBrush" Color="#E6E8EC" />
+        <SolidColorBrush x:Key="DividerStrongBrush" Color="#D3D7DE" />
+        <SolidColorBrush x:Key="TextSecondaryBrush" Color="#5B626D" />
+        <SolidColorBrush x:Key="AccentBrush" Color="#005FB8" />
+        <SolidColorBrush x:Key="OnAccentBrush" Color="#FFFFFF" />
+        <SolidColorBrush x:Key="DangerBrush" Color="#C42B1C" />
+        <SolidColorBrush x:Key="DangerSoftBrush" Color="#FBEAE8" />
+    </Window.Resources>
+
+    <StackPanel Margin="40" Spacing="4" VerticalAlignment="Center">
+
+        <Image Source="/Assets/almatter-logo.png" Width="48" Height="48" HorizontalAlignment="Center" Margin="0,0,0,12" />
+        <TextBlock Text="Se connecter à Almatter" FontWeight="Bold" FontSize="17" HorizontalAlignment="Center" Margin="0,0,0,24" />
+
+        <TextBlock Text="Serveur" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" Margin="2,0,0,4" />
+        <TextBox Text="{Binding ServerUrl}" PlaceholderText="https://mon-serveur.exemple.com" Margin="0,0,0,14" />
+
+        <TextBlock Text="Identifiant" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" Margin="2,0,0,4" />
+        <TextBox Text="{Binding LoginId}" PlaceholderText="Nom d'utilisateur ou e-mail" Margin="0,0,0,14" />
+
+        <TextBlock Text="Mot de passe" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" Margin="2,0,0,4" />
+        <TextBox Text="{Binding Password}" PasswordChar="•" Margin="0,0,0,6" />
+
+        <Border IsVisible="{Binding ErrorMessage, Converter={x:Static conv:ObjectConverters.IsNotNull}}"
+                Background="{DynamicResource DangerSoftBrush}" CornerRadius="6" Padding="10,8" Margin="0,8,0,0">
+            <TextBlock Text="{Binding ErrorMessage}" Foreground="{DynamicResource DangerBrush}" TextWrapping="Wrap" FontSize="12.5" />
+        </Border>
+
+        <Button Content="{Binding ButtonLabel}"
+                Command="{Binding LogInCommand}"
+                IsDefault="True"
+                HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                Background="{DynamicResource AccentBrush}" Foreground="{DynamicResource OnAccentBrush}" FontWeight="SemiBold"
+                Padding="0,10" CornerRadius="8" Margin="0,18,0,0" />
+
+    </StackPanel>
+</Window>

@@ -1,0 +1,191 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body { margin: 0; }
+    * { box-sizing: border-box; }
+    a { color: #005FB8; } a:hover { color: #074581; }
+    .tok { display: flex; align-items: center; gap: 10px; }
+    .sw { width: 34px; height: 22px; border-radius: 4px; flex-shrink: 0; border: 1px solid rgba(20,22,26,.14); }
+    .tk { font-family: 'Cascadia Mono', Consolas, monospace; font-size: 11px; }
+  </style>
+</helmet>
+
+<div style="width: 1280px; min-height: 1260px; background: #FCFCFD; color: #14161A; font-family: 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif; font-size: 13px; padding: 32px 36px; display: flex; flex-direction: column; gap: 28px;">
+
+  <div style="display: flex; flex-direction: column; gap: 4px;">
+    <span style="font-size: 21px; font-weight: 700; letter-spacing: -0.02em;">Jetons de thème</span>
+    <span style="color: #5B626D; font-size: 13px;">Deux palettes, mêmes noms de jetons que le code actuel. Un seul accent, décliné par variante.</span>
+  </div>
+
+  <!-- PALETTES -->
+  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px;">
+
+    <div style="border: 1px solid #E6E8EC; border-radius: 10px; overflow: hidden;">
+      <div style="padding: 12px 16px; background: #F5F6F8; border-bottom: 1px solid #E6E8EC; display: flex; align-items: center; gap: 8px;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#14161A" stroke-width="1.8"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M19.1 4.9l-1.8 1.8M6.7 17.3l-1.8 1.8" stroke-linecap="round"/></svg>
+        <span style="font-weight: 700;">Clair</span>
+      </div>
+      <div style="padding: 14px 16px; display: flex; flex-direction: column; gap: 9px;">
+        <div class="tok"><div class="sw" style="background: #FCFCFD;"></div><span class="tk" style="flex: 1;">BgApp</span><span class="tk" style="color: #5B626D;">#FCFCFD</span></div>
+        <div class="tok"><div class="sw" style="background: #F5F6F8;"></div><span class="tk" style="flex: 1;">BgPanel</span><span class="tk" style="color: #5B626D;">#F5F6F8</span></div>
+        <div class="tok"><div class="sw" style="background: #EDEFF3;"></div><span class="tk" style="flex: 1;">BgRail</span><span class="tk" style="color: #5B626D;">#EDEFF3</span></div>
+        <div class="tok"><div class="sw" style="background: #FFFFFF;"></div><span class="tk" style="flex: 1;">CardBg</span><span class="tk" style="color: #5B626D;">#FFFFFF</span></div>
+        <div class="tok"><div class="sw" style="background: #E6E8EC;"></div><span class="tk" style="flex: 1;">Divider</span><span class="tk" style="color: #5B626D;">#E6E8EC</span></div>
+        <div class="tok"><div class="sw" style="background: #D3D7DE;"></div><span class="tk" style="flex: 1;">DividerStrong</span><span class="tk" style="color: #5B626D;">#D3D7DE</span></div>
+        <div class="tok"><div class="sw" style="background: #14161A;"></div><span class="tk" style="flex: 1;">TextPrimary</span><span class="tk" style="color: #5B626D;">#14161A</span></div>
+        <div class="tok"><div class="sw" style="background: #5B626D;"></div><span class="tk" style="flex: 1;">TextSecondary</span><span class="tk" style="color: #5B626D;">#5B626D</span></div>
+        <div class="tok"><div class="sw" style="background: #8A929E;"></div><span class="tk" style="flex: 1;">TextTertiary</span><span class="tk" style="color: #5B626D;">#8A929E</span></div>
+        <div style="height: 1px; background: #E6E8EC; margin: 3px 0;"></div>
+        <div class="tok"><div class="sw" style="background: #005FB8;"></div><span class="tk" style="flex: 1;">Accent</span><span class="tk" style="color: #5B626D;">#005FB8</span></div>
+        <div class="tok"><div class="sw" style="background: #D8E4F0;"></div><span class="tk" style="flex: 1;">AccentSoft</span><span class="tk" style="color: #5B626D;">#D8E4F0</span></div>
+        <div class="tok"><div class="sw" style="background: #074581;"></div><span class="tk" style="flex: 1;">AccentInk</span><span class="tk" style="color: #5B626D;">#074581</span></div>
+        <div class="tok"><div class="sw" style="background: #C42B1C;"></div><span class="tk" style="flex: 1;">Danger</span><span class="tk" style="color: #5B626D;">#C42B1C</span></div>
+      </div>
+    </div>
+
+    <div style="border: 1px solid #E6E8EC; border-radius: 10px; overflow: hidden; background: #16181C;">
+      <div style="padding: 12px 16px; background: #1B1E23; border-bottom: 1px solid #282C33; display: flex; align-items: center; gap: 8px;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#E9EBEE" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z"/></svg>
+        <span style="font-weight: 700; color: #E9EBEE;">Sombre</span>
+      </div>
+      <div style="padding: 14px 16px; display: flex; flex-direction: column; gap: 9px;">
+        <div class="tok"><div class="sw" style="background: #16181C; border-color: rgba(233,235,238,.18);"></div><span class="tk" style="flex: 1; color: #E9EBEE;">BgApp</span><span class="tk" style="color: #9DA5B0;">#16181C</span></div>
+        <div class="tok"><div class="sw" style="background: #1B1E23; border-color: rgba(233,235,238,.18);"></div><span class="tk" style="flex: 1; color: #E9EBEE;">BgPanel</span><span class="tk" style="color: #9DA5B0;">#1B1E23</span></div>
+        <div class="tok"><div class="sw" style="background: #202429; border-color: rgba(233,235,238,.18);"></div><span class="tk" style="flex: 1; color: #E9EBEE;">BgRail</span><span class="tk" style="color: #9DA5B0;">#202429</span></div>
+        <div class="tok"><div class="sw" style="background: #1E2127; border-color: rgba(233,235,238,.18);"></div><span class="tk" style="flex: 1; color: #E9EBEE;">CardBg</span><span class="tk" style="color: #9DA5B0;">#1E2127</span></div>
+        <div class="tok"><div class="sw" style="background: #282C33; border-color: rgba(233,235,238,.18);"></div><span class="tk" style="flex: 1; color: #E9EBEE;">Divider</span><span class="tk" style="color: #9DA5B0;">#282C33</span></div>
+        <div class="tok"><div class="sw" style="background: #383D46; border-color: rgba(233,235,238,.18);"></div><span class="tk" style="flex: 1; color: #E9EBEE;">DividerStrong</span><span class="tk" style="color: #9DA5B0;">#383D46</span></div>
+        <div class="tok"><div class="sw" style="background: #E9EBEE; border-color: rgba(233,235,238,.18);"></div><span class="tk" style="flex: 1; color: #E9EBEE;">TextPrimary</span><span class="tk" style="color: #9DA5B0;">#E9EBEE</span></div>
+        <div class="tok"><div class="sw" style="background: #9DA5B0; border-color: rgba(233,235,238,.18);"></div><span class="tk" style="flex: 1; color: #E9EBEE;">TextSecondary</span><span class="tk" style="color: #9DA5B0;">#9DA5B0</span></div>
+        <div class="tok"><div class="sw" style="background: #6E7681; border-color: rgba(233,235,238,.18);"></div><span class="tk" style="flex: 1; color: #E9EBEE;">TextTertiary</span><span class="tk" style="color: #9DA5B0;">#6E7681</span></div>
+        <div style="height: 1px; background: #282C33; margin: 3px 0;"></div>
+        <div class="tok"><div class="sw" style="background: #4C9DF5; border-color: rgba(233,235,238,.18);"></div><span class="tk" style="flex: 1; color: #E9EBEE;">Accent</span><span class="tk" style="color: #9DA5B0;">#4C9DF5</span></div>
+        <div class="tok"><div class="sw" style="background: #223040; border-color: rgba(233,235,238,.18);"></div><span class="tk" style="flex: 1; color: #E9EBEE;">AccentSoft</span><span class="tk" style="color: #9DA5B0;">#223040</span></div>
+        <div class="tok"><div class="sw" style="background: #73B1F3; border-color: rgba(233,235,238,.18);"></div><span class="tk" style="flex: 1; color: #E9EBEE;">AccentInk</span><span class="tk" style="color: #9DA5B0;">#73B1F3</span></div>
+        <div class="tok"><div class="sw" style="background: #F0574A; border-color: rgba(233,235,238,.18);"></div><span class="tk" style="flex: 1; color: #E9EBEE;">Danger</span><span class="tk" style="color: #9DA5B0;">#F0574A</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PRESENCE + STATES -->
+  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px;">
+
+    <div style="border: 1px solid #E6E8EC; border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 12px;">
+      <span style="font-size: 11px; font-weight: 700; color: #8A929E; letter-spacing: 0.04em;">PRÉSENCE</span>
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px;">
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <span style="font-size: 11px; color: #8A929E;">Clair</span>
+          <div class="tok"><div style="width: 10px; height: 10px; border-radius: 5px; background: #1F9E4A;"></div><span class="tk" style="flex: 1;">En ligne</span><span class="tk" style="color: #5B626D;">#1F9E4A</span></div>
+          <div class="tok"><div style="width: 10px; height: 10px; border-radius: 5px; background: #D9A521;"></div><span class="tk" style="flex: 1;">Absent</span><span class="tk" style="color: #5B626D;">#D9A521</span></div>
+          <div class="tok"><div style="width: 10px; height: 10px; border-radius: 5px; background: #C42B1C;"></div><span class="tk" style="flex: 1;">Ne pas déranger</span><span class="tk" style="color: #5B626D;">#C42B1C</span></div>
+          <div class="tok"><div style="width: 10px; height: 10px; border-radius: 5px; background: #9AA1AB;"></div><span class="tk" style="flex: 1;">Hors ligne</span><span class="tk" style="color: #5B626D;">#9AA1AB</span></div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 8px; background: #16181C; border-radius: 8px; padding: 10px 12px;">
+          <span style="font-size: 11px; color: #6E7681;">Sombre</span>
+          <div class="tok"><div style="width: 10px; height: 10px; border-radius: 5px; background: #3FB950;"></div><span class="tk" style="flex: 1; color: #E9EBEE;">En ligne</span><span class="tk" style="color: #9DA5B0;">#3FB950</span></div>
+          <div class="tok"><div style="width: 10px; height: 10px; border-radius: 5px; background: #D9A521;"></div><span class="tk" style="flex: 1; color: #E9EBEE;">Absent</span><span class="tk" style="color: #9DA5B0;">#D9A521</span></div>
+          <div class="tok"><div style="width: 10px; height: 10px; border-radius: 5px; background: #F0574A;"></div><span class="tk" style="flex: 1; color: #E9EBEE;">Ne pas déranger</span><span class="tk" style="color: #9DA5B0;">#F0574A</span></div>
+          <div class="tok"><div style="width: 10px; height: 10px; border-radius: 5px; background: #6E7681;"></div><span class="tk" style="flex: 1; color: #E9EBEE;">Hors ligne</span><span class="tk" style="color: #9DA5B0;">#6E7681</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div style="border: 1px solid #E6E8EC; border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 12px;">
+      <span style="font-size: 11px; font-weight: 700; color: #8A929E; letter-spacing: 0.04em;">ÉTATS D'UNE LIGNE DE CANAL</span>
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px;">
+        <div style="display: flex; flex-direction: column; gap: 4px; background: #F5F6F8; border-radius: 8px; padding: 10px;">
+          <div style="display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 6px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8A929E" stroke-width="1.7"><path d="M9 4l-1 16M16 4l-1 16M4 9h16M3 15h16"/></svg>
+            <span style="font-family: 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif; font-size: 14px; flex: 1;">Normal</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 6px; background: #ECEEF2;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8A929E" stroke-width="1.7"><path d="M9 4l-1 16M16 4l-1 16M4 9h16M3 15h16"/></svg>
+            <span style="font-family: 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif; font-size: 14px; flex: 1;">Survol</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 6px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#14161A" stroke-width="1.7"><path d="M9 4l-1 16M16 4l-1 16M4 9h16M3 15h16"/></svg>
+            <span style="font-family: 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif; font-size: 14px; font-weight: 700; flex: 1;">Non lu</span>
+            <span style="min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: #005FB8; color: #FFFFFF; font-size: 10.5px; font-weight: 700; display: flex; align-items: center; justify-content: center;">3</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 6px; background: #D8E4F0;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#074581" stroke-width="1.7"><path d="M9 4l-1 16M16 4l-1 16M4 9h16M3 15h16"/></svg>
+            <span style="font-family: 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif; font-size: 14px; font-weight: 600; color: #074581; flex: 1;">Sélectionné</span>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 4px; background: #1B1E23; border-radius: 8px; padding: 10px;">
+          <div style="display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 6px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6E7681" stroke-width="1.7"><path d="M9 4l-1 16M16 4l-1 16M4 9h16M3 15h16"/></svg>
+            <span style="font-family: 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif; font-size: 14px; color: #E9EBEE; flex: 1;">Normal</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 6px; background: #23272E;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6E7681" stroke-width="1.7"><path d="M9 4l-1 16M16 4l-1 16M4 9h16M3 15h16"/></svg>
+            <span style="font-family: 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif; font-size: 14px; color: #E9EBEE; flex: 1;">Survol</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 6px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#E9EBEE" stroke-width="1.7"><path d="M9 4l-1 16M16 4l-1 16M4 9h16M3 15h16"/></svg>
+            <span style="font-family: 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif; font-size: 14px; font-weight: 700; color: #FFFFFF; flex: 1;">Non lu</span>
+            <span style="min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: #4C9DF5; color: #0F1114; font-size: 10.5px; font-weight: 700; display: flex; align-items: center; justify-content: center;">3</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 6px; background: #223040;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#73B1F3" stroke-width="1.7"><path d="M9 4l-1 16M16 4l-1 16M4 9h16M3 15h16"/></svg>
+            <span style="font-family: 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif; font-size: 14px; font-weight: 600; color: #73B1F3; flex: 1;">Sélectionné</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TYPE + SHAPE -->
+  <div style="display: grid; grid-template-columns: 1.5fr 1fr; gap: 24px;">
+
+    <div style="border: 1px solid #E6E8EC; border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 12px;">
+      <span style="font-size: 11px; font-weight: 700; color: #8A929E; letter-spacing: 0.04em;">ÉCHELLE TYPOGRAPHIQUE</span>
+      <div style="display: flex; flex-direction: column; gap: 10px;">
+        <div style="display: flex; align-items: baseline; gap: 14px;"><span class="tk" style="width: 78px; color: #8A929E;">15 · 700</span><span style="font-size: 15px; font-weight: 700; letter-spacing: -0.01em; flex: 1;">Nom du canal</span><span class="tk" style="color: #8A929E;">barre du haut</span></div>
+        <div style="display: flex; align-items: baseline; gap: 14px;"><span class="tk" style="width: 78px; color: #8A929E;">14,5 · 700</span><span style="font-family: 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif; font-size: 14.5px; font-weight: 700; flex: 1;">Auteur du message</span><span class="tk" style="color: #C42B1C;">Open Sans auj.</span></div>
+        <div style="display: flex; align-items: baseline; gap: 14px;"><span class="tk" style="width: 78px; color: #8A929E;">14,5 · 400</span><span style="font-family: 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif; font-size: 14.5px; flex: 1;">Corps du message, interligne 1,5</span><span class="tk" style="color: #C42B1C;">Open Sans auj.</span></div>
+        <div style="display: flex; align-items: baseline; gap: 14px;"><span class="tk" style="width: 78px; color: #8A929E;">14 · 400</span><span style="font-family: 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif; font-size: 14px; flex: 1;">Nom de canal / conversation</span><span class="tk" style="color: #C42B1C;">16 auj.</span></div>
+        <div style="display: flex; align-items: baseline; gap: 14px;"><span class="tk" style="width: 78px; color: #8A929E;">13 · 400</span><span style="font-size: 13px; flex: 1;">Interface courante, sujet du canal</span><span class="tk" style="color: #8A929E;">base</span></div>
+        <div style="display: flex; align-items: baseline; gap: 14px;"><span class="tk" style="width: 78px; color: #8A929E;">12 · 400</span><span style="font-size: 12px; color: #5B626D; flex: 1;">Descriptions secondaires</span><span class="tk" style="color: #8A929E;">secondaire</span></div>
+        <div style="display: flex; align-items: baseline; gap: 14px;"><span class="tk" style="width: 78px; color: #8A929E;">11 · 400</span><span style="font-size: 11px; color: #8A929E; flex: 1;">Horodatage, méta, citation</span><span class="tk" style="color: #8A929E;">tertiaire</span></div>
+        <div style="display: flex; align-items: baseline; gap: 14px;"><span class="tk" style="width: 78px; color: #8A929E;">11 · 700</span><span style="font-size: 11px; font-weight: 700; color: #8A929E; letter-spacing: 0.04em; flex: 1;">EN-TÊTE DE SECTION</span><span class="tk" style="color: #8A929E;">majuscules</span></div>
+      </div>
+      <div style="border-top: 1px solid #E6E8EC; padding-top: 10px; font-size: 12px; color: #5B626D;">Une seule famille partout : Segoe UI Variable (repli Segoe UI). Open Sans, plus large d'approche, disparaît. Aujourd'hui l'app utilise 10,5 · 11 · 11,5 · 12 · 12,5 · 13 · 14 · 14,5 · 15 · 16 · 18 sans système ; cette échelle en retient six.</div>
+    </div>
+
+    <div style="border: 1px solid #E6E8EC; border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 12px;">
+      <span style="font-size: 11px; font-weight: 700; color: #8A929E; letter-spacing: 0.04em;">FORMES &amp; ÉLÉVATION</span>
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <div style="width: 56px; height: 40px; border-radius: 6px; background: #F5F6F8; border: 1px solid #E6E8EC;"></div>
+        <div style="flex: 1;"><div style="font-weight: 600;">Ligne</div><div class="tk" style="color: #8A929E;">rayon 6</div></div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <div style="width: 56px; height: 40px; border-radius: 10px; background: #FFFFFF; border: 1px solid #D3D7DE;"></div>
+        <div style="flex: 1;"><div style="font-weight: 600;">Surface</div><div class="tk" style="color: #8A929E;">rayon 10</div></div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <div style="width: 56px; height: 40px; border-radius: 10px; background: #FFFFFF; border: 1px solid #E6E8EC; box-shadow: 0 2px 6px rgba(20,22,26,.10);"></div>
+        <div style="flex: 1;"><div style="font-weight: 600;">Élévation, clair</div><div class="tk" style="color: #8A929E;">0 2 6 / noir 10 %</div></div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 12px; background: #16181C; border-radius: 8px; padding: 8px;">
+        <div style="width: 56px; height: 40px; border-radius: 10px; background: #22262D; border: 1px solid #343941; box-shadow: 0 2px 8px rgba(0,0,0,.5);"></div>
+        <div style="flex: 1;"><div style="font-weight: 600; color: #E9EBEE;">Élévation, sombre</div><div class="tk" style="color: #9DA5B0;">0 2 8 / noir 50 % + bord</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{"$preview":{"width":1280,"height":1260}}'>
+class Component extends DCLogic {}
+</script>
+</body>
+</html>

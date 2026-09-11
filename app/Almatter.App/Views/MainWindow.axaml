@@ -1,0 +1,1621 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Almatter.App.ViewModels"
+        xmlns:models="using:Almatter.App.Models"
+        xmlns:conv="using:Avalonia.Data.Converters"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="1280" d:DesignHeight="800"
+        x:Class="Almatter.App.Views.MainWindow"
+        x:DataType="vm:MainViewModel"
+        x:Name="RootWindow"
+        Icon="/Assets/almatter-logo.ico"
+        Title="Almatter"
+        Width="1280" Height="800" MinWidth="980" MinHeight="620"
+        FontFamily="{DynamicResource AppFontFamily}"
+        FontSize="13"
+        Foreground="{DynamicResource TextPrimaryBrush}">
+
+    <Window.KeyBindings>
+        <KeyBinding Gesture="Ctrl+F" Command="{Binding OpenSearchCommand}" />
+    </Window.KeyBindings>
+
+    <!-- Light-palette values only so the XAML previewer has something to
+         draw. The real ones are pushed in by ThemeResources.Apply before
+         the window is shown, and again on every theme change — everything
+         below is referenced with DynamicResource for exactly that reason. -->
+    <Window.Resources>
+        <SolidColorBrush x:Key="BgAppBrush" Color="#FCFCFD" />
+        <SolidColorBrush x:Key="BgPanelBrush" Color="#F5F6F8" />
+        <SolidColorBrush x:Key="BgRailBrush" Color="#EDEFF3" />
+        <SolidColorBrush x:Key="BgHoverBrush" Color="#ECEEF2" />
+        <SolidColorBrush x:Key="DividerBrush" Color="#E6E8EC" />
+        <SolidColorBrush x:Key="DividerStrongBrush" Color="#D3D7DE" />
+        <SolidColorBrush x:Key="TextPrimaryBrush" Color="#14161A" />
+        <SolidColorBrush x:Key="TextSecondaryBrush" Color="#5B626D" />
+        <SolidColorBrush x:Key="TextTertiaryBrush" Color="#8A929E" />
+        <SolidColorBrush x:Key="AccentBrush" Color="#005FB8" />
+        <SolidColorBrush x:Key="AccentSoftBrush" Color="#D7E3F0" />
+        <SolidColorBrush x:Key="AccentInkBrush" Color="#074581" />
+        <SolidColorBrush x:Key="OnAccentBrush" Color="#FFFFFF" />
+        <SolidColorBrush x:Key="DangerBrush" Color="#C42B1C" />
+        <SolidColorBrush x:Key="DangerSoftBrush" Color="#FBEAE8" />
+        <SolidColorBrush x:Key="DangerBorderBrush" Color="#F0C4BE" />
+        <SolidColorBrush x:Key="ScrimBrush" Color="#B3FCFCFD" />
+        <SolidColorBrush x:Key="CardBgBrush" Color="#FFFFFF" />
+        <SolidColorBrush x:Key="PresenceOnlineBrush" Color="#1F9E4A" />
+        <SolidColorBrush x:Key="PresenceAwayBrush" Color="#D9A521" />
+        <SolidColorBrush x:Key="PresenceOfflineBrush" Color="#9AA1AB" />
+
+        <!-- Theme shape/elevation tokens — swapped alongside the palette. -->
+        <CornerRadius x:Key="RowRadiusValue">6</CornerRadius>
+        <CornerRadius x:Key="SurfaceRadiusValue">10</CornerRadius>
+        <BoxShadows x:Key="PopoverShadow">0 6 20 0 #33000000</BoxShadows>
+        <BoxShadows x:Key="CardShadow">0 2 6 0 #1A000000</BoxShadows>
+
+        <!-- A template with no pointerover/pressed background logic at all —
+             the FluentTheme default template applies its hover/press tint
+             to a named template part that a plain Background/pseudo-class
+             override doesn't reliably reach, so this replaces it outright
+             rather than fighting it. A row's own RowBackground binding (on
+             the Border inside) is the only visible click feedback.
+             Background is still bound (to whatever the button's own style
+             sets, usually Transparent) — a Panel/ContentPresenter is only
+             hit-test visible where it has a Background at all, so without
+             this an icon-only button (a bare Path/Canvas with no filled
+             area) is only clickable exactly on the drawn stroke pixels. -->
+        <ControlTemplate x:Key="FlatButtonTemplate" TargetType="Button">
+            <ContentPresenter Content="{TemplateBinding Content}"
+                               Background="{TemplateBinding Background}"
+                               CornerRadius="{TemplateBinding CornerRadius}"
+                               Padding="{TemplateBinding Padding}"
+                               HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                               VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" />
+        </ControlTemplate>
+
+        <!-- Shared between the regular Canaux/Messages privés lists and Favoris, so
+             favoriting/unfavoriting (drag-and-drop, handled in code-behind) only ever
+             moves an item, never re-styles it. -->
+        <DataTemplate x:Key="ChannelRowTemplate" DataType="models:ChannelItem">
+            <Button Classes="row-button sidebar-row" CornerRadius="{DynamicResource RowRadiusValue}"
+                    Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).SelectChannelCommand}"
+                    CommandParameter="{Binding Id}">
+                <Button.ContextFlyout>
+                    <MenuFlyout>
+                        <MenuItem Header="Mettre en sourdine" IsVisible="{Binding !IsMuted}"
+                                  Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).ToggleMuteCommand}"
+                                  CommandParameter="{Binding}" />
+                        <MenuItem Header="Réactiver les notifications" IsVisible="{Binding IsMuted}"
+                                  Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).ToggleMuteCommand}"
+                                  CommandParameter="{Binding}" />
+                    </MenuFlyout>
+                </Button.ContextFlyout>
+                <StackPanel>
+                    <Border Height="2" Margin="8,0" CornerRadius="1" Background="{DynamicResource AccentBrush}" IsVisible="{Binding ShowDropIndicatorAbove}" />
+                    <Border Background="{Binding RowBackground}" CornerRadius="{DynamicResource RowRadiusValue}" Padding="8,7">
+                        <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+                            <Path Grid.Column="0" IsVisible="{Binding !IsPrivate}" Data="M9 4l-1 16M16 4l-1 16M4 9h16M3 15h16"
+                                  Stroke="{Binding IconBrush}" StrokeThickness="1.7" Width="14" Height="14" Stretch="Uniform" VerticalAlignment="Center" Margin="0,0,8,0" />
+                            <Canvas Grid.Column="0" IsVisible="{Binding IsPrivate}" Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,8,0">
+                                <Rectangle Canvas.Left="2" Canvas.Top="5" Width="10" Height="8" RadiusX="1.4" RadiusY="1.4" Fill="{Binding IconBrush}" />
+                                <Path Data="M4.5 5 L4.5 3.2 A2.5 2.5 0 0 1 9.5 3.2 L9.5 5" Stroke="{Binding IconBrush}" StrokeThickness="1.4" />
+                            </Canvas>
+                            <TextBlock Grid.Column="1" Text="{Binding Name}" FontWeight="{Binding NameWeight}" Foreground="{Binding NameBrush}"
+                                       FontSize="14.5" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                            <Path Grid.Column="2" IsVisible="{Binding IsMuted}" ToolTip.Tip="En sourdine"
+                                  Data="M11 5 6 9H2v6h4l5 4V5z M23 9l-6 6 M17 9l6 6" Stroke="{DynamicResource TextTertiaryBrush}" StrokeThickness="1.6"
+                                  StrokeLineCap="Round" StrokeJoin="Round" Width="13" Height="13" Stretch="Uniform" VerticalAlignment="Center" Margin="6,0,0,0" />
+                            <Border Grid.Column="3" IsVisible="{Binding HasMentions}" Background="{DynamicResource AccentBrush}"
+                                    CornerRadius="9" MinWidth="18" Height="18" Padding="5,0" Margin="8,0,0,0">
+                                <TextBlock Text="{Binding MentionCount}" Foreground="{DynamicResource OnAccentBrush}" FontWeight="Bold" FontSize="10.5" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                        </Grid>
+                    </Border>
+                    <Border Height="2" Margin="8,0" CornerRadius="1" Background="{DynamicResource AccentBrush}" IsVisible="{Binding ShowDropIndicatorBelow}" />
+                </StackPanel>
+            </Button>
+        </DataTemplate>
+
+        <DataTemplate x:Key="DirectMessageRowTemplate" DataType="models:DirectMessageItem">
+            <Button Classes="row-button sidebar-row" CornerRadius="{DynamicResource RowRadiusValue}"
+                    Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).SelectChannelCommand}"
+                    CommandParameter="{Binding Id}">
+                <Button.ContextFlyout>
+                    <MenuFlyout>
+                        <MenuItem Header="Mettre en sourdine" IsVisible="{Binding !IsMuted}"
+                                  Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).ToggleMuteCommand}"
+                                  CommandParameter="{Binding}" />
+                        <MenuItem Header="Réactiver les notifications" IsVisible="{Binding IsMuted}"
+                                  Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).ToggleMuteCommand}"
+                                  CommandParameter="{Binding}" />
+                    </MenuFlyout>
+                </Button.ContextFlyout>
+                <StackPanel>
+                    <Border Height="2" Margin="8,0" CornerRadius="1" Background="{DynamicResource AccentBrush}" IsVisible="{Binding ShowDropIndicatorAbove}" />
+                    <Border Background="{Binding RowBackground}" CornerRadius="{DynamicResource RowRadiusValue}" Padding="8,6">
+                        <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+                            <Grid Grid.Column="0" Width="22" Height="22" Margin="0,0,8,0">
+                                <Border CornerRadius="11" Background="{Binding AvatarBrush}">
+                                    <Panel>
+                                        <TextBlock Text="{Binding Initials}" IsVisible="{Binding !IsGroup}" FontSize="9.5" Foreground="White" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                        <Path IsVisible="{Binding IsGroup}"
+                                              Data="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2 M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z M23 21v-2a4 4 0 0 0-3-3.87 M16 3.13a4 4 0 0 1 0 7.75"
+                                              Stroke="White" StrokeThickness="2" StrokeLineCap="Round" StrokeJoin="Round"
+                                              Width="13" Height="13" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                        <Ellipse Width="22" Height="22" Fill="{Binding AvatarImageBrush}" IsVisible="{Binding AvatarImageBrush, Converter={x:Static conv:ObjectConverters.IsNotNull}}" />
+                                    </Panel>
+                                </Border>
+                                <Ellipse IsVisible="{Binding !IsGroup}" Width="9" Height="9" Fill="{Binding PresenceBrush}" Stroke="{DynamicResource BgPanelBrush}" StrokeThickness="2"
+                                         HorizontalAlignment="Right" VerticalAlignment="Bottom" />
+                            </Grid>
+                            <TextBlock Grid.Column="1" Text="{Binding DisplayName}" FontWeight="{Binding NameWeight}" Foreground="{Binding NameBrush}"
+                                       FontSize="14.5" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                            <Path Grid.Column="2" IsVisible="{Binding IsMuted}" ToolTip.Tip="En sourdine"
+                                  Data="M11 5 6 9H2v6h4l5 4V5z M23 9l-6 6 M17 9l6 6" Stroke="{DynamicResource TextTertiaryBrush}" StrokeThickness="1.6"
+                                  StrokeLineCap="Round" StrokeJoin="Round" Width="13" Height="13" Stretch="Uniform" VerticalAlignment="Center" Margin="6,0,0,0" />
+                            <Border Grid.Column="3" IsVisible="{Binding HasMentions}" Background="{DynamicResource AccentBrush}"
+                                    CornerRadius="9" MinWidth="18" Height="18" Padding="5,0" Margin="8,0,0,0">
+                                <TextBlock Text="{Binding MentionCount}" Foreground="{DynamicResource OnAccentBrush}" FontWeight="Bold" FontSize="10.5" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                        </Grid>
+                    </Border>
+                    <Border Height="2" Margin="8,0" CornerRadius="1" Background="{DynamicResource AccentBrush}" IsVisible="{Binding ShowDropIndicatorBelow}" />
+                </StackPanel>
+            </Button>
+        </DataTemplate>
+    </Window.Resources>
+
+    <Window.Styles>
+        <Style Selector="Button.row-button">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Cursor" Value="Hand" />
+            <!-- FluentTheme's own default Button Foreground otherwise wins
+                 over plain inheritance from the Window, so any text inside
+                 a row-button that doesn't bind its own Foreground (e.g. the
+                 search results' author name) stayed theme-default dark
+                 regardless of the app's actual (possibly dark) theme. -->
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+            <Setter Property="Template" Value="{StaticResource FlatButtonTemplate}" />
+        </Style>
+
+        <!-- Pointer-over feedback for sidebar channel/DM rows. Deliberately
+             scoped to its own class rather than all row-buttons: the same
+             class is worn by icon buttons and by the full-window invisible
+             buttons that close popovers, none of which should tint.
+             The row's own selected background (bound on the Border inside)
+             paints on top, so a selected row keeps its accent tint. -->
+        <Style Selector="Button.sidebar-row:pointerover">
+            <Setter Property="Background" Value="{DynamicResource BgHoverBrush}" />
+        </Style>
+
+        <!-- Invisible until pointed at, then a soft accent line — the same
+             "only show the affordance when it's reachable" idea as the
+             message rows' hover actions. -->
+        <Style Selector="GridSplitter.sidebar-resize:pointerover">
+            <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
+        </Style>
+
+        <!-- A clickable link rendered inline within message text. -->
+        <Style Selector="Button.link-button">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+            <Setter Property="Template" Value="{StaticResource FlatButtonTemplate}" />
+        </Style>
+        <Style Selector="Button.link-button TextBlock">
+            <Setter Property="TextDecorations" Value="Underline" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+
+        <!-- One swatch in the accent-color picker. -->
+        <Style Selector="Button.swatch-button">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template" Value="{StaticResource FlatButtonTemplate}" />
+        </Style>
+
+        <!-- The "add a reaction" smiley only shows up while hovering the
+             message row it belongs to — :pointerover reflects the pointer
+             being anywhere within the row's bounds, not just directly over
+             this button, so hovering the text/reactions/etc. reveals it too.
+             Both states (hidden by default, shown on hover) are Style
+             Setters rather than a local IsVisible="False" attribute on the
+             element — a local value always wins over a Style Setter
+             regardless of selector specificity, which would have made the
+             :pointerover rule below never actually take effect. -->
+        <!-- Opacity/IsHitTestVisible rather than IsVisible: the button still
+             has a fixed 26x26 size and needs to keep occupying that space
+             even while "hidden" — toggling IsVisible instead removes it from
+             layout entirely, which changes the row's measured size on every
+             hover. Harmless-looking with a plain StackPanel, but with the
+             message list now virtualized (see MainViewModel/channel-switch
+             perf work), any realized row's height changing at all makes the
+             panel recompute its scroll position — visible as the whole
+             conversation jumping around on hover. -->
+        <Style Selector="Button.hover-reveal-btn">
+            <Setter Property="Opacity" Value="0" />
+            <Setter Property="IsHitTestVisible" Value="False" />
+        </Style>
+        <Style Selector="Border.message-row:pointerover Button.hover-reveal-btn">
+            <Setter Property="Opacity" Value="1" />
+            <Setter Property="IsHitTestVisible" Value="True" />
+        </Style>
+
+        <!-- Transparent rather than unset: a Border with no Background at
+             all isn't hit-testable, so :pointerover would never fire and
+             the row's action icons would never appear. -->
+        <Style Selector="Border.message-row">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="Border.message-row:pointerover">
+            <Setter Property="Background" Value="{DynamicResource BgHoverBrush}" />
+        </Style>
+        <!-- Last, so a highlighted (jumped-to) or being-edited row keeps its
+             accent tint while the pointer is over it. -->
+        <Style Selector="Border.message-row.tinted">
+            <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
+        </Style>
+
+        <!-- The message composer boxes: no FluentTheme chrome at all — its
+             focused/pointerover states pull a light background and an
+             accent-colored border from the default (always-light) theme
+             resources, regardless of our own dark themes, and the default
+             Foreground/CaretBrush don't follow our palette either. -->
+        <Style Selector="TextBox.composer">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+            <Setter Property="CaretBrush" Value="{DynamicResource TextPrimaryBrush}" />
+            <Setter Property="SelectionBrush" Value="{DynamicResource AccentSoftBrush}" />
+        </Style>
+        <Style Selector="TextBox.composer /template/ Border#PART_BorderElement">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+        </Style>
+        <Style Selector="TextBox.composer:pointerover /template/ Border#PART_BorderElement">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+        </Style>
+        <Style Selector="TextBox.composer:focus /template/ Border#PART_BorderElement">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+        </Style>
+        <Style Selector="TextBox.composer:focus-within /template/ Border#PART_BorderElement">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+        </Style>
+    </Window.Styles>
+
+    <Grid x:Name="AppGrid" Background="{DynamicResource BgAppBrush}">
+        <Grid.ColumnDefinitions>
+            <!-- Width is restored from (and saved back to) settings by the
+                 code-behind; the bounds live here so a dragged splitter can
+                 never leave the sidebar unusably narrow or eat the
+                 conversation. -->
+            <ColumnDefinition Width="280" MinWidth="200" MaxWidth="480" />
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
+
+
+        <!-- SIDEBAR -->
+        <Border Grid.Column="0" Background="{DynamicResource BgPanelBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,1,0">
+            <Grid RowDefinitions="Auto,Auto,*,Auto">
+
+                <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="6" Margin="14,14,14,8">
+                    <TextBlock Text="{Binding TeamName}" FontWeight="Bold" FontSize="14.5" Foreground="{DynamicResource TextPrimaryBrush}" />
+                    <Path Data="M6 9l6 6 6-6" Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="2" StrokeLineCap="Round" StrokeJoin="Round" Width="10" Height="10" Stretch="Uniform" VerticalAlignment="Center" />
+                </StackPanel>
+
+                <Border Grid.Row="1" Margin="12,0,12,12" Padding="10,6" CornerRadius="{DynamicResource RowRadiusValue}" Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Canvas Width="15" Height="15">
+                            <Ellipse Width="10" Height="10" Stroke="{DynamicResource TextTertiaryBrush}" StrokeThickness="1.6" />
+                            <Line StartPoint="9,9" EndPoint="14,14" Stroke="{DynamicResource TextTertiaryBrush}" StrokeThickness="1.6" StrokeLineCap="Round" />
+                        </Canvas>
+                        <TextBlock Text="Rechercher" Foreground="{DynamicResource TextTertiaryBrush}" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Border>
+
+                <ScrollViewer Grid.Row="2" x:Name="SidebarScroller">
+                    <StackPanel Margin="8,0,8,12" Spacing="1">
+
+                        <StackPanel x:Name="FavoritesDropZone" DragDrop.AllowDrop="True" Spacing="1">
+                            <Button Classes="row-button" Command="{Binding ToggleFavoritesSectionCommand}" Margin="0,10,0,4">
+                                <StackPanel Orientation="Horizontal" Spacing="4" Margin="8,0">
+                                    <Path IsVisible="{Binding IsFavoritesSectionExpanded}" Data="M6 9l6 6 6-6"
+                                          Stroke="{DynamicResource TextTertiaryBrush}" StrokeThickness="2.4" StrokeLineCap="Round" StrokeJoin="Round"
+                                          Width="9" Height="9" Stretch="Uniform" VerticalAlignment="Center" />
+                                    <Path IsVisible="{Binding !IsFavoritesSectionExpanded}" Data="M9 6l6 6-6 6"
+                                          Stroke="{DynamicResource TextTertiaryBrush}" StrokeThickness="2.4" StrokeLineCap="Round" StrokeJoin="Round"
+                                          Width="9" Height="9" Stretch="Uniform" VerticalAlignment="Center" />
+                                    <TextBlock Text="FAVORIS" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource TextTertiaryBrush}" />
+                                </StackPanel>
+                            </Button>
+
+                            <ItemsControl ItemsSource="{Binding FavoriteChannels}" IsVisible="{Binding IsFavoritesSectionExpanded}" ItemTemplate="{StaticResource ChannelRowTemplate}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                            </ItemsControl>
+
+                            <ItemsControl ItemsSource="{Binding FavoriteDirectMessages}" IsVisible="{Binding IsFavoritesSectionExpanded}" ItemTemplate="{StaticResource DirectMessageRowTemplate}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel Spacing="3" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                            </ItemsControl>
+
+                            <!-- Empty-state hint — otherwise an empty Favoris zone has no drop target visible at all. -->
+                            <TextBlock IsVisible="{Binding !HasFavorites}" Text="Glisse un canal ou une conversation ici"
+                                       IsHitTestVisible="False" FontSize="11" FontStyle="Italic" Foreground="{DynamicResource TextTertiaryBrush}"
+                                       Margin="10,2,10,8" TextWrapping="Wrap" />
+                        </StackPanel>
+
+                        <StackPanel x:Name="RegularDropZone" DragDrop.AllowDrop="True" Spacing="1">
+                            <Grid ColumnDefinitions="*,Auto" Margin="0,10,0,4">
+                                <Button Grid.Column="0" Classes="row-button" Command="{Binding ToggleChannelsSectionCommand}">
+                                    <StackPanel Orientation="Horizontal" Spacing="4" Margin="8,0">
+                                        <Path IsVisible="{Binding IsChannelsSectionExpanded}" Data="M6 9l6 6 6-6"
+                                              Stroke="{DynamicResource TextTertiaryBrush}" StrokeThickness="2.4" StrokeLineCap="Round" StrokeJoin="Round"
+                                              Width="9" Height="9" Stretch="Uniform" VerticalAlignment="Center" />
+                                        <Path IsVisible="{Binding !IsChannelsSectionExpanded}" Data="M9 6l6 6-6 6"
+                                              Stroke="{DynamicResource TextTertiaryBrush}" StrokeThickness="2.4" StrokeLineCap="Round" StrokeJoin="Round"
+                                              Width="9" Height="9" Stretch="Uniform" VerticalAlignment="Center" />
+                                        <TextBlock Text="CANAUX" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource TextTertiaryBrush}" />
+                                    </StackPanel>
+                                </Button>
+                                <Button Grid.Column="1" Classes="row-button" Width="20" Height="20" Margin="0,0,8,0"
+                                        HorizontalAlignment="Right" ToolTip.Tip="Parcourir les canaux"
+                                        Command="{Binding OpenBrowseChannelsCommand}">
+                                    <Path Data="M12 5v14M5 12h14" Stroke="{DynamicResource TextTertiaryBrush}" StrokeThickness="2"
+                                          StrokeLineCap="Round" Width="12" Height="12" Stretch="Uniform"
+                                          HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                </Button>
+                            </Grid>
+
+                            <ItemsControl ItemsSource="{Binding Channels}" IsVisible="{Binding IsChannelsSectionExpanded}" ItemTemplate="{StaticResource ChannelRowTemplate}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                            </ItemsControl>
+
+                            <Grid ColumnDefinitions="*,Auto" Margin="0,14,0,4">
+                                <Button Grid.Column="0" Classes="row-button" Command="{Binding ToggleDirectMessagesSectionCommand}">
+                                    <StackPanel Orientation="Horizontal" Spacing="4" Margin="8,0">
+                                        <Path IsVisible="{Binding IsDirectMessagesSectionExpanded}" Data="M6 9l6 6 6-6"
+                                              Stroke="{DynamicResource TextTertiaryBrush}" StrokeThickness="2.4" StrokeLineCap="Round" StrokeJoin="Round"
+                                              Width="9" Height="9" Stretch="Uniform" VerticalAlignment="Center" />
+                                        <Path IsVisible="{Binding !IsDirectMessagesSectionExpanded}" Data="M9 6l6 6-6 6"
+                                              Stroke="{DynamicResource TextTertiaryBrush}" StrokeThickness="2.4" StrokeLineCap="Round" StrokeJoin="Round"
+                                              Width="9" Height="9" Stretch="Uniform" VerticalAlignment="Center" />
+                                        <TextBlock Text="MESSAGES PRIVÉS" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource TextTertiaryBrush}" />
+                                    </StackPanel>
+                                </Button>
+                                <Button Grid.Column="1" Classes="row-button" Width="20" Height="20" Margin="0,0,8,0"
+                                        HorizontalAlignment="Right" ToolTip.Tip="Nouvelle conversation"
+                                        Command="{Binding OpenNewConversationCommand}">
+                                    <Path Data="M12 5v14M5 12h14" Stroke="{DynamicResource TextTertiaryBrush}" StrokeThickness="2"
+                                          StrokeLineCap="Round" Width="12" Height="12" Stretch="Uniform"
+                                          HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                </Button>
+                            </Grid>
+
+                            <ItemsControl ItemsSource="{Binding DirectMessages}" IsVisible="{Binding IsDirectMessagesSectionExpanded}" ItemTemplate="{StaticResource DirectMessageRowTemplate}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel Spacing="3" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                            </ItemsControl>
+                        </StackPanel>
+
+                    </StackPanel>
+                </ScrollViewer>
+
+                <Border Grid.Row="3" x:Name="SettingsAnchor" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,1,0,0" Padding="12,10">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <Button Grid.Column="0" Classes="row-button" ToolTip.Tip="Changer de statut"
+                                Command="{Binding ToggleStatusPickerCommand}">
+                            <Grid ColumnDefinitions="Auto,*">
+                                <Grid Grid.Column="0" Width="28" Height="28">
+                                    <Border CornerRadius="14" Background="{DynamicResource AccentBrush}">
+                                        <Panel>
+                                            <TextBlock Text="{Binding CurrentUserInitials}" Foreground="{DynamicResource OnAccentBrush}" FontWeight="Bold" FontSize="11" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                            <Ellipse Width="28" Height="28" Fill="{Binding MyAvatarImageBrush}" IsVisible="{Binding MyAvatarImageBrush, Converter={x:Static conv:ObjectConverters.IsNotNull}}" />
+                                        </Panel>
+                                    </Border>
+                                    <Ellipse Width="10" Height="10" Fill="{Binding MyPresenceBrush}" Stroke="{DynamicResource BgPanelBrush}" StrokeThickness="2"
+                                             HorizontalAlignment="Right" VerticalAlignment="Bottom" />
+                                </Grid>
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="8,0,0,0">
+                                    <TextBlock Text="{Binding CurrentUserDisplayName}" FontWeight="Bold" Foreground="{DynamicResource TextPrimaryBrush}" />
+                                    <TextBlock Text="{Binding MyStatusLabel}" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" />
+                                </StackPanel>
+                            </Grid>
+                        </Button>
+                        <Button Grid.Column="1" Classes="row-button" Width="28" Height="28" ToolTip.Tip="Réglages"
+                                Command="{Binding ToggleSettingsCommand}">
+                            <Path Data="M12 15a3 3 0 100-6 3 3 0 000 6z M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z"
+                                  Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.6" Width="16" Height="16" Stretch="Uniform"
+                                  HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Button>
+                    </Grid>
+                </Border>
+            </Grid>
+        </Border>
+
+        <!-- Sidebar resize handle. Sits in the conversation column, aligned
+             left and pulled back over the sidebar's own 1px border, so the
+             grab area straddles the visible seam instead of stealing a
+             visible strip. With BasedOnAlignment resize behaviour, a
+             left-aligned splitter resizes the PREVIOUS column — the sidebar
+             — which is why it lives here rather than in a column of its own. -->
+        <GridSplitter Grid.Column="1" Classes="sidebar-resize"
+                      HorizontalAlignment="Left" VerticalAlignment="Stretch"
+                      Width="6" Margin="-3,0,0,0" Background="Transparent"
+                      Cursor="SizeWestEast" ZIndex="1" />
+
+        <!-- MAIN CONVERSATION -->
+        <Grid Grid.Column="1" RowDefinitions="52,*,Auto">
+
+            <Border Grid.Row="0" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1" Padding="16,0">
+                <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto">
+                    <Path Grid.Column="0" Data="M9 4l-1 16M16 4l-1 16M4 9h16M3 15h16" Stroke="{DynamicResource TextPrimaryBrush}" StrokeThickness="1.8"
+                          Width="16" Height="16" Stretch="Uniform" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="1" Text="{Binding ActiveChannelName}" FontWeight="Bold" FontSize="15" Margin="10,0,0,0" VerticalAlignment="Center" />
+                    <Border Grid.Column="2" Width="1" Height="16" Background="{DynamicResource DividerStrongBrush}" Margin="12,0" />
+                    <TextBlock Grid.Column="3" Text="{Binding ActiveChannelTopic}" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                    <Button Grid.Column="4" Classes="row-button" Width="28" Height="28" ToolTip.Tip="Rechercher" Margin="4,0"
+                            Command="{Binding OpenSearchCommand}">
+                        <Canvas Width="16" Height="16" HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <Ellipse Canvas.Left="1" Canvas.Top="1" Width="9" Height="9" Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.6" />
+                            <Line StartPoint="9,9" EndPoint="15,15" Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.6" StrokeLineCap="Round" />
+                        </Canvas>
+                    </Button>
+                    <TextBlock Grid.Column="5" VerticalAlignment="Center" Foreground="{DynamicResource TextTertiaryBrush}" FontSize="11">
+                        <Run Text="core v" /><Run Text="{Binding CoreVersion}" />
+                    </TextBlock>
+                </Grid>
+            </Border>
+
+            <ScrollViewer Grid.Row="1" x:Name="MessagesScroller">
+                <ItemsControl x:Name="MessagesItemsControl" ItemsSource="{Binding Messages}" Margin="20,14">
+                    <!-- Virtualized: without this, every message in the channel's whole
+                         history is fully realized/measured/laid out on every repaint —
+                         not just the ~15-20 actually visible — which is what made
+                         switching to a long-history channel feel slow (and CPU-heavy
+                         enough to spin the fan up) regardless of how fast the data
+                         itself arrived. -->
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <VirtualizingStackPanel />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="models:MessageItem">
+                            <Border Classes="message-row" Classes.tinted="{Binding IsTinted}" Opacity="{Binding BodyOpacity}" CornerRadius="{DynamicResource RowRadiusValue}" Padding="{Binding RowPadding}">
+                                <Panel>
+                                <Grid ColumnDefinitions="36,*">
+                                    <Button Grid.Column="0" Classes="row-button" Width="36" Height="36" VerticalAlignment="Top" IsVisible="{Binding !IsContinuation}">
+                                        <Button.Flyout>
+                                            <Flyout Placement="RightEdgeAlignedTop">
+                                                <StackPanel Width="220" Spacing="10">
+                                                    <StackPanel Orientation="Horizontal" Spacing="10">
+                                                        <Border Width="40" Height="40" CornerRadius="20" Background="{Binding AvatarBrush}">
+                                                            <Panel>
+                                                                <TextBlock Text="{Binding AuthorInitials}" Foreground="White" FontWeight="Bold" FontSize="14" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                                <Ellipse Width="40" Height="40" Fill="{Binding AvatarImageBrush}" IsVisible="{Binding AvatarImageBrush, Converter={x:Static conv:ObjectConverters.IsNotNull}}" />
+                                                            </Panel>
+                                                        </Border>
+                                                        <TextBlock Text="{Binding AuthorName}" FontWeight="Bold" FontSize="14" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="150" />
+                                                    </StackPanel>
+                                                    <Button Classes="row-button" IsVisible="{Binding !IsMine}"
+                                                            Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).OpenDirectMessageWithCommand}"
+                                                            CommandParameter="{Binding AuthorUserId}">
+                                                        <Border Background="{DynamicResource AccentBrush}" CornerRadius="{DynamicResource RowRadiusValue}" Padding="10,7" HorizontalAlignment="Stretch">
+                                                            <TextBlock Text="Envoyer un message" Foreground="{DynamicResource OnAccentBrush}" FontWeight="SemiBold" FontSize="12.5" HorizontalAlignment="Center" />
+                                                        </Border>
+                                                    </Button>
+                                                </StackPanel>
+                                            </Flyout>
+                                        </Button.Flyout>
+                                        <Border CornerRadius="18" Background="{Binding AvatarBrush}">
+                                            <Panel>
+                                                <TextBlock Text="{Binding AuthorInitials}" Foreground="White" FontWeight="Bold" FontSize="13" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                <Ellipse Width="36" Height="36" Fill="{Binding AvatarImageBrush}" IsVisible="{Binding AvatarImageBrush, Converter={x:Static conv:ObjectConverters.IsNotNull}}" />
+                                            </Panel>
+                                        </Border>
+                                    </Button>
+                                    <StackPanel Grid.Column="1" Margin="10,0,0,0">
+                                        <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,0,0,14" IsVisible="{Binding !IsContinuation}">
+                                            <TextBlock Text="{Binding AuthorName}" FontWeight="Bold"
+                                                       FontSize="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.MessageFontSize}" />
+                                            <TextBlock Text="{Binding TimeLabel}" FontSize="11.5" Foreground="{DynamicResource TextTertiaryBrush}" VerticalAlignment="Center" />
+                                            <TextBlock Text="Envoi en cours…" FontSize="11.5" FontStyle="Italic" Foreground="{DynamicResource TextTertiaryBrush}" VerticalAlignment="Center" IsVisible="{Binding IsPending}" />
+                                        </StackPanel>
+                                        <Button IsVisible="{Binding HasQuotedMessage}" Classes="row-button" Margin="0,0,0,2"
+                                                Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).JumpToQuotedMessageCommand}"
+                                                CommandParameter="{Binding}">
+                                            <Border BorderBrush="{DynamicResource DividerStrongBrush}" BorderThickness="2,0,0,0" Padding="8,1,4,1">
+                                                <StackPanel Orientation="Horizontal" Spacing="5">
+                                                    <TextBlock Text="{Binding QuotedAuthorName}" FontWeight="SemiBold" FontSize="11.5" Foreground="{DynamicResource TextTertiaryBrush}" />
+                                                    <TextBlock Text="{Binding QuotedText}" FontSize="11.5" Foreground="{DynamicResource TextTertiaryBrush}" TextTrimming="CharacterEllipsis" />
+                                                </StackPanel>
+                                            </Border>
+                                        </Button>
+                                        <ItemsControl ItemsSource="{Binding TextLines}">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate>
+                                                    <StackPanel />
+                                                </ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate DataType="models:MessageTextLine">
+                                                    <ItemsControl ItemsSource="{Binding Segments}">
+                                                        <ItemsControl.ItemsPanel>
+                                                            <ItemsPanelTemplate>
+                                                                <WrapPanel />
+                                                            </ItemsPanelTemplate>
+                                                        </ItemsControl.ItemsPanel>
+                                                        <ItemsControl.ItemTemplate>
+                                                            <DataTemplate DataType="models:MessageTextSegment">
+                                                                <Panel>
+                                                                    <SelectableTextBlock Text="{Binding Text}" TextWrapping="Wrap" IsVisible="{Binding IsPlainText}"
+                                                                              
+                                                                               FontSize="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.MessageFontSize}" />
+                                                                    <SelectableTextBlock Text="{Binding Text}" TextWrapping="Wrap" IsVisible="{Binding IsMention}"
+                                                                               Foreground="{DynamicResource AccentBrush}" FontWeight="SemiBold"
+                                                                              
+                                                                               FontSize="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.MessageFontSize}" />
+                                                                    <Button Classes="link-button" Content="{Binding Text}" IsVisible="{Binding IsLink}"
+                                                                           
+                                                                            FontSize="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.MessageFontSize}"
+                                                                            Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).OpenLinkCommand}"
+                                                                            CommandParameter="{Binding LinkUrl}">
+                                                                        <Button.ContextFlyout>
+                                                                            <MenuFlyout>
+                                                                                <MenuItem Header="Copier le lien" Click="OnCopyLinkClick" />
+                                                                            </MenuFlyout>
+                                                                        </Button.ContextFlyout>
+                                                                    </Button>
+                                                                </Panel>
+                                                            </DataTemplate>
+                                                        </ItemsControl.ItemTemplate>
+                                                    </ItemsControl>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+
+                                        <Border IsVisible="{Binding HasLinkPreview}" Margin="0,6,0,0" MaxWidth="420" HorizontalAlignment="Left">
+                                            <Border IsVisible="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.ShowLinkPreviews}"
+                                                    Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1"
+                                                    CornerRadius="8" DataContext="{Binding LinkPreview}">
+                                                <StackPanel>
+                                                    <Button Classes="row-button" ToolTip.Tip="{Binding Url}"
+                                                            Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).OpenLinkCommand}"
+                                                            CommandParameter="{Binding Url}">
+                                                        <StackPanel Margin="10,8,10,8" Spacing="2">
+                                                            <TextBlock Text="{Binding SiteName}" IsVisible="{Binding HasSiteName}" FontSize="10.5" Foreground="{DynamicResource TextTertiaryBrush}" />
+                                                            <TextBlock Text="{Binding Title}" IsVisible="{Binding HasTitle}" FontWeight="SemiBold" FontSize="13" TextWrapping="Wrap" />
+                                                            <TextBlock Text="{Binding Description}" IsVisible="{Binding HasDescription}" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"
+                                                                       TextWrapping="Wrap" MaxLines="3" TextTrimming="CharacterEllipsis" />
+                                                        </StackPanel>
+                                                    </Button>
+                                                    <Border IsVisible="{Binding HasImage}" Height="160" Margin="0,4,0,0" Background="{DynamicResource BgPanelBrush}" CornerRadius="0,0,7,7" ClipToBounds="True">
+                                                        <Image Source="{Binding ImageSource}" Stretch="UniformToFill" IsVisible="{Binding ImageSource, Converter={x:Static conv:ObjectConverters.IsNotNull}}" />
+                                                    </Border>
+                                                </StackPanel>
+                                            </Border>
+                                        </Border>
+
+                                        <TextBlock Text="(modifié)" IsVisible="{Binding IsEdited}" Margin="6,1,0,0"
+                                                   FontSize="11" FontStyle="Italic" Foreground="{DynamicResource TextTertiaryBrush}" />
+
+                                        <ItemsControl IsVisible="{Binding HasAttachments}" ItemsSource="{Binding Attachments}" Margin="0,4,0,0">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate>
+                                                    <StackPanel Spacing="6" />
+                                                </ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate DataType="models:AttachmentItem">
+                                                    <Button Classes="row-button" ToolTip.Tip="Ouvrir"
+                                                            Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).OpenAttachmentCommand}"
+                                                            CommandParameter="{Binding}">
+                                                        <Border Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1"
+                                                                CornerRadius="8" Padding="10,8" MaxWidth="340" HorizontalAlignment="Left">
+                                                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                                                <Path Data="M14 2 L6 2 A2 2 0 0 0 4 4 L4 18 A2 2 0 0 0 6 20 L18 20 A2 2 0 0 0 20 18 L20 8 Z M14 2 L14 8 L20 8"
+                                                                      Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.6" Width="20" Height="20" Stretch="Uniform" />
+                                                                <StackPanel>
+                                                                    <TextBlock Text="{Binding FileName}" FontWeight="SemiBold" FontSize="12.5" />
+                                                                    <TextBlock Text="{Binding SizeLabel}" FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}" IsVisible="{Binding !IsDownloading}" />
+                                                                    <TextBlock Text="Téléchargement…" FontSize="11" FontStyle="Italic" Foreground="{DynamicResource TextTertiaryBrush}" IsVisible="{Binding IsDownloading}" />
+                                                                </StackPanel>
+                                                            </StackPanel>
+                                                        </Border>
+                                                    </Button>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+
+                                        <ItemsControl ItemsSource="{Binding Reactions}" IsVisible="{Binding HasReactions}" Margin="0,4,0,0">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate>
+                                                    <StackPanel Orientation="Horizontal" Spacing="6" />
+                                                </ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate DataType="models:ReactionItem">
+                                                    <Button Classes="row-button"
+                                                            Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).ToggleReactionCommand}"
+                                                            CommandParameter="{Binding}">
+                                                        <Border BorderBrush="{Binding BorderBrush}" BorderThickness="1" CornerRadius="14" Padding="9,3">
+                                                            <StackPanel Orientation="Horizontal" Spacing="5">
+                                                                <Image Source="{Binding Image}" IsVisible="{Binding Image, Converter={x:Static conv:ObjectConverters.IsNotNull}}"
+                                                                       Width="23" Height="23" Stretch="Uniform" />
+                                                                <TextBlock Text="{Binding Emoji}" FontSize="18" IsVisible="{Binding Image, Converter={x:Static conv:ObjectConverters.IsNull}}" />
+                                                                <TextBlock Text="{Binding Count}" FontWeight="Bold" Foreground="{Binding TextBrush}" FontSize="13" />
+                                                            </StackPanel>
+                                                        </Border>
+                                                    </Button>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+
+                                        <Button IsVisible="{Binding HasThreadReplies}" Classes="row-button" Margin="0,6,0,0"
+                                                Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).OpenThreadCommand}"
+                                                CommandParameter="{Binding Id}">
+                                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                                <TextBlock Foreground="{DynamicResource AccentBrush}" FontWeight="SemiBold">
+                                                    <Run Text="{Binding ThreadReplyCount}" /><Run Text=" réponses" />
+                                                </TextBlock>
+                                            </StackPanel>
+                                        </Button>
+                                    </StackPanel>
+                                </Grid>
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,2,4,0" Spacing="4">
+                                    <Button Classes="row-button hover-reveal-btn" IsVisible="{Binding IsMine}"
+                                            Width="26" Height="26" ToolTip.Tip="Modifier"
+                                            Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).StartEditMessageCommand}"
+                                            CommandParameter="{Binding}">
+                                        <Border CornerRadius="13" Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1" BoxShadow="{DynamicResource CardShadow}">
+                                            <Path Data="M12 20h9 M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"
+                                                  Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.4" StrokeLineCap="Round" StrokeJoin="Round"
+                                                  Width="14" Height="14" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                        </Border>
+                                    </Button>
+                                    <Button Classes="row-button hover-reveal-btn" IsVisible="{Binding IsMine}"
+                                            Width="26" Height="26" ToolTip.Tip="Supprimer"
+                                            Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).RequestDeleteMessageCommand}"
+                                            CommandParameter="{Binding}">
+                                        <Border CornerRadius="13" Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1" BoxShadow="{DynamicResource CardShadow}">
+                                            <Path Data="M3 6h18 M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2 M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"
+                                                  Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.4" StrokeLineCap="Round" StrokeJoin="Round"
+                                                  Width="14" Height="14" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                        </Border>
+                                    </Button>
+                                    <Button Classes="row-button hover-reveal-btn" ToolTip.Tip="Ajouter une réaction"
+                                            Width="26" Height="26"
+                                            Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).OpenEmojiPickerCommand}"
+                                            CommandParameter="{Binding Id}">
+                                        <Border CornerRadius="13" Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1" BoxShadow="{DynamicResource CardShadow}">
+                                            <Canvas Width="16" Height="16" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                <Ellipse Width="16" Height="16" Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.3" />
+                                                <Ellipse Canvas.Left="4.3" Canvas.Top="5.3" Width="1.8" Height="1.8" Fill="{DynamicResource TextSecondaryBrush}" />
+                                                <Ellipse Canvas.Left="9.9" Canvas.Top="5.3" Width="1.8" Height="1.8" Fill="{DynamicResource TextSecondaryBrush}" />
+                                                <Path Data="M4.3 10 Q8 12.8 11.7 10" Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.3" StrokeLineCap="Round" />
+                                            </Canvas>
+                                        </Border>
+                                    </Button>
+                                    <Button Classes="row-button hover-reveal-btn" IsVisible="{Binding !IsPending}" ToolTip.Tip="Répondre"
+                                            Width="26" Height="26"
+                                            Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).OpenThreadCommand}"
+                                            CommandParameter="{Binding ReplyTargetId}">
+                                        <Border CornerRadius="13" Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1" BoxShadow="{DynamicResource CardShadow}">
+                                            <Path Data="M9 14 4 9 9 4 M20 20v-7a4 4 0 0 0-4-4H4"
+                                                  Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.5" StrokeLineCap="Round" StrokeJoin="Round"
+                                                  Width="15" Height="15" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                        </Border>
+                                    </Button>
+                                </StackPanel>
+                                </Panel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+
+            <Border Grid.Row="2" Margin="20,10,20,16" BorderBrush="{DynamicResource DividerStrongBrush}" BorderThickness="1" CornerRadius="{DynamicResource SurfaceRadiusValue}" Background="{DynamicResource CardBgBrush}">
+                <StackPanel>
+                    <TextBlock Text="{Binding TypingIndicatorText}" IsVisible="{Binding TypingIndicatorText, Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}"
+                               FontSize="11.5" FontStyle="Italic" Foreground="{DynamicResource TextTertiaryBrush}" Margin="14,8,10,0" />
+                    <Border IsVisible="{Binding IsEditingMessage}" Background="{DynamicResource BgPanelBrush}" CornerRadius="{DynamicResource RowRadiusValue}" Margin="10,8,10,0" Padding="10,5">
+                        <Grid ColumnDefinitions="Auto,*,Auto">
+                            <Path Grid.Column="0" Data="M12 20h9 M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"
+                                  Stroke="{DynamicResource AccentBrush}" StrokeThickness="1.5" StrokeLineCap="Round" StrokeJoin="Round"
+                                  Width="13" Height="13" Stretch="Uniform" VerticalAlignment="Center" Margin="0,0,8,0" />
+                            <TextBlock Grid.Column="1" Text="Modification du message" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
+                            <Button Grid.Column="2" Classes="row-button" Command="{Binding CancelEditMessageCommand}">
+                                <TextBlock Text="Annuler" FontSize="12" Foreground="{DynamicResource AccentBrush}" FontWeight="SemiBold" />
+                            </Button>
+                        </Grid>
+                    </Border>
+                    <ItemsControl ItemsSource="{Binding PendingAttachments}" Margin="10,8,10,0">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="models:PendingAttachmentItem">
+                                <Border Background="{DynamicResource BgPanelBrush}" CornerRadius="{DynamicResource RowRadiusValue}" Padding="8,4" Margin="0,0,6,6">
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <TextBlock Text="{Binding FileName}" FontSize="11.5" VerticalAlignment="Center" />
+                                        <Button Classes="row-button" Width="16" Height="16"
+                                                Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).RemovePendingAttachmentCommand}"
+                                                CommandParameter="{Binding}">
+                                            <Canvas Width="10" Height="10">
+                                                <Line StartPoint="0.5,0.5" EndPoint="9.5,9.5" Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.4" StrokeLineCap="Round" />
+                                                <Line StartPoint="9.5,0.5" EndPoint="0.5,9.5" Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.4" StrokeLineCap="Round" />
+                                            </Canvas>
+                                        </Button>
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <Border IsVisible="{Binding IsMainMentionPopupOpen}" Background="{DynamicResource BgPanelBrush}" CornerRadius="{DynamicResource RowRadiusValue}" Margin="10,8,10,0" Padding="4">
+                        <ItemsControl ItemsSource="{Binding MentionSuggestions}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="models:MentionSuggestionItem">
+                                    <Button Classes="row-button"
+                                            Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).PickMentionSuggestionCommand}"
+                                            CommandParameter="{Binding}">
+                                        <Border Background="{Binding RowBackground}" CornerRadius="{DynamicResource RowRadiusValue}" Padding="8,5">
+                                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                                <Border Width="22" Height="22" CornerRadius="11" Background="{Binding AvatarBrush}">
+                                                    <TextBlock Text="{Binding Initials}" FontSize="9.5" Foreground="White" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                </Border>
+                                                <TextBlock Text="{Binding DisplayName}" FontSize="13" VerticalAlignment="Center" />
+                                                <TextBlock Text="{Binding Username, StringFormat='@{0}'}" FontSize="12" Foreground="{DynamicResource TextTertiaryBrush}" VerticalAlignment="Center" />
+                                            </StackPanel>
+                                        </Border>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </Border>
+                    <TextBox x:Name="ComposerBox" Classes="composer" Text="{Binding ComposeText}"
+                             PlaceholderText="{Binding ActiveChannelName, StringFormat='Écrire dans #{0}…'}"
+                             FontSize="{Binding Settings.MessageFontSize}"
+                             TextWrapping="Wrap"
+                             Padding="12,10,12,4" AcceptsReturn="True" MinHeight="20" />
+                    <Grid ColumnDefinitions="Auto,*,Auto" Margin="10,4,10,10">
+                        <Button Grid.Column="0" Classes="row-button" Width="28" Height="28" ToolTip.Tip="Joindre un fichier"
+                                Command="{Binding AttachFileCommand}">
+                            <Path Data="M21.4 11.1 L12.2 20.3 A5 5 0 0 1 5.1 13.2 L14.1 4.2 A3.5 3.5 0 0 1 19.1 9.2 L10.1 18.2 A2 2 0 0 1 7.3 15.4 L15.4 7.3"
+                                  Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.8" StrokeLineCap="Round" Width="17" Height="17" Stretch="Uniform"
+                                  HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Button>
+                        <Button Grid.Column="2" Classes="row-button" Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).SendMessageCommand}">
+                            <Border Width="30" Height="30" CornerRadius="7" Background="{DynamicResource AccentBrush}">
+                                <Path Data="M3 11l18-8-8 18-2.5-7.5L3 11z" Fill="{DynamicResource OnAccentBrush}" Width="15" Height="15" Stretch="Uniform"
+                                      HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                        </Button>
+                    </Grid>
+                </StackPanel>
+            </Border>
+        </Grid>
+
+        <!-- THREAD PANEL — only takes up space (an Auto-sized column) while a thread is actually open, per user request. -->
+        <Border Grid.Column="2" Width="320" IsVisible="{Binding IsThreadOpen}"
+                Background="{DynamicResource BgAppBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1,0,0,0">
+            <Grid RowDefinitions="52,*,Auto">
+                <Border Grid.Row="0" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1" Padding="14,0">
+                    <Grid ColumnDefinitions="*,Auto,Auto">
+                        <TextBlock Grid.Column="0" Text="Fil de discussion" FontWeight="Bold" VerticalAlignment="Center" />
+                        <TextBlock Grid.Column="1" Text="{Binding ActiveChannelName}" Foreground="{DynamicResource TextTertiaryBrush}" FontSize="12" VerticalAlignment="Center" Margin="0,0,10,0" />
+                        <Button Grid.Column="2" Classes="row-button" Width="20" Height="20"
+                                Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).CloseThreadCommand}">
+                            <Canvas Width="14" Height="14" VerticalAlignment="Center" HorizontalAlignment="Center">
+                                <Line StartPoint="1,1" EndPoint="13,13" Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.6" StrokeLineCap="Round" />
+                                <Line StartPoint="13,1" EndPoint="1,13" Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.6" StrokeLineCap="Round" />
+                            </Canvas>
+                        </Button>
+                    </Grid>
+                </Border>
+
+                <ScrollViewer Grid.Row="1">
+                    <StackPanel Margin="14">
+
+                        <StackPanel>
+
+                            <StackPanel IsVisible="{Binding ThreadRootMessage, Converter={x:Static conv:ObjectConverters.IsNotNull}}">
+                                <Grid ColumnDefinitions="30,*" DataContext="{Binding ThreadRootMessage}" x:DataType="models:MessageItem">
+                                    <Button Grid.Column="0" Classes="row-button" Width="30" Height="30" VerticalAlignment="Top">
+                                        <Button.Flyout>
+                                            <Flyout Placement="RightEdgeAlignedTop">
+                                                <StackPanel Width="220" Spacing="10">
+                                                    <StackPanel Orientation="Horizontal" Spacing="10">
+                                                        <Border Width="40" Height="40" CornerRadius="20" Background="{Binding AvatarBrush}">
+                                                            <Panel>
+                                                                <TextBlock Text="{Binding AuthorInitials}" Foreground="White" FontWeight="Bold" FontSize="14" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                                <Ellipse Width="40" Height="40" Fill="{Binding AvatarImageBrush}" IsVisible="{Binding AvatarImageBrush, Converter={x:Static conv:ObjectConverters.IsNotNull}}" />
+                                                            </Panel>
+                                                        </Border>
+                                                        <TextBlock Text="{Binding AuthorName}" FontWeight="Bold" FontSize="14" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="150" />
+                                                    </StackPanel>
+                                                    <Button Classes="row-button" IsVisible="{Binding !IsMine}"
+                                                            Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).OpenDirectMessageWithCommand}"
+                                                            CommandParameter="{Binding AuthorUserId}">
+                                                        <Border Background="{DynamicResource AccentBrush}" CornerRadius="{DynamicResource RowRadiusValue}" Padding="10,7" HorizontalAlignment="Stretch">
+                                                            <TextBlock Text="Envoyer un message" Foreground="{DynamicResource OnAccentBrush}" FontWeight="SemiBold" FontSize="12.5" HorizontalAlignment="Center" />
+                                                        </Border>
+                                                    </Button>
+                                                </StackPanel>
+                                            </Flyout>
+                                        </Button.Flyout>
+                                        <Border CornerRadius="15" Background="{Binding AvatarBrush}">
+                                            <Panel>
+                                                <TextBlock Text="{Binding AuthorInitials}" Foreground="White" FontWeight="Bold" FontSize="11" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                <Ellipse Width="30" Height="30" Fill="{Binding AvatarImageBrush}" IsVisible="{Binding AvatarImageBrush, Converter={x:Static conv:ObjectConverters.IsNotNull}}" />
+                                            </Panel>
+                                        </Border>
+                                    </Button>
+                                    <StackPanel Grid.Column="1" Margin="8,0,0,0" Spacing="1">
+                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                            <TextBlock Text="{Binding AuthorName}" FontWeight="Bold"
+                                                       FontSize="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.MessageFontSize}" />
+                                            <TextBlock Text="{Binding TimeLabel}" FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                        <ItemsControl ItemsSource="{Binding TextLines}">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate>
+                                                    <StackPanel />
+                                                </ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate DataType="models:MessageTextLine">
+                                                    <ItemsControl ItemsSource="{Binding Segments}">
+                                                        <ItemsControl.ItemsPanel>
+                                                            <ItemsPanelTemplate>
+                                                                <WrapPanel />
+                                                            </ItemsPanelTemplate>
+                                                        </ItemsControl.ItemsPanel>
+                                                        <ItemsControl.ItemTemplate>
+                                                            <DataTemplate DataType="models:MessageTextSegment">
+                                                                <Panel>
+                                                                    <SelectableTextBlock Text="{Binding Text}" TextWrapping="Wrap" IsVisible="{Binding IsPlainText}"
+                                                                              
+                                                                               FontSize="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.MessageFontSize}" />
+                                                                    <SelectableTextBlock Text="{Binding Text}" TextWrapping="Wrap" IsVisible="{Binding IsMention}"
+                                                                               Foreground="{DynamicResource AccentBrush}" FontWeight="SemiBold"
+                                                                              
+                                                                               FontSize="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.MessageFontSize}" />
+                                                                    <Button Classes="link-button" Content="{Binding Text}" IsVisible="{Binding IsLink}"
+                                                                           
+                                                                            FontSize="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.MessageFontSize}"
+                                                                            Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).OpenLinkCommand}"
+                                                                            CommandParameter="{Binding LinkUrl}" />
+                                                                </Panel>
+                                                            </DataTemplate>
+                                                        </ItemsControl.ItemTemplate>
+                                                    </ItemsControl>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+
+                                        <Border IsVisible="{Binding HasLinkPreview}" Margin="0,6,0,0" MaxWidth="380" HorizontalAlignment="Left">
+                                            <Border IsVisible="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.ShowLinkPreviews}"
+                                                    Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1"
+                                                    CornerRadius="8" DataContext="{Binding LinkPreview}">
+                                                <StackPanel>
+                                                    <Button Classes="row-button" ToolTip.Tip="{Binding Url}"
+                                                            Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).OpenLinkCommand}"
+                                                            CommandParameter="{Binding Url}">
+                                                        <StackPanel Margin="10,8,10,8" Spacing="2">
+                                                            <TextBlock Text="{Binding SiteName}" IsVisible="{Binding HasSiteName}" FontSize="10.5" Foreground="{DynamicResource TextTertiaryBrush}" />
+                                                            <TextBlock Text="{Binding Title}" IsVisible="{Binding HasTitle}" FontWeight="SemiBold" FontSize="13" TextWrapping="Wrap" />
+                                                            <TextBlock Text="{Binding Description}" IsVisible="{Binding HasDescription}" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"
+                                                                       TextWrapping="Wrap" MaxLines="3" TextTrimming="CharacterEllipsis" />
+                                                        </StackPanel>
+                                                    </Button>
+                                                    <Border IsVisible="{Binding HasImage}" Height="140" Margin="0,4,0,0" Background="{DynamicResource BgPanelBrush}" CornerRadius="0,0,7,7" ClipToBounds="True">
+                                                        <Image Source="{Binding ImageSource}" Stretch="UniformToFill" IsVisible="{Binding ImageSource, Converter={x:Static conv:ObjectConverters.IsNotNull}}" />
+                                                    </Border>
+                                                </StackPanel>
+                                            </Border>
+                                        </Border>
+                                    </StackPanel>
+                                </Grid>
+                            </StackPanel>
+
+                            <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,14">
+                                <Border Height="1" Background="{DynamicResource DividerBrush}" HorizontalAlignment="Stretch" Width="60" />
+                                <TextBlock Text="{Binding ThreadReplies.Count, StringFormat='{}{0} réponses'}" FontSize="11.5" Foreground="{DynamicResource TextTertiaryBrush}" />
+                                <Border Height="1" Background="{DynamicResource DividerBrush}" HorizontalAlignment="Stretch" Width="60" />
+                            </StackPanel>
+
+                            <ItemsControl ItemsSource="{Binding ThreadReplies}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel Spacing="14" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="models:MessageItem">
+                                        <Grid ColumnDefinitions="30,*" Opacity="{Binding BodyOpacity}">
+                                            <Button Grid.Column="0" Classes="row-button" Width="30" Height="30" VerticalAlignment="Top" IsVisible="{Binding !IsContinuation}">
+                                                <Button.Flyout>
+                                                    <Flyout Placement="RightEdgeAlignedTop">
+                                                        <StackPanel Width="220" Spacing="10">
+                                                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                                                <Border Width="40" Height="40" CornerRadius="20" Background="{Binding AvatarBrush}">
+                                                                    <Panel>
+                                                                        <TextBlock Text="{Binding AuthorInitials}" Foreground="White" FontWeight="Bold" FontSize="14" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                                        <Ellipse Width="40" Height="40" Fill="{Binding AvatarImageBrush}" IsVisible="{Binding AvatarImageBrush, Converter={x:Static conv:ObjectConverters.IsNotNull}}" />
+                                                                    </Panel>
+                                                                </Border>
+                                                                <TextBlock Text="{Binding AuthorName}" FontWeight="Bold" FontSize="14" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="150" />
+                                                            </StackPanel>
+                                                            <Button Classes="row-button" IsVisible="{Binding !IsMine}"
+                                                                    Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).OpenDirectMessageWithCommand}"
+                                                                    CommandParameter="{Binding AuthorUserId}">
+                                                                <Border Background="{DynamicResource AccentBrush}" CornerRadius="{DynamicResource RowRadiusValue}" Padding="10,7" HorizontalAlignment="Stretch">
+                                                                    <TextBlock Text="Envoyer un message" Foreground="{DynamicResource OnAccentBrush}" FontWeight="SemiBold" FontSize="12.5" HorizontalAlignment="Center" />
+                                                                </Border>
+                                                            </Button>
+                                                        </StackPanel>
+                                                    </Flyout>
+                                                </Button.Flyout>
+                                                <Border CornerRadius="15" Background="{Binding AvatarBrush}">
+                                                    <Panel>
+                                                        <TextBlock Text="{Binding AuthorInitials}" Foreground="White" FontWeight="Bold" FontSize="11" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                        <Ellipse Width="30" Height="30" Fill="{Binding AvatarImageBrush}" IsVisible="{Binding AvatarImageBrush, Converter={x:Static conv:ObjectConverters.IsNotNull}}" />
+                                                    </Panel>
+                                                </Border>
+                                            </Button>
+                                            <StackPanel Grid.Column="1" Margin="8,0,0,0" Spacing="1">
+                                                <StackPanel Orientation="Horizontal" Spacing="6" IsVisible="{Binding !IsContinuation}">
+                                                    <TextBlock Text="{Binding AuthorName}" FontWeight="Bold"
+                                                               FontSize="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.MessageFontSize}" />
+                                                    <TextBlock Text="{Binding TimeLabel}" FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}" VerticalAlignment="Center" />
+                                                    <TextBlock Text="Envoi en cours…" FontSize="11" FontStyle="Italic" Foreground="{DynamicResource TextTertiaryBrush}" VerticalAlignment="Center" IsVisible="{Binding IsPending}" />
+                                                </StackPanel>
+                                                <ItemsControl ItemsSource="{Binding TextLines}">
+                                                    <ItemsControl.ItemsPanel>
+                                                        <ItemsPanelTemplate>
+                                                            <StackPanel />
+                                                        </ItemsPanelTemplate>
+                                                    </ItemsControl.ItemsPanel>
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate DataType="models:MessageTextLine">
+                                                            <ItemsControl ItemsSource="{Binding Segments}">
+                                                                <ItemsControl.ItemsPanel>
+                                                                    <ItemsPanelTemplate>
+                                                                        <WrapPanel />
+                                                                    </ItemsPanelTemplate>
+                                                                </ItemsControl.ItemsPanel>
+                                                                <ItemsControl.ItemTemplate>
+                                                                    <DataTemplate DataType="models:MessageTextSegment">
+                                                                        <Panel>
+                                                                            <SelectableTextBlock Text="{Binding Text}" TextWrapping="Wrap" IsVisible="{Binding IsPlainText}"
+                                                                                      
+                                                                                       FontSize="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.MessageFontSize}" />
+                                                                            <SelectableTextBlock Text="{Binding Text}" TextWrapping="Wrap" IsVisible="{Binding IsMention}"
+                                                                                       Foreground="{DynamicResource AccentBrush}" FontWeight="SemiBold"
+                                                                                      
+                                                                                       FontSize="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.MessageFontSize}" />
+                                                                            <Button Classes="link-button" Content="{Binding Text}" IsVisible="{Binding IsLink}"
+                                                                                   
+                                                                                    FontSize="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.MessageFontSize}"
+                                                                                    Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).OpenLinkCommand}"
+                                                                                    CommandParameter="{Binding LinkUrl}" />
+                                                                        </Panel>
+                                                                    </DataTemplate>
+                                                                </ItemsControl.ItemTemplate>
+                                                            </ItemsControl>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+
+                                                <Border IsVisible="{Binding HasLinkPreview}" Margin="0,6,0,0" MaxWidth="340" HorizontalAlignment="Left">
+                                                    <Border IsVisible="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.ShowLinkPreviews}"
+                                                            Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1"
+                                                            CornerRadius="8" DataContext="{Binding LinkPreview}">
+                                                        <StackPanel>
+                                                            <Button Classes="row-button" ToolTip.Tip="{Binding Url}"
+                                                                    Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).OpenLinkCommand}"
+                                                                    CommandParameter="{Binding Url}">
+                                                                <StackPanel Margin="10,8,10,8" Spacing="2">
+                                                                    <TextBlock Text="{Binding SiteName}" IsVisible="{Binding HasSiteName}" FontSize="10.5" Foreground="{DynamicResource TextTertiaryBrush}" />
+                                                                    <TextBlock Text="{Binding Title}" IsVisible="{Binding HasTitle}" FontWeight="SemiBold" FontSize="13" TextWrapping="Wrap" />
+                                                                    <TextBlock Text="{Binding Description}" IsVisible="{Binding HasDescription}" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"
+                                                                               TextWrapping="Wrap" MaxLines="3" TextTrimming="CharacterEllipsis" />
+                                                                </StackPanel>
+                                                            </Button>
+                                                            <Border IsVisible="{Binding HasImage}" Height="120" Margin="0,4,0,0" Background="{DynamicResource BgPanelBrush}" CornerRadius="0,0,7,7" ClipToBounds="True">
+                                                                <Image Source="{Binding ImageSource}" Stretch="UniformToFill" IsVisible="{Binding ImageSource, Converter={x:Static conv:ObjectConverters.IsNotNull}}" />
+                                                            </Border>
+                                                        </StackPanel>
+                                                    </Border>
+                                                </Border>
+                                            </StackPanel>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <Border Grid.Row="2" Margin="14,10,14,14" BorderBrush="{DynamicResource DividerStrongBrush}" BorderThickness="1" CornerRadius="{DynamicResource SurfaceRadiusValue}" Background="{DynamicResource CardBgBrush}" Padding="10,8">
+                    <StackPanel Spacing="4">
+                        <ItemsControl ItemsSource="{Binding ThreadPendingAttachments}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="models:PendingAttachmentItem">
+                                    <Border Background="{DynamicResource BgPanelBrush}" CornerRadius="{DynamicResource RowRadiusValue}" Padding="8,4" Margin="0,0,6,6">
+                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                            <TextBlock Text="{Binding FileName}" FontSize="11.5" VerticalAlignment="Center" />
+                                            <Button Classes="row-button" Width="16" Height="16"
+                                                    Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).RemoveThreadPendingAttachmentCommand}"
+                                                    CommandParameter="{Binding}">
+                                                <Canvas Width="10" Height="10">
+                                                    <Line StartPoint="0.5,0.5" EndPoint="9.5,9.5" Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.4" StrokeLineCap="Round" />
+                                                    <Line StartPoint="9.5,0.5" EndPoint="0.5,9.5" Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.4" StrokeLineCap="Round" />
+                                                </Canvas>
+                                            </Button>
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <Border IsVisible="{Binding IsThreadMentionPopupOpen}" Background="{DynamicResource BgPanelBrush}" CornerRadius="{DynamicResource RowRadiusValue}" Padding="4">
+                            <ItemsControl ItemsSource="{Binding MentionSuggestions}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="models:MentionSuggestionItem">
+                                        <Button Classes="row-button"
+                                                Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).PickMentionSuggestionCommand}"
+                                                CommandParameter="{Binding}">
+                                            <Border Background="{Binding RowBackground}" CornerRadius="{DynamicResource RowRadiusValue}" Padding="8,5">
+                                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                                    <Border Width="22" Height="22" CornerRadius="11" Background="{Binding AvatarBrush}">
+                                                        <TextBlock Text="{Binding Initials}" FontSize="9.5" Foreground="White" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                    </Border>
+                                                    <TextBlock Text="{Binding DisplayName}" FontSize="13" VerticalAlignment="Center" />
+                                                    <TextBlock Text="{Binding Username, StringFormat='@{0}'}" FontSize="12" Foreground="{DynamicResource TextTertiaryBrush}" VerticalAlignment="Center" />
+                                                </StackPanel>
+                                            </Border>
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </Border>
+                        <TextBox x:Name="ThreadComposerBox" Classes="composer" Text="{Binding ThreadComposeText}"
+                                 PlaceholderText="Répondre au fil…" Padding="0"
+                                 FontSize="{Binding Settings.MessageFontSize}"
+                                 TextWrapping="Wrap"
+                                 AcceptsReturn="True" />
+                        <Button Classes="row-button" Width="24" Height="24" HorizontalAlignment="Left" ToolTip.Tip="Joindre un fichier"
+                                Command="{Binding AttachThreadFileCommand}">
+                            <Path Data="M21.4 11.1 L12.2 20.3 A5 5 0 0 1 5.1 13.2 L14.1 4.2 A3.5 3.5 0 0 1 19.1 9.2 L10.1 18.2 A2 2 0 0 1 7.3 15.4 L15.4 7.3"
+                                  Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.8" StrokeLineCap="Round" Width="15" Height="15" Stretch="Uniform"
+                                  HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Button>
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </Border>
+
+        <!-- LOADING OVERLAY -->
+        <Border Grid.Column="0" Grid.ColumnSpan="3" IsVisible="{Binding IsLoading}" Background="{DynamicResource ScrimBrush}">
+            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="10">
+                <TextBlock Text="Connexion au serveur…" FontWeight="SemiBold" HorizontalAlignment="Center" />
+                <TextBlock Text="{Binding TeamName, StringFormat='Récupération des équipes et des canaux'}" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" HorizontalAlignment="Center" />
+            </StackPanel>
+        </Border>
+
+        <!-- ERROR BANNER -->
+        <Border Grid.Column="0" Grid.ColumnSpan="3" VerticalAlignment="Top"
+                IsVisible="{Binding ErrorMessage, Converter={x:Static conv:ObjectConverters.IsNotNull}}"
+                Background="{DynamicResource DangerSoftBrush}" BorderBrush="{DynamicResource DangerBorderBrush}" BorderThickness="0,0,0,1" Padding="16,10">
+            <TextBlock Text="{Binding ErrorMessage}" Foreground="{DynamicResource DangerBrush}" HorizontalAlignment="Center" TextWrapping="Wrap" />
+        </Border>
+
+        <!-- SETTINGS PANEL -->
+        <Button Classes="row-button" Grid.Column="0" Grid.ColumnSpan="3" IsVisible="{Binding IsSettingsOpen}"
+                HorizontalAlignment="Stretch" VerticalAlignment="Stretch" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"
+                Command="{Binding CloseSettingsCommand}" Background="Transparent" Content="" />
+
+        <Border Grid.Column="0" IsVisible="{Binding IsSettingsOpen}"
+                HorizontalAlignment="Stretch" VerticalAlignment="Bottom" Margin="12,0,12,66"
+                Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource DividerStrongBrush}" BorderThickness="1"
+                CornerRadius="{DynamicResource SurfaceRadiusValue}" Padding="14" BoxShadow="{DynamicResource PopoverShadow}">
+            <StackPanel Spacing="16">
+                <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Grid.Column="0" Text="Réglages" FontWeight="Bold" FontSize="14" VerticalAlignment="Center" />
+                    <Button Grid.Column="1" Classes="row-button" Width="20" Height="20" Command="{Binding CloseSettingsCommand}">
+                        <Canvas Width="14" Height="14" HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <Line StartPoint="1,1" EndPoint="13,13" Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.6" StrokeLineCap="Round" />
+                            <Line StartPoint="13,1" EndPoint="1,13" Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.6" StrokeLineCap="Round" />
+                        </Canvas>
+                    </Button>
+                </Grid>
+
+                <StackPanel Spacing="6">
+                    <TextBlock Text="APPARENCE" FontSize="10.5" FontWeight="Bold" Foreground="{DynamicResource TextTertiaryBrush}" />
+                    <ItemsControl ItemsSource="{Binding ThemeOptions}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel Orientation="Horizontal" Spacing="6" />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="models:ThemeOption">
+                                <Button Classes="row-button"
+                                        Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).SetThemeCommand}"
+                                        CommandParameter="{Binding Mode}">
+                                    <Border Background="{Binding RowBackground}" CornerRadius="{DynamicResource RowRadiusValue}" Padding="10,7">
+                                        <StackPanel Orientation="Horizontal" Spacing="7">
+                                            <Path Data="{Binding IconData}" Stroke="{Binding IconBrush}" StrokeThickness="1.8"
+                                                  StrokeLineCap="Round" StrokeJoin="Round"
+                                                  Width="14" Height="14" Stretch="Uniform" VerticalAlignment="Center" />
+                                            <TextBlock Text="{Binding Name}" Foreground="{Binding TextBrush}" FontSize="12.5" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </Border>
+                                </Button>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <TextBlock Text="« Système » suit le réglage clair/sombre de Windows."
+                               FontSize="11.5" Foreground="{DynamicResource TextTertiaryBrush}" TextWrapping="Wrap" />
+                </StackPanel>
+
+                <StackPanel Spacing="6">
+                    <TextBlock Text="POLICE" FontSize="10.5" FontWeight="Bold" Foreground="{DynamicResource TextTertiaryBrush}" />
+                    <ItemsControl ItemsSource="{Binding FontChoiceOptions}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel Orientation="Horizontal" Spacing="6" />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="models:FontChoiceOption">
+                                <Button Classes="row-button"
+                                        Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).SetFontChoiceCommand}"
+                                        CommandParameter="{Binding Choice}">
+                                    <Border Background="{Binding RowBackground}" CornerRadius="{DynamicResource RowRadiusValue}" Padding="10,7">
+                                        <TextBlock Text="{Binding Name}" Foreground="{Binding TextBrush}"
+                                                   FontFamily="{Binding Preview}" FontSize="13" />
+                                    </Border>
+                                </Button>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <TextBlock Text="« Mattermost » utilise Open Sans, la police du client officiel."
+                               FontSize="11.5" Foreground="{DynamicResource TextTertiaryBrush}" TextWrapping="Wrap" />
+                </StackPanel>
+
+                <StackPanel Spacing="6">
+                    <TextBlock Text="TAILLE DE POLICE DES MESSAGES" FontSize="10.5" FontWeight="Bold" Foreground="{DynamicResource TextTertiaryBrush}" />
+                    <ItemsControl ItemsSource="{Binding FontSizeOptions}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel Orientation="Horizontal" Spacing="6" />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="models:FontSizeOption">
+                                <Button Classes="row-button"
+                                        Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).SetFontSizeCommand}"
+                                        CommandParameter="{Binding Size}">
+                                    <Border Background="{Binding RowBackground}" CornerRadius="{DynamicResource RowRadiusValue}" Padding="10,6">
+                                        <TextBlock Text="{Binding Label}" Foreground="{Binding TextBrush}" FontSize="{Binding Size}" />
+                                    </Border>
+                                </Button>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+
+                <StackPanel Spacing="6">
+                    <TextBlock Text="LIENS" FontSize="10.5" FontWeight="Bold" Foreground="{DynamicResource TextTertiaryBrush}" />
+                    <Button Classes="row-button" Command="{Binding ToggleLinkPreviewsCommand}">
+                        <Border Background="{DynamicResource BgPanelBrush}" CornerRadius="{DynamicResource RowRadiusValue}" Padding="10,8">
+                            <Grid ColumnDefinitions="*,Auto">
+                                <TextBlock Grid.Column="0" Text="Aperçus de liens" FontSize="12.5" VerticalAlignment="Center" />
+                                <Border Grid.Column="1" Width="18" Height="18" CornerRadius="4" BorderThickness="1.4"
+                                        BorderBrush="{DynamicResource DividerStrongBrush}" Background="{Binding Settings.LinkPreviewsCheckBrush}">
+                                    <Path IsVisible="{Binding Settings.ShowLinkPreviews}" Data="M4 9l3 3 6-7"
+                                          Stroke="{DynamicResource OnAccentBrush}" StrokeThickness="1.6" StrokeLineCap="Round" StrokeJoin="Round"
+                                          Width="10" Height="10" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                </Border>
+                            </Grid>
+                        </Border>
+                    </Button>
+                </StackPanel>
+
+                <Border Height="1" Background="{DynamicResource DividerBrush}" />
+
+                <Button Classes="row-button" Command="{Binding LogOutCommand}">
+                    <Border CornerRadius="{DynamicResource RowRadiusValue}" Padding="8,7">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Path Data="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"
+                                  Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.7" StrokeLineCap="Round" StrokeJoin="Round"
+                                  Width="15" Height="15" Stretch="Uniform" VerticalAlignment="Center" />
+                            <TextBlock Text="Se déconnecter" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Border>
+                </Button>
+            </StackPanel>
+        </Border>
+
+        <!-- STATUS PICKER -->
+        <Button Classes="row-button" Grid.Column="0" Grid.ColumnSpan="3" IsVisible="{Binding IsStatusPickerOpen}"
+                HorizontalAlignment="Stretch" VerticalAlignment="Stretch" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"
+                Command="{Binding CloseStatusPickerCommand}" Background="Transparent" Content="" />
+
+        <Border Grid.Column="0" IsVisible="{Binding IsStatusPickerOpen}"
+                HorizontalAlignment="Stretch" VerticalAlignment="Bottom" Margin="12,0,12,66"
+                Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource DividerStrongBrush}" BorderThickness="1"
+                CornerRadius="{DynamicResource SurfaceRadiusValue}" Padding="6" BoxShadow="{DynamicResource PopoverShadow}">
+            <StackPanel Spacing="2">
+                <Button Classes="row-button" Command="{Binding SetStatusCommand}" CommandParameter="online">
+                    <Border CornerRadius="{DynamicResource RowRadiusValue}" Padding="8,7">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Ellipse Width="10" Height="10" Fill="{DynamicResource PresenceOnlineBrush}" />
+                            <TextBlock Text="Disponible" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Border>
+                </Button>
+                <Button Classes="row-button" Command="{Binding SetStatusCommand}" CommandParameter="away">
+                    <Border CornerRadius="{DynamicResource RowRadiusValue}" Padding="8,7">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Ellipse Width="10" Height="10" Fill="{DynamicResource PresenceAwayBrush}" />
+                            <TextBlock Text="Absent" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Border>
+                </Button>
+                <Button Classes="row-button" Command="{Binding SetStatusCommand}" CommandParameter="dnd">
+                    <Border CornerRadius="{DynamicResource RowRadiusValue}" Padding="8,7">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Ellipse Width="10" Height="10" Fill="{DynamicResource DangerBrush}" />
+                            <TextBlock Text="Ne pas déranger" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Border>
+                </Button>
+                <Button Classes="row-button" Command="{Binding SetStatusCommand}" CommandParameter="offline">
+                    <Border CornerRadius="{DynamicResource RowRadiusValue}" Padding="8,7">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Ellipse Width="10" Height="10" Fill="{DynamicResource PresenceOfflineBrush}" />
+                            <TextBlock Text="Hors ligne" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Border>
+                </Button>
+            </StackPanel>
+        </Border>
+
+        <!-- NEW CONVERSATION PANEL -->
+        <Button Classes="row-button" Grid.Column="0" Grid.ColumnSpan="3" IsVisible="{Binding IsNewConversationOpen}"
+                HorizontalAlignment="Stretch" VerticalAlignment="Stretch" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"
+                Command="{Binding CloseNewConversationCommand}" Background="Transparent" Content="" />
+
+        <Border Grid.Column="0" Grid.ColumnSpan="2" IsVisible="{Binding IsNewConversationOpen}"
+                HorizontalAlignment="Center" VerticalAlignment="Top" Width="480" Margin="0,16,0,0"
+                Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource DividerStrongBrush}" BorderThickness="1"
+                CornerRadius="{DynamicResource SurfaceRadiusValue}" Padding="14" BoxShadow="{DynamicResource PopoverShadow}">
+            <Grid RowDefinitions="Auto,Auto,Auto,Auto">
+                <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,10">
+                    <TextBlock Grid.Column="0" Text="Nouvelle conversation" FontWeight="Bold" FontSize="14" VerticalAlignment="Center" />
+                    <Button Grid.Column="1" Classes="row-button" Width="20" Height="20" Command="{Binding CloseNewConversationCommand}">
+                        <Canvas Width="14" Height="14" HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <Line StartPoint="1,1" EndPoint="13,13" Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.6" StrokeLineCap="Round" />
+                            <Line StartPoint="13,1" EndPoint="1,13" Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.6" StrokeLineCap="Round" />
+                        </Canvas>
+                    </Button>
+                </Grid>
+
+                <Border Grid.Row="1" BorderBrush="{DynamicResource DividerStrongBrush}" BorderThickness="1"
+                        CornerRadius="{DynamicResource SurfaceRadiusValue}" Margin="0,0,0,10">
+                    <TextBox x:Name="NewConversationBox" Classes="composer" Text="{Binding NewConversationQuery}"
+                             PlaceholderText="Rechercher une personne…" Padding="10,8" />
+                </Border>
+
+                <TextBlock Grid.Row="2" Text="{Binding NewConversationError}" Foreground="{DynamicResource DangerBrush}"
+                           TextWrapping="Wrap" FontSize="12.5" Margin="2,0,2,8"
+                           IsVisible="{Binding NewConversationError, Converter={x:Static conv:ObjectConverters.IsNotNull}}" />
+
+                <ScrollViewer Grid.Row="3" MaxHeight="440">
+                    <StackPanel Spacing="2">
+                        <TextBlock Text="Recherche…" Foreground="{DynamicResource TextTertiaryBrush}"
+                                   HorizontalAlignment="Center" Margin="0,20" IsVisible="{Binding IsSearchingPeople}" />
+                        <TextBlock Text="Personne ne correspond" Foreground="{DynamicResource TextTertiaryBrush}"
+                                   HorizontalAlignment="Center" Margin="0,20" IsVisible="{Binding NoPeopleResults}" />
+                        <ItemsControl ItemsSource="{Binding PeopleResults}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Spacing="2" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="models:DirectoryUserItem">
+                                    <Button Classes="row-button"
+                                            Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).StartConversationCommand}"
+                                            CommandParameter="{Binding}">
+                                        <Border CornerRadius="{DynamicResource RowRadiusValue}" Padding="8,7">
+                                            <Grid ColumnDefinitions="28,*">
+                                                <Border Grid.Column="0" Width="28" Height="28" CornerRadius="14" Background="{Binding AvatarBrush}">
+                                                    <TextBlock Text="{Binding Initials}" Foreground="White" FontWeight="Bold" FontSize="11"
+                                                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                </Border>
+                                                <StackPanel Grid.Column="1" Margin="9,0,0,0" Spacing="1" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" FontSize="13" />
+                                                    <TextBlock Text="{Binding UsernameLabel}" FontSize="11.5" Foreground="{DynamicResource TextTertiaryBrush}" />
+                                                </StackPanel>
+                                            </Grid>
+                                        </Border>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </ScrollViewer>
+            </Grid>
+        </Border>
+
+        <!-- BROWSE CHANNELS PANEL -->
+        <Button Classes="row-button" Grid.Column="0" Grid.ColumnSpan="3" IsVisible="{Binding IsBrowseChannelsOpen}"
+                HorizontalAlignment="Stretch" VerticalAlignment="Stretch" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"
+                Command="{Binding CloseBrowseChannelsCommand}" Background="Transparent" Content="" />
+
+        <Border Grid.Column="0" Grid.ColumnSpan="2" IsVisible="{Binding IsBrowseChannelsOpen}"
+                HorizontalAlignment="Center" VerticalAlignment="Top" Width="480" Margin="0,16,0,0"
+                Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource DividerStrongBrush}" BorderThickness="1"
+                CornerRadius="{DynamicResource SurfaceRadiusValue}" Padding="14" BoxShadow="{DynamicResource PopoverShadow}">
+            <Grid RowDefinitions="Auto,Auto,Auto,Auto">
+                <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,10">
+                    <TextBlock Grid.Column="0" Text="Parcourir les canaux" FontWeight="Bold" FontSize="14" VerticalAlignment="Center" />
+                    <Button Grid.Column="1" Classes="row-button" Width="20" Height="20" Command="{Binding CloseBrowseChannelsCommand}">
+                        <Canvas Width="14" Height="14" HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <Line StartPoint="1,1" EndPoint="13,13" Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.6" StrokeLineCap="Round" />
+                            <Line StartPoint="13,1" EndPoint="1,13" Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.6" StrokeLineCap="Round" />
+                        </Canvas>
+                    </Button>
+                </Grid>
+
+                <Border Grid.Row="1" BorderBrush="{DynamicResource DividerStrongBrush}" BorderThickness="1"
+                        CornerRadius="{DynamicResource SurfaceRadiusValue}" Margin="0,0,0,10">
+                    <TextBox x:Name="BrowseChannelsBox" Classes="composer" Text="{Binding BrowseChannelsQuery}"
+                             PlaceholderText="Filtrer par nom…" Padding="10,8" />
+                </Border>
+
+                <TextBlock Grid.Row="2" Text="{Binding BrowseChannelsError}" Foreground="{DynamicResource DangerBrush}"
+                           TextWrapping="Wrap" FontSize="12.5" Margin="2,0,2,8"
+                           IsVisible="{Binding BrowseChannelsError, Converter={x:Static conv:ObjectConverters.IsNotNull}}" />
+
+                <ScrollViewer Grid.Row="3" MaxHeight="440">
+                    <StackPanel Spacing="2">
+                        <TextBlock Text="Chargement des canaux…" Foreground="{DynamicResource TextTertiaryBrush}"
+                                   HorizontalAlignment="Center" Margin="0,20" IsVisible="{Binding IsBrowsingChannels}" />
+                        <TextBlock Text="Aucun canal public à rejoindre" Foreground="{DynamicResource TextTertiaryBrush}"
+                                   HorizontalAlignment="Center" Margin="0,20" TextWrapping="Wrap"
+                                   IsVisible="{Binding NoBrowseChannelResults}" />
+                        <ItemsControl ItemsSource="{Binding BrowseChannelResults}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Spacing="2" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="models:BrowseChannelItem">
+                                    <Border CornerRadius="{DynamicResource RowRadiusValue}" Padding="8,7">
+                                        <Grid ColumnDefinitions="Auto,*,Auto">
+                                            <Path Grid.Column="0" Data="M9 4l-1 16M16 4l-1 16M4 9h16M3 15h16"
+                                                  Stroke="{DynamicResource TextTertiaryBrush}" StrokeThickness="1.7"
+                                                  Width="14" Height="14" Stretch="Uniform" VerticalAlignment="Top" Margin="0,3,8,0" />
+                                            <StackPanel Grid.Column="1" Spacing="1">
+                                                <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" FontSize="13" TextWrapping="Wrap" />
+                                                <TextBlock Text="{Binding Purpose}" IsVisible="{Binding HasPurpose}"
+                                                           FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" />
+                                            </StackPanel>
+                                            <Button Grid.Column="2" Classes="row-button" VerticalAlignment="Top" Margin="10,0,0,0"
+                                                    IsEnabled="{Binding !IsJoining}"
+                                                    Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).JoinChannelCommand}"
+                                                    CommandParameter="{Binding}">
+                                                <Border Background="{DynamicResource AccentBrush}" CornerRadius="{DynamicResource RowRadiusValue}" Padding="10,5">
+                                                    <TextBlock Text="{Binding JoinLabel}" Foreground="{DynamicResource OnAccentBrush}"
+                                                               FontSize="12" FontWeight="SemiBold" MinWidth="52" TextAlignment="Center" />
+                                                </Border>
+                                            </Button>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </ScrollViewer>
+            </Grid>
+        </Border>
+
+        <!-- SEARCH PANEL -->
+        <Button Classes="row-button" Grid.Column="0" Grid.ColumnSpan="3" IsVisible="{Binding IsSearchOpen}"
+                HorizontalAlignment="Stretch" VerticalAlignment="Stretch" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"
+                Command="{Binding CloseSearchCommand}" Background="Transparent" Content="" />
+
+        <Border Grid.Column="0" Grid.ColumnSpan="2" IsVisible="{Binding IsSearchOpen}"
+                HorizontalAlignment="Center" VerticalAlignment="Top" Width="480" Margin="0,16,0,0"
+                Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource DividerStrongBrush}" BorderThickness="1"
+                CornerRadius="{DynamicResource SurfaceRadiusValue}" Padding="14" BoxShadow="{DynamicResource PopoverShadow}">
+            <Grid RowDefinitions="Auto,Auto,Auto">
+                <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,10">
+                    <TextBlock Grid.Column="0" Text="Rechercher" FontWeight="Bold" FontSize="14" VerticalAlignment="Center" />
+                    <Button Grid.Column="1" Classes="row-button" Width="20" Height="20" Command="{Binding CloseSearchCommand}">
+                        <Canvas Width="14" Height="14" HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <Line StartPoint="1,1" EndPoint="13,13" Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.6" StrokeLineCap="Round" />
+                            <Line StartPoint="13,1" EndPoint="1,13" Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.6" StrokeLineCap="Round" />
+                        </Canvas>
+                    </Button>
+                </Grid>
+
+                <Border Grid.Row="1" BorderBrush="{DynamicResource DividerStrongBrush}" BorderThickness="1"
+                        CornerRadius="{DynamicResource SurfaceRadiusValue}" Margin="0,0,0,10">
+                    <TextBox x:Name="SearchBox" Classes="composer" Text="{Binding SearchQuery}"
+                             PlaceholderText="Rechercher un message…" Padding="10,8" />
+                </Border>
+
+                <ScrollViewer Grid.Row="2" MaxHeight="440">
+                    <StackPanel Spacing="2">
+                        <TextBlock Text="Aucun résultat" Foreground="{DynamicResource TextTertiaryBrush}" HorizontalAlignment="Center" Margin="0,20"
+                                   IsVisible="{Binding NoSearchResults}" />
+                        <ItemsControl ItemsSource="{Binding SearchResults}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Spacing="2" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="models:SearchResultItem">
+                                    <Button Classes="row-button"
+                                            Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).OpenSearchResultCommand}"
+                                            CommandParameter="{Binding}">
+                                        <Border CornerRadius="{DynamicResource RowRadiusValue}" Padding="8,7">
+                                            <Grid ColumnDefinitions="26,*">
+                                                <Border Grid.Column="0" Width="26" Height="26" CornerRadius="13" Background="{Binding AvatarBrush}" VerticalAlignment="Top">
+                                                    <TextBlock Text="{Binding AuthorInitials}" Foreground="White" FontWeight="Bold" FontSize="10.5" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                </Border>
+                                                <StackPanel Grid.Column="1" Margin="8,0,0,0" Spacing="1">
+                                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                                        <TextBlock Text="{Binding AuthorName}" FontWeight="Bold" FontSize="12.5" />
+                                                        <TextBlock Text="{Binding ChannelLabel}" FontSize="11.5" Foreground="{DynamicResource TextTertiaryBrush}" />
+                                                        <TextBlock Text="{Binding TimeLabel}" FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}" />
+                                                    </StackPanel>
+                                                    <TextBlock Text="{Binding Text}" FontSize="12.5" TextWrapping="Wrap" Foreground="{DynamicResource TextPrimaryBrush}" />
+                                                </StackPanel>
+                                            </Grid>
+                                        </Border>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </ScrollViewer>
+            </Grid>
+        </Border>
+
+        <!-- EMOJI PICKER (reactions) -->
+        <Button Classes="row-button" Grid.Column="0" Grid.ColumnSpan="3" IsVisible="{Binding IsEmojiPickerOpen}"
+                HorizontalAlignment="Stretch" VerticalAlignment="Stretch" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"
+                Command="{Binding CloseEmojiPickerCommand}" Background="Transparent" Content="" />
+
+        <Border Grid.Column="0" Grid.ColumnSpan="3" IsVisible="{Binding IsEmojiPickerOpen}"
+                HorizontalAlignment="Center" VerticalAlignment="Center" Width="340"
+                Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource DividerStrongBrush}" BorderThickness="1"
+                CornerRadius="{DynamicResource SurfaceRadiusValue}" Padding="14" BoxShadow="{DynamicResource PopoverShadow}">
+            <Grid RowDefinitions="Auto,*">
+                <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,10">
+                    <TextBlock Grid.Column="0" Text="Choisir une réaction" FontWeight="Bold" FontSize="14" VerticalAlignment="Center" />
+                    <Button Grid.Column="1" Classes="row-button" Width="20" Height="20" Command="{Binding CloseEmojiPickerCommand}">
+                        <Canvas Width="14" Height="14" HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <Line StartPoint="1,1" EndPoint="13,13" Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.6" StrokeLineCap="Round" />
+                            <Line StartPoint="13,1" EndPoint="1,13" Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.6" StrokeLineCap="Round" />
+                        </Canvas>
+                    </Button>
+                </Grid>
+
+                <ScrollViewer Grid.Row="1" MaxHeight="360">
+                    <StackPanel Spacing="12">
+                        <StackPanel Spacing="6">
+                            <TextBlock Text="STANDARD" FontSize="10.5" FontWeight="Bold" Foreground="{DynamicResource TextTertiaryBrush}" />
+                            <ItemsControl ItemsSource="{Binding StandardEmojiOptions}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="models:EmojiPickerItem">
+                                        <Button Classes="swatch-button" Width="30" Height="30" Margin="0,0,2,2"
+                                                ToolTip.Tip="{Binding Name}"
+                                                Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).PickEmojiCommand}"
+                                                CommandParameter="{Binding Name}">
+                                            <TextBlock Text="{Binding Glyph}" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+
+                        <StackPanel Spacing="6">
+                            <TextBlock Text="PERSONNALISÉS" FontSize="10.5" FontWeight="Bold" Foreground="{DynamicResource TextTertiaryBrush}" />
+                            <ItemsControl ItemsSource="{Binding CustomEmojiOptions}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="models:EmojiPickerItem">
+                                        <Button Classes="swatch-button" Width="30" Height="30" Margin="0,0,2,2"
+                                                ToolTip.Tip="{Binding Name}"
+                                                Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).PickEmojiCommand}"
+                                                CommandParameter="{Binding Name}">
+                                            <Image Source="{Binding Image}" Width="22" Height="22" Stretch="Uniform" />
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+            </Grid>
+        </Border>
+
+        <!-- DELETE MESSAGE CONFIRMATION -->
+        <Button Classes="row-button" Grid.Column="0" Grid.ColumnSpan="3" IsVisible="{Binding IsDeleteConfirmOpen}"
+                HorizontalAlignment="Stretch" VerticalAlignment="Stretch" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"
+                Command="{Binding CancelDeleteMessageCommand}" Background="Transparent" Content="" />
+
+        <Border Grid.Column="0" Grid.ColumnSpan="3" IsVisible="{Binding IsDeleteConfirmOpen}"
+                HorizontalAlignment="Center" VerticalAlignment="Center" Width="300"
+                Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource DividerStrongBrush}" BorderThickness="1"
+                CornerRadius="{DynamicResource SurfaceRadiusValue}" Padding="16" BoxShadow="{DynamicResource PopoverShadow}">
+            <StackPanel Spacing="14">
+                <TextBlock Text="Supprimer ce message ?" FontWeight="Bold" FontSize="14" TextWrapping="Wrap" />
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+                    <Button Classes="row-button" Command="{Binding CancelDeleteMessageCommand}">
+                        <Border Background="{DynamicResource BgPanelBrush}" CornerRadius="{DynamicResource RowRadiusValue}" Padding="12,6">
+                            <TextBlock Text="Annuler" FontSize="12.5" />
+                        </Border>
+                    </Button>
+                    <Button Classes="row-button" Command="{Binding ConfirmDeleteMessageCommand}">
+                        <Border Background="{DynamicResource DangerBrush}" CornerRadius="{DynamicResource RowRadiusValue}" Padding="12,6">
+                            <TextBlock Text="Supprimer" Foreground="White" FontSize="12.5" FontWeight="SemiBold" />
+                        </Border>
+                    </Button>
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
+    </Grid>
+</Window>

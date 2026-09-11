@@ -1,0 +1,196 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    :root{
+      --c-bg:#FAFAFA; --c-panel:#F3F3F3; --c-rail:#EAEAEA;
+      --c-border:#E1E1E1; --c-border-strong:#D6D6D6;
+      --c-text:#1A1A1A; --c-text-2:#5C5C5C; --c-text-3:#8A8A8A;
+      --c-accent:#005FB8; --c-accent-soft:#E7F1FB; --c-accent-ink:#0B4E93;
+      --c-danger:#C42B1C; --c-online:#0E8A0E; --c-away:#DF9A00; --c-offline:#A6A4A2;
+      --font:'Segoe UI Variable','Segoe UI',system-ui,-apple-system,BlinkMacSystemFont,sans-serif;
+    }
+    *{box-sizing:border-box;}
+    html,body{margin:0;padding:0;}
+    body{font-family:var(--font);color:var(--c-text);}
+    a{color:var(--c-accent);text-decoration:none;} a:hover{color:var(--c-accent-ink);}
+    .icon{display:block;flex:none;}
+    .avatar{border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:600;flex:none;}
+    .presence{width:11px;height:11px;border-radius:50%;border:2px solid var(--c-panel);flex:none;}
+    .truncate{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+    .dm-row{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;}
+  </style>
+</helmet>
+
+<div style="width:1440px;height:900px;display:flex;background:var(--c-bg);font-size:13px;line-height:1.4;overflow:hidden;">
+
+  <!-- TEAM RAIL -->
+  <div style="width:56px;flex:none;background:var(--c-rail);border-right:1px solid var(--c-border);display:flex;flex-direction:column;align-items:center;padding:12px 0;gap:8px;">
+    <div style="width:40px;height:40px;border-radius:10px;background:var(--c-accent);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;">WM</div>
+    <div style="width:40px;height:40px;border-radius:10px;background:#DDD9D3;color:#5C5650;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;">DE</div>
+    <div style="width:40px;height:40px;border-radius:10px;background:#D8DEE6;color:#4A5568;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;">OP</div>
+  </div>
+
+  <!-- SIDEBAR: FOCUSED ON DMs -->
+  <div style="width:300px;flex:none;background:var(--c-panel);border-right:1px solid var(--c-border);display:flex;flex-direction:column;">
+    <div style="padding:14px 14px 8px 14px;font-weight:700;font-size:14.5px;">Acme Corp</div>
+    <div style="padding:0 12px 10px 12px;">
+      <div style="display:flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--c-border);border-radius:6px;padding:6px 10px;color:var(--c-text-3);">
+        <svg class="icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+        <span>Rechercher</span>
+      </div>
+    </div>
+
+    <div style="padding:2px 14px 6px 14px;display:flex;align-items:center;">
+      <div style="display:flex;gap:4px;padding:2px;background:#fff;border:1px solid var(--c-border);border-radius:8px;">
+        <div style="padding:5px 12px;border-radius:6px;color:var(--c-text-2);font-size:12px;">Canaux</div>
+        <div style="padding:5px 12px;border-radius:6px;background:var(--c-accent);color:#fff;font-weight:600;font-size:12px;">Messages privés</div>
+      </div>
+      <div style="flex:1;"></div>
+      <svg class="icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--c-text-2)" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+    </div>
+
+    <div style="flex:1;overflow:auto;padding:4px 8px 12px 8px;">
+
+      <div class="dm-row" style="background:var(--c-accent-soft);position:relative;">
+        <div style="position:absolute;left:-8px;top:6px;bottom:6px;width:3px;border-radius:2px;background:var(--c-accent);"></div>
+        <div style="position:relative;">
+          <div class="avatar" style="width:36px;height:36px;font-size:13px;background:#8752A3;">CL</div>
+          <div class="presence" style="position:absolute;right:-2px;bottom:-2px;background:var(--c-online);"></div>
+        </div>
+        <div style="min-width:0;flex:1;">
+          <div style="display:flex;align-items:baseline;justify-content:space-between;">
+            <span class="truncate" style="font-weight:700;color:var(--c-accent-ink);">Camille Leroux</span>
+            <span style="color:var(--c-text-3);font-size:11px;">14:02</span>
+          </div>
+          <div class="truncate" style="color:var(--c-accent-ink);font-weight:600;">Tu peux relire la section offline ?</div>
+        </div>
+      </div>
+
+      <div class="dm-row">
+        <div style="position:relative;">
+          <div class="avatar" style="width:36px;height:36px;font-size:13px;background:#3B7A57;">TN</div>
+          <div class="presence" style="position:absolute;right:-2px;bottom:-2px;background:var(--c-away);"></div>
+        </div>
+        <div style="min-width:0;flex:1;">
+          <div style="display:flex;align-items:baseline;justify-content:space-between;">
+            <span class="truncate" style="font-weight:700;">Thomas Noël</span>
+            <span style="color:var(--c-text-3);font-size:11px;">hier</span>
+          </div>
+          <div class="truncate" style="color:var(--c-text-2);">Beta poussée sur le partage 👍</div>
+        </div>
+      </div>
+
+      <div class="dm-row">
+        <div style="position:relative;">
+          <div class="avatar" style="width:36px;height:36px;font-size:13px;background:#B0554B;">SM</div>
+          <div class="presence" style="position:absolute;right:-2px;bottom:-2px;background:var(--c-offline);"></div>
+        </div>
+        <div style="min-width:0;flex:1;">
+          <div style="display:flex;align-items:baseline;justify-content:space-between;">
+            <span class="truncate" style="font-weight:700;">Sophie Marchand</span>
+            <span style="color:var(--c-text-3);font-size:11px;">lun.</span>
+          </div>
+          <div class="truncate" style="color:var(--c-text-2);">Merci pour le retour !</div>
+        </div>
+      </div>
+
+      <div class="dm-row">
+        <div style="display:flex;">
+          <div class="avatar" style="width:26px;height:26px;font-size:10px;background:#4A6FA5;">ML</div>
+          <div class="avatar" style="width:26px;height:26px;font-size:10px;background:#8752A3;margin-left:-8px;border:2px solid var(--c-panel);">CL</div>
+        </div>
+        <div style="min-width:0;flex:1;margin-left:2px;">
+          <div style="display:flex;align-items:baseline;justify-content:space-between;">
+            <span class="truncate" style="font-weight:700;">Marc Lambert, Camille +1</span>
+            <span style="color:var(--c-text-3);font-size:11px;">ven.</span>
+          </div>
+          <div class="truncate" style="color:var(--c-text-2);">Point sync vendredi ?</div>
+        </div>
+      </div>
+
+      <div class="dm-row" style="opacity:.6;">
+        <div style="position:relative;">
+          <div class="avatar" style="width:36px;height:36px;font-size:13px;background:#6B6560;">JD</div>
+          <div class="presence" style="position:absolute;right:-2px;bottom:-2px;background:var(--c-offline);"></div>
+        </div>
+        <div style="min-width:0;flex:1;">
+          <div style="display:flex;align-items:baseline;justify-content:space-between;">
+            <span class="truncate" style="font-weight:700;">Julie Dumas</span>
+            <span style="color:var(--c-text-3);font-size:11px;">03/08</span>
+          </div>
+          <div class="truncate" style="color:var(--c-text-2);">À bientôt !</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="border-top:1px solid var(--c-border);padding:10px 12px;display:flex;align-items:center;gap:8px;">
+      <div style="position:relative;">
+        <div class="avatar" style="width:28px;height:28px;font-size:11px;background:var(--c-accent);">VH</div>
+        <div class="presence" style="position:absolute;right:-2px;bottom:-2px;background:var(--c-online);"></div>
+      </div>
+      <div style="flex:1;min-width:0;">
+        <div class="truncate" style="font-weight:700;">Vous</div>
+        <div class="truncate" style="color:var(--c-text-2);font-size:11.5px;">Disponible</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN: DM CONVERSATION -->
+  <div style="flex:1;min-width:0;display:flex;flex-direction:column;">
+    <div style="height:52px;flex:none;border-bottom:1px solid var(--c-border);display:flex;align-items:center;padding:0 16px;gap:10px;">
+      <div style="position:relative;">
+        <div class="avatar" style="width:26px;height:26px;font-size:10px;background:#8752A3;">CL</div>
+        <div class="presence" style="position:absolute;right:-2px;bottom:-2px;background:var(--c-online);border-color:var(--c-bg);"></div>
+      </div>
+      <div style="font-weight:700;font-size:15px;">Camille Leroux</div>
+      <div style="color:var(--c-online);font-size:12px;">· En ligne</div>
+    </div>
+
+    <div style="flex:1;overflow:auto;padding:14px 20px;">
+      <div style="display:flex;gap:10px;padding:6px 8px;">
+        <div class="avatar" style="width:36px;height:36px;font-size:13px;background:#8752A3;flex:none;">CL</div>
+        <div style="min-width:0;flex:1;">
+          <div style="display:flex;align-items:baseline;gap:8px;">
+            <span style="font-weight:700;">Camille Leroux</span>
+            <span style="color:var(--c-text-3);font-size:11.5px;">13:58</span>
+          </div>
+          <div>Tu peux relire la section offline du doc quand tu as 5 min ?</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;padding:6px 8px;background:#F0F6FC;">
+        <div class="avatar" style="width:36px;height:36px;font-size:13px;background:var(--c-accent);flex:none;">VH</div>
+        <div style="min-width:0;flex:1;">
+          <div style="display:flex;align-items:baseline;gap:8px;">
+            <span style="font-weight:700;">Vous</span>
+            <span style="color:var(--c-text-3);font-size:11.5px;">14:02</span>
+          </div>
+          <div>Oui, je regarde ça dans l'heure.</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="flex:none;padding:10px 20px 16px 20px;">
+      <div style="border:1px solid var(--c-border-strong);border-radius:10px;background:#fff;">
+        <div style="padding:10px 12px 6px 12px;color:var(--c-text-3);">Écrire à Camille Leroux…</div>
+        <div style="display:flex;align-items:center;gap:10px;padding:6px 10px 10px 10px;color:var(--c-text-2);">
+          <svg class="icon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M21.4 11.1L12.2 20.3a5 5 0 01-7.1-7.1l9-9a3.5 3.5 0 015 5l-9 9a2 2 0 01-2.8-2.8l8.1-8.1"/></svg>
+          <div style="flex:1;"></div>
+          <div style="width:30px;height:30px;border-radius:7px;background:var(--c-accent);display:flex;align-items:center;justify-content:center;">
+            <svg class="icon" width="15" height="15" viewBox="0 0 24 24" fill="#fff" stroke="none"><path d="M3 11l18-8-8 18-2.5-7.5L3 11z"/></svg>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

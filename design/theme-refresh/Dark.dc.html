@@ -1,0 +1,311 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body { margin: 0; }
+    * { box-sizing: border-box; }
+    a { color: #4C9DF5; text-decoration: none; }
+    a:hover { color: #7FBAF8; }
+    .sb-row:hover { background: #23272E !important; }
+    .msg:hover .msg-actions { opacity: 1; }
+    .thin-sb { scrollbar-width: thin; scrollbar-color: #383D46 transparent; }
+  </style>
+</helmet>
+
+<div style="display: flex; width: 1280px; height: 800px; background: #16181C; color: #E9EBEE; font-family: 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif; font-size: 13px; overflow: hidden;">
+
+  <!-- ============ SIDEBAR ============ -->
+  <div style="width: 280px; flex-shrink: 0; background: #1B1E23; border-right: 1px solid #282C33; display: flex; flex-direction: column;">
+
+    <div style="display: flex; align-items: center; gap: 6px; padding: 14px 14px 8px;">
+      <span style="font-size: 14px; font-weight: 700; letter-spacing: -0.01em;">Acme Corp</span>
+      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#9DA5B0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+    </div>
+
+    <div style="margin: 0 12px 12px; padding: 7px 10px; border-radius: 6px; background: #1E2127; border: 1px solid #2F343C; display: flex; align-items: center; gap: 8px;">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#6E7681" stroke-width="1.6"><circle cx="6.5" cy="6.5" r="4.5"/><path d="M10 10l4.5 4.5" stroke-linecap="round"/></svg>
+      <span style="color: #6E7681;">Rechercher</span>
+    </div>
+
+    <div class="thin-sb" style="flex: 1; overflow: hidden; padding: 0 8px 12px; display: flex; flex-direction: column;">
+
+      <div style="display: flex; align-items: center; gap: 5px; padding: 10px 8px 4px;">
+        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#6E7681" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+        <span style="font-size: 11px; font-weight: 700; color: #6E7681; letter-spacing: 0.04em;">FAVORIS</span>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 1px;">
+        <div class="sb-row" style="display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 6px;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6E7681" stroke-width="1.7"><path d="M9 4l-1 16M16 4l-1 16M4 9h16M3 15h16"/></svg>
+          <span style="font-family: 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif; font-size: 14px; color: #E9EBEE; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Relecture</span>
+        </div>
+        <div class="sb-row" style="display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 6px;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6E7681" stroke-width="1.7"><path d="M9 4l-1 16M16 4l-1 16M4 9h16M3 15h16"/></svg>
+          <span style="font-family: 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif; font-size: 14px; color: #E9EBEE; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Rédaction</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 6px; background: {{accentSoft}};">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="{{accentInk}}" stroke-width="1.7"><path d="M9 4l-1 16M16 4l-1 16M4 9h16M3 15h16"/></svg>
+          <span style="font-family: 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif; font-size: 14px; font-weight: 600; color: {{accentInk}}; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Veille sujets</span>
+        </div>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 5px; padding: 14px 8px 4px;">
+        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#6E7681" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+        <span style="font-size: 11px; font-weight: 700; color: #6E7681; letter-spacing: 0.04em;">CANAUX</span>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 1px;">
+        <div class="sb-row" style="display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 6px;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6E7681" stroke-width="1.7"><path d="M9 4l-1 16M16 4l-1 16M4 9h16M3 15h16"/></svg>
+          <span style="font-family: 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif; font-size: 14px; color: #E9EBEE; flex: 1;">/pause-café</span>
+        </div>
+        <div class="sb-row" style="display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 6px;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#E9EBEE" stroke-width="1.7"><path d="M9 4l-1 16M16 4l-1 16M4 9h16M3 15h16"/></svg>
+          <span style="font-family: 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif; font-size: 14px; font-weight: 700; color: #FFFFFF; flex: 1;">Général</span>
+          <span style="min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: {{accent}}; color: #0F1114; font-size: 10.5px; font-weight: 700; display: flex; align-items: center; justify-content: center;">2</span>
+        </div>
+        <div class="sb-row" style="display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 6px;">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#6E7681" stroke-width="1.4"><rect x="2" y="6" width="12" height="8" rx="1.4" fill="#6E7681" stroke="none"/><path d="M4.8 6V4a3.2 3.2 0 0 1 6.4 0v2"/></svg>
+          <span style="font-family: 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif; font-size: 14px; color: #E9EBEE; flex: 1;">Marketing</span>
+        </div>
+        <div class="sb-row" style="display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 6px;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6E7681" stroke-width="1.7"><path d="M9 4l-1 16M16 4l-1 16M4 9h16M3 15h16"/></svg>
+          <span style="font-family: 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif; font-size: 14px; color: #6E7681; flex: 1;">support-tickets</span>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6E7681" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M23 9l-6 6M17 9l6 6"/></svg>
+        </div>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 5px; padding: 14px 8px 4px;">
+        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#6E7681" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+        <span style="font-size: 11px; font-weight: 700; color: #6E7681; letter-spacing: 0.04em;">MESSAGES PRIVÉS</span>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 3px;">
+        <div class="sb-row" style="display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px;">
+          <div style="position: relative; width: 22px; height: 22px; flex-shrink: 0;">
+            <div style="width: 22px; height: 22px; border-radius: 11px; background: #4A9068; color: #0F1114; font-size: 9.5px; font-weight: 700; display: flex; align-items: center; justify-content: center;">SG</div>
+            <div style="position: absolute; right: -1px; bottom: -1px; width: 9px; height: 9px; border-radius: 5px; background: #3FB950; border: 2px solid #1B1E23;"></div>
+          </div>
+          <span style="font-family: 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif; font-size: 14px; color: #E9EBEE; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Camille Leroux</span>
+        </div>
+        <div class="sb-row" style="display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px;">
+          <div style="position: relative; width: 22px; height: 22px; flex-shrink: 0;">
+            <div style="width: 22px; height: 22px; border-radius: 11px; background: #6E7DD2; color: #0F1114; font-size: 9.5px; font-weight: 700; display: flex; align-items: center; justify-content: center;">ML</div>
+            <div style="position: absolute; right: -1px; bottom: -1px; width: 9px; height: 9px; border-radius: 5px; background: #D9A521; border: 2px solid #1B1E23;"></div>
+          </div>
+          <span style="font-family: 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif; font-size: 14px; font-weight: 700; color: #FFFFFF; flex: 1;">Julie Dumas</span>
+          <span style="min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: {{accent}}; color: #0F1114; font-size: 10.5px; font-weight: 700; display: flex; align-items: center; justify-content: center;">3</span>
+        </div>
+        <div class="sb-row" style="display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px;">
+          <div style="position: relative; width: 22px; height: 22px; flex-shrink: 0;">
+            <div style="width: 22px; height: 22px; border-radius: 11px; background: #9E7F46; color: #0F1114; font-size: 9.5px; font-weight: 700; display: flex; align-items: center; justify-content: center;">TB</div>
+            <div style="position: absolute; right: -1px; bottom: -1px; width: 9px; height: 9px; border-radius: 5px; background: #6E7681; border: 2px solid #1B1E23;"></div>
+          </div>
+          <span style="font-family: 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif; font-size: 14px; color: #6E7681; flex: 1;">Todo Bot</span>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6E7681" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M23 9l-6 6M17 9l6 6"/></svg>
+        </div>
+      </div>
+    </div>
+
+    <div style="border-top: 1px solid #282C33; padding: 10px 12px; display: flex; align-items: center; gap: 8px;">
+      <div style="position: relative; width: 28px; height: 28px; flex-shrink: 0;">
+        <div style="width: 28px; height: 28px; border-radius: 14px; background: {{accent}}; color: #0F1114; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center;">VH</div>
+        <div style="position: absolute; right: -1px; bottom: -1px; width: 10px; height: 10px; border-radius: 5px; background: #3FB950; border: 2px solid #1B1E23;"></div>
+      </div>
+      <div style="flex: 1; display: flex; flex-direction: column;">
+        <span style="font-weight: 700;">camille_l</span>
+        <span style="font-size: 11px; color: #9DA5B0;">Disponible</span>
+      </div>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9DA5B0" stroke-width="1.6"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+    </div>
+  </div>
+
+  <!-- ============ CONVERSATION ============ -->
+  <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; background: #16181C;">
+
+    <div style="height: 52px; flex-shrink: 0; border-bottom: 1px solid #282C33; padding: 0 16px; display: flex; align-items: center; gap: 0;">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#E9EBEE" stroke-width="1.8"><path d="M9 4l-1 16M16 4l-1 16M4 9h16M3 15h16"/></svg>
+      <span style="font-size: 15px; font-weight: 700; margin-left: 10px; letter-spacing: -0.01em;">Veille sujets</span>
+      <div style="width: 1px; height: 16px; background: #383D46; margin: 0 12px;"></div>
+      <span style="color: #9DA5B0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Signalements et sujets à suivre pour la rédaction</span>
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#9DA5B0" stroke-width="1.6" style="margin: 0 10px;"><circle cx="6.5" cy="6.5" r="4.5"/><path d="M10 10l4.5 4.5" stroke-linecap="round"/></svg>
+      <span style="font-size: 11px; color: #6E7681;">core v0.1.0</span>
+    </div>
+
+    <div style="flex: 1; min-height: 0; padding: 14px 20px; display: flex; flex-direction: column; justify-content: flex-end; gap: 0; overflow: hidden;">
+
+      <div class="msg" style="position: relative; display: flex; gap: 10px; padding: 10px 8px 4px 0; border-radius: 6px;">
+        <div style="width: 36px; height: 36px; flex-shrink: 0; border-radius: 18px; background: #C4685C; color: #0F1114; font-size: 13px; font-weight: 700; display: flex; align-items: center; justify-content: center;">AL</div>
+        <div style="flex: 1; min-width: 0;">
+          <div style="display: flex; align-items: baseline; gap: 8px; margin-bottom: 14px;">
+            <span style="font-family: 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif; font-size: 14.5px; font-weight: 700;">Sophie Marchand</span>
+            <span style="font-size: 11px; color: #6E7681;">08:24</span>
+          </div>
+          <div style="font-family: 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif; font-size: 14.5px; line-height: 1.5; color: #E9EBEE;">Le rapport annuel sur l'accessibilité des services publics en ligne vient de paraître, avec des chiffres très détaillés — <a href="#">la synthèse</a> est plutôt bien faite.</div>
+        </div>
+      </div>
+
+      <div class="msg" style="position: relative; display: flex; gap: 10px; padding: 4px 8px 4px 0; border-radius: 6px;">
+        <div style="width: 36px; flex-shrink: 0;"></div>
+        <div style="flex: 1; min-width: 0; font-family: 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif; font-size: 14.5px; line-height: 1.5; color: #E9EBEE;">Je regarde si on a déjà traité le sujet de notre côté.</div>
+      </div>
+
+      <div class="msg" style="position: relative; display: flex; gap: 10px; padding: 10px 8px 4px 0; border-radius: 6px;">
+        <div style="width: 36px; height: 36px; flex-shrink: 0; border-radius: 18px; background: #5C82B8; color: #0F1114; font-size: 13px; font-weight: 700; display: flex; align-items: center; justify-content: center;">MH</div>
+        <div style="flex: 1; min-width: 0;">
+          <div style="display: flex; align-items: baseline; gap: 8px; margin-bottom: 14px;">
+            <span style="font-family: 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif; font-size: 14.5px; font-weight: 700;">lucas_b</span>
+            <span style="font-size: 11px; color: #6E7681;">08:38</span>
+          </div>
+          <div style="font-family: 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif; font-size: 14.5px; line-height: 1.5;"><a href="#">techmeme.com/260908/p28</a></div>
+          <div style="margin-top: 6px; max-width: 420px; border: 1px solid #2F343C; border-radius: 8px; background: #1E2127; overflow: hidden;">
+            <div style="padding: 8px 10px; display: flex; flex-direction: column; gap: 2px;">
+              <span style="font-size: 10.5px; color: #6E7681;">Techmeme</span>
+              <span style="font-size: 13px; font-weight: 600; line-height: 1.35; color: #E9EBEE;">OpenAI reports Navier-Stokes singularity find in 88 hours using Astra-next</span>
+              <span style="font-size: 12px; color: #9DA5B0; line-height: 1.4;">Roughly 10 000 agents and 130B tokens, a contender for the second ever Millennium Prize awarded.</span>
+            </div>
+            <div style="height: 132px; background: linear-gradient(135deg, #242932 0%, #1C2027 100%); display: flex; align-items: center; justify-content: center;">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#4A515C" stroke-width="1.4"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9.5" r="1.8"/><path d="M3 16l5-4 4 3 3-2 6 5"/></svg>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="msg" style="position: relative; display: flex; gap: 10px; padding: 10px 8px 4px 0; border-radius: 6px;">
+        <div style="width: 36px; height: 36px; flex-shrink: 0; border-radius: 18px; background: #9B63B8; color: #0F1114; font-size: 13px; font-weight: 700; display: flex; align-items: center; justify-content: center;">MC</div>
+        <div style="flex: 1; min-width: 0;">
+          <div style="display: flex; align-items: baseline; gap: 8px; margin-bottom: 14px;">
+            <span style="font-family: 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif; font-size: 14.5px; font-weight: 700;">Thomas Noël</span>
+            <span style="font-size: 11px; color: #6E7681;">08:41</span>
+          </div>
+          <div style="border-left: 2px solid #383D46; padding: 1px 4px 1px 8px; margin-bottom: 4px; display: flex; gap: 5px; align-items: baseline;">
+            <span style="font-size: 11px; font-weight: 600; color: #6E7681;">lucas_b</span>
+            <span style="font-size: 11px; color: #6E7681; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">OpenAI reports Navier-Stokes singularity find in 88 hours…</span>
+          </div>
+          <div style="font-family: 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif; font-size: 14.5px; line-height: 1.5; color: #E9EBEE;">Voir la discussion ici, <span style="color: {{accent}}; font-weight: 600;">@camille</span> avait déjà creusé le sujet.</div>
+          <div style="display: flex; gap: 6px; margin-top: 6px;">
+            <div style="display: flex; align-items: center; gap: 5px; border: 1px solid {{accent}}; background: {{accentSoft}}; border-radius: 14px; padding: 2px 9px;">
+              <span style="font-size: 15px; line-height: 1;">👍</span>
+              <span style="font-size: 12px; font-weight: 700; color: {{accentInk}};">2</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 5px; border: 1px solid #2F343C; border-radius: 14px; padding: 2px 9px;">
+              <span style="font-size: 15px; line-height: 1;">🎉</span>
+              <span style="font-size: 12px; font-weight: 700; color: #9DA5B0;">1</span>
+            </div>
+          </div>
+          <div style="margin-top: 8px;"><span style="color: {{accent}}; font-weight: 600; font-size: 13px;">3 réponses</span></div>
+        </div>
+
+        <div class="msg-actions" style="position: absolute; top: 4px; right: 4px; display: flex; gap: 4px; opacity: 0; transition: opacity .12s;">
+          <div style="width: 26px; height: 26px; border-radius: 13px; background: #22262D; border: 1px solid #343941; box-shadow: 0 2px 8px rgba(0,0,0,.5); display: flex; align-items: center; justify-content: center;">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#9DA5B0" stroke-width="1.3"><circle cx="8" cy="8" r="6"/><circle cx="6" cy="6.6" r=".9" fill="#9DA5B0" stroke="none"/><circle cx="10" cy="6.6" r=".9" fill="#9DA5B0" stroke="none"/><path d="M5.6 10q2.4 1.9 4.8 0" stroke-linecap="round"/></svg>
+          </div>
+          <div style="width: 26px; height: 26px; border-radius: 13px; background: #22262D; border: 1px solid #343941; box-shadow: 0 2px 8px rgba(0,0,0,.5); display: flex; align-items: center; justify-content: center;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9DA5B0" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin: 10px 20px 16px; border: 1px solid #383D46; border-radius: 10px; background: #1E2127; flex-shrink: 0;">
+      <div style="padding: 8px 14px 0; font-size: 11px; font-style: italic; color: #6E7681;">Camille Leroux est en train d'écrire…</div>
+      <div style="padding: 10px 12px 4px; font-family: 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif; font-size: 14.5px; color: #E9EBEE;">Bonne idée, je prends le sujet pour demain matin<span style="display: inline-block; width: 1px; height: 16px; background: {{accent}}; vertical-align: -3px; margin-left: 1px;"></span></div>
+      <div style="display: flex; align-items: center; padding: 4px 10px 10px;">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#9DA5B0" stroke-width="1.8" stroke-linecap="round"><path d="M21.4 11.1 12.2 20.3a5 5 0 0 1-7.1-7.1l9-9a3.5 3.5 0 0 1 5 5l-9 9a2 2 0 0 1-2.8-2.8l8.1-8.1"/></svg>
+        <div style="flex: 1;"></div>
+        <div style="width: 30px; height: 30px; border-radius: 7px; background: {{accent}}; display: flex; align-items: center; justify-content: center;">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="#0F1114"><path d="M3 11l18-8-8 18-2.5-7.5L3 11z"/></svg>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ THREAD PANEL ============ -->
+  <div style="width: 320px; flex-shrink: 0; border-left: 1px solid #282C33; display: flex; flex-direction: column; background: #16181C;">
+    <div style="height: 52px; flex-shrink: 0; border-bottom: 1px solid #282C33; padding: 0 14px; display: flex; align-items: center; gap: 10px;">
+      <span style="font-weight: 700;">Fil de discussion</span>
+      <span style="flex: 1; font-size: 12px; color: #6E7681; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Veille sujets</span>
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#9DA5B0" stroke-width="1.6" stroke-linecap="round"><path d="M1 1l12 12M13 1L1 13"/></svg>
+    </div>
+
+    <div style="flex: 1; min-height: 0; padding: 14px; overflow: hidden;">
+      <div style="display: flex; gap: 8px;">
+        <div style="width: 30px; height: 30px; flex-shrink: 0; border-radius: 15px; background: #9B63B8; color: #0F1114; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center;">MC</div>
+        <div style="flex: 1; min-width: 0;">
+          <div style="display: flex; align-items: baseline; gap: 6px;">
+            <span style="font-family: 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif; font-size: 14.5px; font-weight: 700;">Thomas Noël</span>
+            <span style="font-size: 11px; color: #6E7681;">08:41</span>
+          </div>
+          <div style="font-family: 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif; font-size: 14.5px; line-height: 1.5; margin-top: 4px; color: #E9EBEE;">Voir la discussion ici, <span style="color: {{accent}}; font-weight: 600;">@camille</span> avait déjà creusé le sujet.</div>
+        </div>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 10px; margin: 14px 0;">
+        <div style="height: 1px; background: #282C33; width: 56px;"></div>
+        <span style="font-size: 11px; color: #6E7681;">3 réponses</span>
+        <div style="height: 1px; background: #282C33; flex: 1;"></div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 14px;">
+        <div style="display: flex; gap: 8px;">
+          <div style="width: 30px; height: 30px; flex-shrink: 0; border-radius: 15px; background: #4A9068; color: #0F1114; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center;">SG</div>
+          <div style="flex: 1; min-width: 0;">
+            <div style="display: flex; align-items: baseline; gap: 6px;">
+              <span style="font-family: 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif; font-size: 14.5px; font-weight: 700;">Camille Leroux</span>
+              <span style="font-size: 11px; color: #6E7681;">08:43</span>
+            </div>
+            <div style="font-family: 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif; font-size: 14.5px; line-height: 1.5; margin-top: 4px; color: #E9EBEE;">Oui, j'ai un brouillon depuis la semaine dernière.</div>
+          </div>
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <div style="width: 30px; height: 30px; flex-shrink: 0; border-radius: 15px; background: #5C82B8; color: #0F1114; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center;">MH</div>
+          <div style="flex: 1; min-width: 0;">
+            <div style="display: flex; align-items: baseline; gap: 6px;">
+              <span style="font-family: 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif; font-size: 14.5px; font-weight: 700;">lucas_b</span>
+              <span style="font-size: 11px; color: #6E7681;">08:44</span>
+            </div>
+            <div style="font-family: 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif; font-size: 14.5px; line-height: 1.5; margin-top: 4px; color: #E9EBEE;">Je te passe mes liens.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin: 10px 14px 14px; border: 1px solid #383D46; border-radius: 10px; background: #1E2127; padding: 10px 12px; display: flex; align-items: center; gap: 10px; flex-shrink: 0;">
+      <span style="flex: 1; font-family: 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif; font-size: 14.5px; color: #6E7681;">Répondre au fil…</span>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9DA5B0" stroke-width="1.8" stroke-linecap="round"><path d="M21.4 11.1 12.2 20.3a5 5 0 0 1-7.1-7.1l9-9a3.5 3.5 0 0 1 5 5l-9 9a2 2 0 0 1-2.8-2.8l8.1-8.1"/></svg>
+    </div>
+  </div>
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{"accent":{"editor":"color","default":"#4C9DF5","options":["#4C9DF5","#6FA8DC","#4FB89A","#B98AD6"],"section":"Palette"},"$preview":{"width":1280,"height":800}}'>
+class Component extends DCLogic {
+  mix(from, to, amount) {
+    const p = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+    const [ar, ag, ab] = p(from);
+    const [br, bg, bb] = p(to);
+    const c = (a, b) => Math.round(a + (b - a) * amount).toString(16).padStart(2, '0');
+    return `#${c(ar, br)}${c(ag, bg)}${c(ab, bb)}`;
+  }
+
+  renderVals() {
+    const accent = this.props.accent ?? '#4C9DF5';
+    return {
+      accent,
+      // Same derivation as the light variant, but lerped toward this
+      // theme's own panel/text colors — that's what keeps a dark
+      // selection readable instead of washed out.
+      accentSoft: this.mix(accent, '#1B1E23', 0.86),
+      accentInk: this.mix(accent, '#E9EBEE', 0.25),
+    };
+  }
+}
+</script>
+</body>
+</html>

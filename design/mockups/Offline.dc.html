@@ -1,0 +1,161 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    :root{
+      --c-bg:#FAFAFA; --c-panel:#F3F3F3; --c-rail:#EAEAEA;
+      --c-border:#E1E1E1; --c-border-strong:#D6D6D6;
+      --c-text:#1A1A1A; --c-text-2:#5C5C5C; --c-text-3:#8A8A8A;
+      --c-accent:#005FB8; --c-accent-soft:#E7F1FB; --c-accent-ink:#0B4E93;
+      --c-danger:#C42B1C; --c-online:#0E8A0E; --c-away:#DF9A00; --c-offline:#A6A4A2;
+      --c-warn-bg:#FFF4E5; --c-warn-ink:#8A5300; --c-warn-border:#F3D9A8;
+      --font:'Segoe UI Variable','Segoe UI',system-ui,-apple-system,BlinkMacSystemFont,sans-serif;
+    }
+    *{box-sizing:border-box;}
+    html,body{margin:0;padding:0;}
+    body{font-family:var(--font);color:var(--c-text);}
+    a{color:var(--c-accent);text-decoration:none;} a:hover{color:var(--c-accent-ink);}
+    .icon{display:block;flex:none;}
+    .avatar{border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:600;flex:none;}
+    .presence{width:10px;height:10px;border-radius:50%;border:2px solid var(--c-panel);flex:none;}
+    .truncate{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  </style>
+</helmet>
+
+<div style="width:1440px;height:900px;display:flex;flex-direction:column;background:var(--c-bg);font-size:13px;line-height:1.4;overflow:hidden;">
+
+  <!-- OFFLINE BANNER -->
+  <div style="flex:none;height:34px;background:var(--c-warn-bg);border-bottom:1px solid var(--c-warn-border);color:var(--c-warn-ink);display:flex;align-items:center;justify-content:center;gap:8px;font-size:12.5px;font-weight:600;">
+    <svg class="icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1 9l2 2a15 15 0 0121 0l2-2M5 13l2 2a9 9 0 0111 0l2-2M9 17l2 2a3 3 0 013 0l2-2"/><path d="M2 2l20 20"/></svg>
+    Hors ligne — vos messages seront envoyés dès la reconnexion
+    <span style="color:var(--c-warn-ink);text-decoration:underline;font-weight:700;margin-left:4px;">Réessayer</span>
+  </div>
+
+  <div style="flex:1;min-height:0;display:flex;">
+
+    <!-- TEAM RAIL -->
+    <div style="width:56px;flex:none;background:var(--c-rail);border-right:1px solid var(--c-border);display:flex;flex-direction:column;align-items:center;padding:12px 0;gap:8px;">
+      <div style="width:40px;height:40px;border-radius:10px;background:var(--c-accent);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;">WM</div>
+      <div style="width:40px;height:40px;border-radius:10px;background:#DDD9D3;color:#5C5650;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;">DE</div>
+      <div style="width:40px;height:40px;border-radius:10px;background:#D8DEE6;color:#4A5568;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;">OP</div>
+    </div>
+
+    <!-- SIDEBAR -->
+    <div style="width:280px;flex:none;background:var(--c-panel);border-right:1px solid var(--c-border);display:flex;flex-direction:column;">
+      <div style="padding:14px 14px 8px 14px;font-weight:700;font-size:14.5px;">Acme Corp</div>
+      <div style="padding:0 12px 12px 12px;">
+        <div style="display:flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--c-border);border-radius:6px;padding:6px 10px;color:var(--c-text-3);">
+          <svg class="icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+          <span>Rechercher (index local)</span>
+        </div>
+      </div>
+
+      <div style="flex:1;overflow:auto;padding:0 8px;">
+        <div style="padding:10px 8px 4px 8px;color:var(--c-text-3);font-size:11px;font-weight:700;">CANAUX</div>
+        <div style="display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:6px;background:var(--c-accent-soft);position:relative;">
+          <div style="position:absolute;left:-8px;top:6px;bottom:6px;width:3px;border-radius:2px;background:var(--c-accent);"></div>
+          <svg class="icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--c-accent-ink)" stroke-width="1.8"><path d="M9 4l-1 16M16 4l-1 16M4 9h16M3 15h16"/></svg>
+          <span style="font-weight:700;color:var(--c-accent-ink);flex:1;">general</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:6px;color:var(--c-text-2);">
+          <svg class="icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 4l-1 16M16 4l-1 16M4 9h16M3 15h16"/></svg>
+          <span>produit</span>
+        </div>
+
+        <div style="padding:14px 8px 4px 8px;color:var(--c-text-3);font-size:11px;font-weight:700;">MESSAGES PRIVÉS</div>
+        <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;color:var(--c-text-2);">
+          <div style="position:relative;">
+            <div class="avatar" style="width:22px;height:22px;font-size:9.5px;background:#8752A3;">CL</div>
+            <div class="presence" style="position:absolute;right:-2px;bottom:-2px;background:var(--c-offline);"></div>
+          </div>
+          <span>Camille Leroux</span>
+        </div>
+      </div>
+
+      <div style="border-top:1px solid var(--c-border);padding:10px 12px;display:flex;align-items:center;gap:8px;">
+        <div style="position:relative;">
+          <div class="avatar" style="width:28px;height:28px;font-size:11px;background:var(--c-accent);">VH</div>
+          <div class="presence" style="position:absolute;right:-2px;bottom:-2px;background:var(--c-offline);"></div>
+        </div>
+        <div style="flex:1;min-width:0;">
+          <div class="truncate" style="font-weight:700;">Vous</div>
+          <div class="truncate" style="color:var(--c-warn-ink);font-size:11.5px;font-weight:600;">Hors ligne</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MAIN CONVERSATION -->
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column;">
+      <div style="height:52px;flex:none;border-bottom:1px solid var(--c-border);display:flex;align-items:center;padding:0 16px;gap:10px;">
+        <svg class="icon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--c-text)" stroke-width="1.8"><path d="M9 4l-1 16M16 4l-1 16M4 9h16M3 15h16"/></svg>
+        <div style="font-weight:700;font-size:15px;">general</div>
+        <div style="color:var(--c-text-3);">· lecture complète disponible hors ligne</div>
+      </div>
+
+      <div style="flex:1;overflow:auto;padding:14px 20px;">
+        <div style="display:flex;gap:10px;padding:6px 8px;">
+          <div class="avatar" style="width:36px;height:36px;font-size:13px;background:#8752A3;flex:none;">CL</div>
+          <div style="min-width:0;flex:1;">
+            <div style="display:flex;align-items:baseline;gap:8px;">
+              <span style="font-weight:700;">Camille Leroux</span>
+              <span style="color:var(--c-text-3);font-size:11.5px;">hier 17:48</span>
+            </div>
+            <div>Bonne semaine à tous, RAS côté serveur ce matin.</div>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:10px;padding:6px 8px;opacity:.85;">
+          <div class="avatar" style="width:36px;height:36px;font-size:13px;background:var(--c-accent);flex:none;">VH</div>
+          <div style="min-width:0;flex:1;">
+            <div style="display:flex;align-items:baseline;gap:8px;">
+              <span style="font-weight:700;">Vous</span>
+              <span style="color:var(--c-text-3);font-size:11.5px;">10:02</span>
+              <span style="display:flex;align-items:center;gap:4px;color:var(--c-warn-ink);font-size:11px;font-weight:600;">
+                <svg class="icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>
+                en attente d'envoi
+              </span>
+            </div>
+            <div>Je note, je regarde les retours de tests cet aprem.</div>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:10px;padding:6px 8px;opacity:.85;">
+          <div class="avatar" style="width:36px;height:36px;font-size:13px;background:var(--c-accent);flex:none;">VH</div>
+          <div style="min-width:0;flex:1;">
+            <div style="display:flex;align-items:baseline;gap:8px;">
+              <span style="font-weight:700;">Vous</span>
+              <span style="color:var(--c-text-3);font-size:11.5px;">10:03</span>
+              <span style="display:flex;align-items:center;gap:4px;color:var(--c-warn-ink);font-size:11px;font-weight:600;">
+                <svg class="icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>
+                en attente d'envoi
+              </span>
+            </div>
+            <div>2 messages en file — synchronisation automatique au retour du réseau.</div>
+          </div>
+        </div>
+      </div>
+
+      <div style="flex:none;padding:10px 20px 16px 20px;">
+        <div style="border:1px solid var(--c-border-strong);border-radius:10px;background:#fff;">
+          <div style="padding:10px 12px 6px 12px;color:var(--c-text-3);">Écrire dans #general… (sera envoyé à la reconnexion)</div>
+          <div style="display:flex;align-items:center;gap:10px;padding:6px 10px 10px 10px;color:var(--c-text-2);">
+            <svg class="icon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M21.4 11.1L12.2 20.3a5 5 0 01-7.1-7.1l9-9a3.5 3.5 0 015 5l-9 9a2 2 0 01-2.8-2.8l8.1-8.1"/></svg>
+            <div style="flex:1;"></div>
+            <div style="width:30px;height:30px;border-radius:7px;background:var(--c-warn-ink);opacity:.8;display:flex;align-items:center;justify-content:center;">
+              <svg class="icon" width="15" height="15" viewBox="0 0 24 24" fill="#fff" stroke="none"><path d="M3 11l18-8-8 18-2.5-7.5L3 11z"/></svg>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

@@ -1,0 +1,15 @@
+{
+  "artboards": [
+    { "file": "Main.dc.html", "title": "Écran principal", "x": 0, "y": 0, "w": 1440, "h": 900 },
+    { "file": "Search.dc.html", "title": "Recherche", "x": 1520, "y": 0, "w": 1440, "h": 900 },
+    { "file": "Offline.dc.html", "title": "Mode hors ligne", "x": 0, "y": 1020, "w": 1440, "h": 900 },
+    { "file": "DMs.dc.html", "title": "Messages privés", "x": 1520, "y": 1020, "w": 1440, "h": 900 }
+  ],
+  "annotations": [
+    { "id": "note-main", "x": 0, "y": -70, "w": 420, "text": "Écran principal : équipes, canaux, conversation et fil de discussion ouvert." },
+    { "id": "note-search", "x": 1520, "y": -70, "w": 420, "text": "Recherche : recherche locale (fonctionne hors ligne) avec filtres et extraits surlignés." },
+    { "id": "note-offline", "x": 0, "y": 950, "w": 420, "text": "Mode hors ligne : bannière de statut + messages en file d'attente de synchronisation." },
+    { "id": "note-dms", "x": 1520, "y": 950, "w": 420, "text": "Messages privés : liste dédiée avec présence, aperçu du dernier message et non-lus." }
+  ],
+  "launch": { "view": "canvas" }
+}

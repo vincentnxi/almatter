@@ -1,0 +1,116 @@
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using Avalonia;
+using Avalonia.Media;
+using CommunityToolkit.Mvvm.ComponentModel;
+
+namespace Almatter.App.Models;
+
+public sealed partial class MessageItem : ObservableObject
+{
+    public required string Id { get; init; }
+    public required string AuthorUserId { get; init; }
+    public required string AuthorName { get; init; }
+    public required string AuthorInitials { get; init; }
+    public required string AvatarHex { get; init; }
+    public required string TimeLabel { get; init; }
+    public required long CreateAtMillis { get; init; }
+    public required string Text { get; set; }
+    public bool IsMine { get; init; }
+
+    /// <summary>The thread this message belongs to — null for a top-level message (not itself a reply). Set on the main list's copy of a message so its "Répondre" button opens the actual thread, not a fresh one rooted on the reply itself.</summary>
+    public string? ThreadRootId { get; init; }
+
+    /// <summary>What "Répondre" opens: the thread this message already belongs to, or itself if it isn't a reply yet — either way, exactly what OpenThreadCommand expects.</summary>
+    public string ReplyTargetId => ThreadRootId ?? Id;
+
+    /// <summary>
+    /// A lightweight citation of the message this one replies to — the
+    /// thread root's author and a truncated excerpt, resolved synchronously
+    /// from whatever's already loaded when this row was built (see
+    /// MainViewModel.PopulateMessages). Deliberately never filled in later:
+    /// this row lives in a virtualized list, and a property that changes
+    /// this row's height after it's already been realized visibly jumps the
+    /// whole conversation (the same reason inline message editing was moved
+    /// into the composer). Null — and no quote shown — when this isn't a
+    /// reply, or its root wasn't in the currently-loaded batch.
+    /// </summary>
+    public string? QuotedAuthorName { get; init; }
+    public string? QuotedText { get; init; }
+    public bool HasQuotedMessage => QuotedAuthorName is not null;
+
+    /// <summary>The server's opengraph preview for this message's first link, if any — see LinkPreviewItem.</summary>
+    public LinkPreviewItem? LinkPreview { get; init; }
+    public bool HasLinkPreview => LinkPreview is not null;
+
+    /// <summary>True once this message has been edited (Mattermost's own edit_at &gt; 0) — shown as a small "(modifié)" tag after the text.</summary>
+    [ObservableProperty]
+    public partial bool IsEdited { get; set; }
+
+    /// <summary>
+    /// True while this specific message is loaded into the composer for
+    /// editing — purely a background tint (see RowBackground) so it's
+    /// visually clear which message is being edited without changing this
+    /// row's own size at all. Editing itself happens in the composer, not
+    /// inline here: an inline edit box used to change this row's height,
+    /// and with the message list virtualized, that made the whole
+    /// conversation visibly jump/scroll the moment you clicked "modifier".
+    /// </summary>
+    [ObservableProperty]
+    public partial bool IsBeingEdited { get; set; }
+
+    /// <summary>Applies a server-confirmed edit — clears the cached TextLines split so it re-parses the new text next time it's bound.</summary>
+    public void ApplyEditedText(string newText)
+    {
+        Text = newText;
+        _textLines = null;
+        IsEdited = true;
+        OnPropertyChanged(nameof(Text));
+        OnPropertyChanged(nameof(TextLines));
+    }
+
+    /// <summary>True when this message follows one from the same author less than two minutes ago — the avatar/name header is skipped, official-client style, so a quick back-to-back exchange doesn't repeat it for every line.</summary>
+    public bool IsContinuation { get; init; }
+
+    /// <summary>Extra breathing room above a new sender's first message so it doesn't crowd the previous person's last line — a continuation (same sender, grouped) stays snug underneath it instead.</summary>
+    public Thickness RowPadding => IsContinuation ? new Thickness(0, 4, 8, 4) : new Thickness(0, 10, 8, 4);
+    public ObservableCollection<ReactionItem> Reactions { get; init; } = [];
+    public ObservableCollection<AttachmentItem> Attachments { get; init; } = [];
+    public int ThreadReplyCount { get; init; }
+    public bool HasThreadReplies => ThreadReplyCount > 0;
+    public bool HasAttachments => Attachments.Count > 0;
+    public bool HasReactions => Reactions.Count > 0;
+
+    /// <summary>True for an outbox entry not yet confirmed by the server — queued while offline, or just fired off and still in flight.</summary>
+    public bool IsPending { get; init; }
+
+    /// <summary>Briefly true right after jumping here from a search result, so the message is easy to spot — cleared automatically a couple of seconds later.</summary>
+    [ObservableProperty]
+    public partial bool IsHighlighted { get; set; }
+
+    private IReadOnlyList<MessageTextLine>? _textLines;
+    public IReadOnlyList<MessageTextLine> TextLines => _textLines ??= MessageTextParser.SplitLines(Text);
+
+    public IBrush AvatarBrush => ColorTokens.Solid(AvatarHex);
+
+    /// <summary>The author's real profile picture, once fetched — null until then (or forever, on a fetch failure), so the colored-initials circle stays as the fallback rather than an empty gap.</summary>
+    [ObservableProperty]
+    public partial IBrush? AvatarImageBrush { get; set; }
+    /// <summary>
+    /// Drives the row's "tinted" style class rather than a brush: the row
+    /// also has a pointer-over tint, and a class lets the accent tint win
+    /// over it (see the Border.message-row styles) instead of the two
+    /// fighting for the same locally-bound Background. The brush itself is
+    /// a DynamicResource, so it follows a theme change on its own.
+    /// </summary>
+    public bool IsTinted => IsHighlighted || IsBeingEdited;
+
+    /// <summary>A pending bubble is dimmed slightly so it visibly reads as "not confirmed yet" without needing its own layout.</summary>
+    public double BodyOpacity => IsPending ? 0.6 : 1.0;
+
+    partial void OnIsHighlightedChanged(bool value) => OnPropertyChanged(nameof(IsTinted));
+    partial void OnIsBeingEditedChanged(bool value) => OnPropertyChanged(nameof(IsTinted));
+
+    /// <summary>Called after Reactions is cleared and rebuilt in place, so the reactions row's visibility follows.</summary>
+    public void NotifyReactionsChanged() => OnPropertyChanged(nameof(HasReactions));
+}
