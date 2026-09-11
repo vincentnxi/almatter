@@ -742,6 +742,25 @@
                 </ItemsControl>
             </ScrollViewer>
 
+            <!-- Floats over the end of the conversation, only while scrolled
+                 away from it. Clicking it returns to the newest message AND
+                 resumes live updates, which is the one gesture that reliably
+                 leaves the "looking at an older message" state. -->
+            <Button Grid.Row="1" Classes="row-button" IsVisible="{Binding IsAwayFromLiveTail}"
+                    HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,28,14"
+                    Width="34" Height="34" ToolTip.Tip="Revenir au dernier message"
+                    Command="{Binding ReturnToLiveTailCommand}">
+                <Border Width="34" Height="34" CornerRadius="17"
+                        Background="{DynamicResource CardBgBrush}"
+                        BorderBrush="{DynamicResource DividerStrongBrush}" BorderThickness="1"
+                        BoxShadow="{DynamicResource PopoverShadow}">
+                    <Path Data="M12 5v14M6 13l6 6 6-6" Stroke="{DynamicResource TextSecondaryBrush}"
+                          StrokeThickness="1.8" StrokeLineCap="Round" StrokeJoin="Round"
+                          Width="15" Height="15" Stretch="Uniform"
+                          HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Border>
+            </Button>
+
             <Border Grid.Row="2" Margin="20,10,20,16" BorderBrush="{DynamicResource DividerStrongBrush}" BorderThickness="1" CornerRadius="{DynamicResource SurfaceRadiusValue}" Background="{DynamicResource CardBgBrush}">
                 <StackPanel>
                     <TextBlock Text="{Binding TypingIndicatorText}" IsVisible="{Binding TypingIndicatorText, Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}"

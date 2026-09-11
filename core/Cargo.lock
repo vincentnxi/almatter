@@ -25,7 +25,7 @@ dependencies = [
 
 [[package]]
 name = "almatter-core"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
  "chrono",
  "directories",
@@ -42,7 +42,7 @@ dependencies = [
 
 [[package]]
 name = "almatter-ffi"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
  "almatter-core",
  "serde_json",

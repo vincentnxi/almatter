@@ -133,6 +133,12 @@ public partial class MainWindow : Window
                 Dispatcher.UIThread.Post(() => ScrollToMessage(postId), DispatcherPriority.Background);
 
             vm.MessagesAppended += (_, _) => FollowIfAtBottom(MessagesScroller);
+
+            // Drives the floating "back to the latest message" button. Also
+            // covers the content growing underneath a reader who has scrolled
+            // up, since that changes the extent and raises this too.
+            MessagesScroller.ScrollChanged += (_, _) =>
+                vm.IsAwayFromLiveTail = DistanceFromBottom(MessagesScroller) > AwayFromTailThreshold;
             vm.ThreadRepliesAppended += (_, _) => FollowIfAtBottom(ThreadScroller);
 
             vm.MentionReceived += (_, notification) =>
@@ -1090,9 +1096,19 @@ public partial class MainWindow : Window
     /// would compare against an extent that already grew, and the answer
     /// would always be no.
     /// </summary>
+    /// <summary>
+    /// How far from the newest message counts as "reading back through the
+    /// conversation". Roughly a message and a half: far enough that the
+    /// button doesn't blink in and out while the last row is half-scrolled.
+    /// </summary>
+    private const double AwayFromTailThreshold = 120;
+
+    private static double DistanceFromBottom(ScrollViewer scroller) =>
+        scroller.Extent.Height - scroller.Viewport.Height - scroller.Offset.Y;
+
     private static void FollowIfAtBottom(ScrollViewer scroller)
     {
-        var distanceFromBottom = scroller.Extent.Height - scroller.Viewport.Height - scroller.Offset.Y;
+        var distanceFromBottom = DistanceFromBottom(scroller);
         if (distanceFromBottom > StickToBottomSlack)
         {
             // Reading further up — leave the view where the reader put it.

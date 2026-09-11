@@ -65,6 +65,15 @@ public partial class MainViewModel : ViewModelBase
     /// </summary>
     private bool _viewingJumpedMessage;
 
+    /// <summary>
+    /// True while the conversation is scrolled away from its newest message.
+    /// Shows the "back to the latest message" button — which is also the
+    /// discoverable way out of the jumped-to-an-older-message state, where
+    /// live updates are suspended on purpose.
+    /// </summary>
+    [ObservableProperty]
+    public partial bool IsAwayFromLiveTail { get; set; }
+
     [ObservableProperty]
     public partial string TeamName { get; set; } = "";
 
@@ -864,8 +873,21 @@ public partial class MainViewModel : ViewModelBase
     [RelayCommand]
     private async Task SelectChannelAsync(string channelId)
     {
-        if (string.IsNullOrEmpty(channelId) || channelId == _activeChannelId)
+        if (string.IsNullOrEmpty(channelId))
         {
+            return;
+        }
+
+        if (channelId == _activeChannelId)
+        {
+            // Clicking the channel you are already in is the way back to the
+            // live conversation after jumping to an older message. Without
+            // this the click did nothing at all, and — because the jump flag
+            // is what suspends the polling loop's message refresh — the
+            // conversation stayed frozen on that older window while its
+            // sidebar badge kept counting messages that never appeared.
+            // The next poll tick repaints within a few hundred milliseconds.
+            ReturnToLiveConversation();
             return;
         }
 
@@ -877,7 +899,7 @@ public partial class MainViewModel : ViewModelBase
 
         _activeChannelId = channelId;
         Settings.LastChannelId = channelId;
-        _viewingJumpedMessage = false;
+        ReturnToLiveConversation();
         foreach (var item in Channels.Concat(FavoriteChannels))
         {
             item.IsSelected = item.Id == channelId;
@@ -1013,6 +1035,11 @@ public partial class MainViewModel : ViewModelBase
         {
             return;
         }
+
+        // Writing into a conversation means you are back in the present, so
+        // stop suspending the live refresh even if you got here by jumping
+        // to an older message.
+        ReturnToLiveConversation();
 
         if (_editingMessageId is { } editingId)
         {
@@ -1955,6 +1982,21 @@ public partial class MainViewModel : ViewModelBase
             return Task.CompletedTask;
         }
         return JumpToMessageAsync(channelId, rootId);
+    }
+
+    /// <summary>
+    /// Leaves the "looking at an older message" state, so the polling loop
+    /// resumes painting new messages (and marking the channel read) for the
+    /// active conversation. Safe to call when not in that state.
+    /// </summary>
+    private void ReturnToLiveConversation() => _viewingJumpedMessage = false;
+
+    /// <summary>Bound to the floating down-arrow: back to the newest message, and back to live updates with it.</summary>
+    [RelayCommand]
+    private void ReturnToLiveTail()
+    {
+        ReturnToLiveConversation();
+        ScrollMessagesToEndRequested?.Invoke(this, EventArgs.Empty);
     }
 
     /// <summary>

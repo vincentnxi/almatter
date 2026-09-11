@@ -21,7 +21,7 @@ public enum AppFontChoice
 public static class AppFonts
 {
     /// <summary>Bundled from Google Fonts under the SIL OFL 1.1 (see licenses/OpenSans-OFL.txt), so it renders identically on every machine.</summary>
-    public const string MattermostStack = "avares://Almatter.App/Assets/Fonts#Open Sans,Segoe UI Variable Text,Segoe UI,Inter";
+    public const string MattermostStack = "avares://Almatter/Assets/Fonts#Open Sans,Segoe UI Variable Text,Segoe UI,Inter";
 
     /// <summary>
     /// "Segoe UI Variable" on its own is NOT an installed family name on

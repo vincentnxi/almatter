@@ -2,6 +2,13 @@
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows</TargetFramework>
+    <!-- The executable, and therefore the name in Task Manager, is
+         "Almatter" rather than the project name. RootNamespace is pinned
+         because it otherwise follows AssemblyName, and every namespace in
+         the codebase is Almatter.App.*. -->
+    <AssemblyName>Almatter</AssemblyName>
+    <RootNamespace>Almatter.App</RootNamespace>
+    <Version>0.5.0</Version>
     <Nullable>enable</Nullable>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets\almatter-logo.ico</ApplicationIcon>
