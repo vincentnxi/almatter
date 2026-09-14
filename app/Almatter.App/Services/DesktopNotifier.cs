@@ -81,6 +81,9 @@ internal sealed class WindowsTrayNotifier : IDesktopNotifier
     private readonly IntPtr _hwnd;
     private readonly IntPtr _icon;
 
+    /// <summary>False when <see cref="_icon"/> is the shared system icon, which must never be destroyed.</summary>
+    private readonly bool _ownsIcon;
+
     /// <summary>
     /// Sent to every top-level window when Explorer restarts. The notification
     /// area is rebuilt from scratch at that point and forgets every icon, so
@@ -103,6 +106,18 @@ internal sealed class WindowsTrayNotifier : IDesktopNotifier
 
         var exePath = Environment.ProcessPath ?? "";
         _icon = ExtractIconW(IntPtr.Zero, exePath, 0);
+        _ownsIcon = _icon != IntPtr.Zero;
+
+        // Windows accepts a notification-area icon with no image, then
+        // silently drops every notification sent through it — nothing
+        // fails, nothing shows. Almatter.exe carries its own icon, but an
+        // executable built without one (seen with a test harness) would lose
+        // all mention notifications without a trace, so fall back to the
+        // stock application icon.
+        if (_icon == IntPtr.Zero)
+        {
+            _icon = LoadIconW(IntPtr.Zero, IdiApplication);
+        }
 
         _taskbarCreatedMessage = RegisterWindowMessageW("TaskbarCreated");
         _hook = OnWindowMessage;
@@ -128,7 +143,10 @@ internal sealed class WindowsTrayNotifier : IDesktopNotifier
         data.szInfo = Truncate(text, 255);
         data.dwInfoFlags = NIIF_INFO;
         data.uTimeoutOrVersion = 6000;
-        Shell_NotifyIconW(NIM_MODIFY, ref data);
+        if (!Shell_NotifyIconW(NIM_MODIFY, ref data))
+        {
+            Diagnostics.CrashLogger.Write("notifications", $"Shell_NotifyIconW refused the notification (error {Marshal.GetLastPInvokeError()})");
+        }
     }
 
     private bool AddIcon()
@@ -170,7 +188,7 @@ internal sealed class WindowsTrayNotifier : IDesktopNotifier
         var data = NewData();
         Shell_NotifyIconW(NIM_DELETE, ref data);
         Win32Properties.RemoveWndProcHookCallback(_window, _hook);
-        if (_icon != IntPtr.Zero)
+        if (_ownsIcon)
         {
             DestroyIcon(_icon);
         }
@@ -210,7 +228,7 @@ internal sealed class WindowsTrayNotifier : IDesktopNotifier
         public IntPtr hBalloonIcon;
     }
 
-    [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool Shell_NotifyIconW(int message, ref NOTIFYICONDATAW data);
 
@@ -220,6 +238,11 @@ internal sealed class WindowsTrayNotifier : IDesktopNotifier
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool DestroyIcon(IntPtr icon);
+
+    private static readonly IntPtr IdiApplication = new(32512);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr LoadIconW(IntPtr instance, IntPtr iconName);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     private static extern uint RegisterWindowMessageW(string message);
