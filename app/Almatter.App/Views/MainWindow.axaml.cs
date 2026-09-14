@@ -141,6 +141,11 @@ public partial class MainWindow : Window
                 vm.IsAwayFromLiveTail = DistanceFromBottom(MessagesScroller) > AwayFromTailThreshold;
             vm.ThreadRepliesAppended += (_, _) => FollowIfAtBottom(ThreadScroller);
 
+            // Images are decoded for the screen's physical pixels; follow the
+            // window when it moves to a monitor with a different scale.
+            vm.DisplayScaling = RenderScaling;
+            ScalingChanged += (_, _) => vm.DisplayScaling = RenderScaling;
+
             // Not needed for the thread panel: it isn't virtualized, so a row
             // growing there just pushes what's below it, as it should.
             var readingPosition = new ReadingPositionKeeper(MessagesScroller, MessagesItemsControl, StickToBottomSlack);

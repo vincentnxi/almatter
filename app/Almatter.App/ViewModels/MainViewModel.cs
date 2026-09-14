@@ -377,7 +377,28 @@ public partial class MainViewModel : ViewModelBase
     private static readonly TimeSpan PresenceRefreshInterval = TimeSpan.FromSeconds(60);
 
     private DateTime _lastPresenceRefreshAt = DateTime.MinValue;
-    private readonly Dictionary<string, Bitmap> _linkPreviewImageCache = [];
+    /// <summary>
+    /// The size of the box a link preview's image is shown in (MainWindow.axaml
+    /// — the card is at most 420 wide, its image strip 160 high). Images are
+    /// decoded to cover this and no more.
+    /// </summary>
+    private const double LinkPreviewImageWidth = 420;
+    private const double LinkPreviewImageHeight = 160;
+
+    /// <summary>
+    /// Decoded link-preview images, capped at 24 MB of pixels — at the
+    /// decode size above that's several dozen cards, comfortably more than a
+    /// screen or two of conversation. It used to be an unbounded dictionary of
+    /// full-resolution images, measured at 418 MB.
+    /// </summary>
+    private readonly BoundedBitmapCache _linkPreviewImageCache = new(24L * 1024 * 1024);
+
+    /// <summary>
+    /// The window's display scale — 1.5 on a 150 % screen. Set by MainWindow;
+    /// images are decoded for physical pixels, so without it they'd look soft
+    /// on a high-density display.
+    /// </summary>
+    public double DisplayScaling { get; set; } = 1.0;
 
     private string? _openThreadRootId;
 
@@ -620,6 +641,10 @@ public partial class MainViewModel : ViewModelBase
             {
                 RefreshFontSizeSelection();
                 OnPropertyChanged(nameof(InlineEmojiSize));
+            }
+            else if (e.PropertyName == nameof(AppSettings.ShowLinkPreviews) && Settings.ShowLinkPreviews)
+            {
+                RequestSkippedLinkPreviewImages();
             }
             SettingsStore.Save(Settings);
         };
@@ -2438,8 +2463,28 @@ public partial class MainViewModel : ViewModelBase
         await EnsureCustomEmojiLoadedAsync();
     }
 
+    /// <summary>
+    /// Whether the picker has been opened this session. The list of custom
+    /// emoji is loaded early (reactions and message text need the name-to-id
+    /// table), but the picture for each one is only needed to draw its
+    /// swatch — so the pictures wait for the first time the picker opens.
+    /// Loading them up front decoded all of the server's custom emoji at
+    /// startup, 199 of them on this server, for a picker most sessions never
+    /// open. Emoji used in reactions and messages still load on their own.
+    /// </summary>
+    private bool _emojiSwatchesWanted;
+
     private void OpenEmojiPickerFor(EmojiPickerTarget target)
     {
+        if (!_emojiSwatchesWanted)
+        {
+            _emojiSwatchesWanted = true;
+            foreach (var item in _allCustomEmoji)
+            {
+                _ = LoadCustomEmojiImageAsync(item);
+            }
+        }
+
         _emojiPickerTarget = target;
         EmojiPickerReturnsToThread = target == EmojiPickerTarget.ThreadComposer;
         OnPropertyChanged(nameof(EmojiPickerTitle));
@@ -2777,7 +2822,10 @@ public partial class MainViewModel : ViewModelBase
             _customEmojiIdByName[e.Name] = e.Id;
             var item = EmojiPickerItem.Custom(e.Name, e.Id);
             _allCustomEmoji.Add(item);
-            _ = LoadCustomEmojiImageAsync(item);
+            if (_emojiSwatchesWanted)
+            {
+                _ = LoadCustomEmojiImageAsync(item);
+            }
         }
 
         // The list arrives twice — once from the cache, once from the network
@@ -2951,31 +2999,32 @@ public partial class MainViewModel : ViewModelBase
     /// <summary>Same shape as GetAvatarBitmapAsync, for a link preview's og:image — cached per source URL rather than per user id.</summary>
     private async Task<Bitmap?> GetLinkPreviewImageBitmapAsync(string url)
     {
-        if (_linkPreviewImageCache.TryGetValue(url, out var cached))
+        if (_linkPreviewImageCache.TryGet(url, out var cached))
         {
             return cached;
         }
         await _imageFetchThrottle.WaitAsync();
         try
         {
-            if (_linkPreviewImageCache.TryGetValue(url, out cached))
+            if (_linkPreviewImageCache.TryGet(url, out cached))
             {
                 return cached;
             }
             var path = await _service.GetLinkPreviewImagePathAsync(url);
+            var scaling = DisplayScaling;
             Bitmap bitmap;
             try
             {
-                bitmap = await Task.Run(() => new Bitmap(path));
+                bitmap = await Task.Run(() => CardImageDecoder.DecodeToCover(path, LinkPreviewImageWidth, LinkPreviewImageHeight, scaling));
             }
             catch (Exception ex)
             {
                 CrashLogger.Write($"link preview: decode failed for {url} at {path}, retrying once", ex);
                 TryDeleteFile(path);
                 path = await _service.GetLinkPreviewImagePathAsync(url);
-                bitmap = await Task.Run(() => new Bitmap(path));
+                bitmap = await Task.Run(() => CardImageDecoder.DecodeToCover(path, LinkPreviewImageWidth, LinkPreviewImageHeight, scaling));
             }
-            _linkPreviewImageCache[url] = bitmap;
+            _linkPreviewImageCache.Add(url, bitmap);
             return bitmap;
         }
         catch (Exception ex)
@@ -3021,20 +3070,47 @@ public partial class MainViewModel : ViewModelBase
             Description = data.Description,
             SiteName = data.SiteName,
             ImageUrl = imageUrl,
+            // Not fetched here: the card asks the first time it's actually
+            // shown (see LinkPreviewItem.ImageSource).
+            ImageResolver = ResolveLinkPreviewImageAsync,
         };
-        if (item.HasImage)
-        {
-            _ = ResolveLinkPreviewImageAsync(item);
-        }
         return item;
     }
 
     private async Task ResolveLinkPreviewImageAsync(LinkPreviewItem item)
     {
+        // The request arrives from inside a binding reading ImageSource; a
+        // cached image would otherwise be assigned back to that same property
+        // before the read has even returned.
+        await Task.Yield();
+
+        // With previews switched off the card isn't visible — its row still
+        // binds, but downloading and decoding an image nobody can see is
+        // exactly the waste this is here to remove.
+        if (!Settings.ShowLinkPreviews)
+        {
+            item.ForgetImageRequest();
+            return;
+        }
+
         if (await GetLinkPreviewImageBitmapAsync(item.ImageUrl) is { } bitmap)
         {
             item.ImageSource = bitmap;
         }
+    }
+
+    /// <summary>Previews were just switched back on: cards already on screen ask for the images they skipped.</summary>
+    private void RequestSkippedLinkPreviewImages()
+    {
+        foreach (var message in Messages)
+        {
+            message.LinkPreview?.RequestImageAgain();
+        }
+        foreach (var reply in ThreadReplies)
+        {
+            reply.LinkPreview?.RequestImageAgain();
+        }
+        ThreadRootMessage?.LinkPreview?.RequestImageAgain();
     }
 
     [RelayCommand]
