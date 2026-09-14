@@ -702,8 +702,44 @@ public partial class MainWindow : Window
         // with the link recovered when there is one, and as the TextBox's
         // own ordinary paste when there isn't.
         e.Handled = true;
-        _ = PasteKeepingLinksAsync(clipboard, textBox);
+        _ = PasteAsync(clipboard, textBox);
         return true;
+    }
+
+    /// <summary>
+    /// Files or an image on the clipboard become attachments of that
+    /// composer, exactly as if picked with its paperclip; anything else is
+    /// pasted as text.
+    /// </summary>
+    private async Task PasteAsync(Avalonia.Input.Platform.IClipboard clipboard, TextBox textBox)
+    {
+        if (DataContext is MainViewModel vm)
+        {
+            IReadOnlyList<string> paths = [];
+            try
+            {
+                paths = await ClipboardAttachments.TryReadAsFilesAsync(clipboard);
+            }
+            catch (Exception ex)
+            {
+                Diagnostics.CrashLogger.Write("paste: reading files or an image from the clipboard failed", ex);
+            }
+
+            if (paths.Count > 0)
+            {
+                try
+                {
+                    await vm.AttachPastedFilesAsync(paths, isThread: textBox == ThreadComposerBox);
+                }
+                finally
+                {
+                    ClipboardAttachments.DeleteTemporaryImages(paths);
+                }
+                return;
+            }
+        }
+
+        await PasteKeepingLinksAsync(clipboard, textBox);
     }
 
     private static async Task PasteKeepingLinksAsync(Avalonia.Input.Platform.IClipboard clipboard, TextBox textBox)

@@ -1279,6 +1279,25 @@ public partial class MainViewModel : ViewModelBase
             return;
         }
 
+        await UploadAttachmentsAsync(channelId, paths, target);
+    }
+
+    /// <summary>
+    /// Files pasted into a composer (an image from a screenshot, or files
+    /// copied in the file explorer) — attached exactly as if they had been
+    /// picked with that composer's paperclip button.
+    /// </summary>
+    public async Task AttachPastedFilesAsync(IReadOnlyList<string> paths, bool isThread)
+    {
+        if (_activeChannelId is not { } channelId)
+        {
+            return;
+        }
+        await UploadAttachmentsAsync(channelId, paths, isThread ? ThreadPendingAttachments : PendingAttachments);
+    }
+
+    private async Task UploadAttachmentsAsync(string channelId, IReadOnlyList<string> paths, ObservableCollection<PendingAttachmentItem> target)
+    {
         foreach (var path in paths)
         {
             try
