@@ -263,6 +263,8 @@ public partial class MainWindow : Window
         // during the bubble phase, so a bubble-routed KeyDown (the plain
         // XAML "KeyDown=" attribute) never even sees a plain Enter press —
         // TextBox already marked it handled by the time it would fire.
+        ComposerFormattingToolbar.Target = ComposerBox;
+        ThreadFormattingToolbar.Target = ThreadComposerBox;
         ComposerBox.AddHandler(KeyDownEvent, OnComposerKeyDown, RoutingStrategies.Tunnel);
         ThreadComposerBox.AddHandler(KeyDownEvent, OnThreadComposerKeyDown, RoutingStrategies.Tunnel);
         SearchBox.AddHandler(KeyDownEvent, OnSearchKeyDown, RoutingStrategies.Tunnel);
@@ -917,25 +919,6 @@ public partial class MainWindow : Window
         textBox.SelectionStart = newCaret;
         textBox.SelectionEnd = newCaret;
         textBox.Focus();
-    }
-
-    /// <summary>The MenuItem inherits its DataContext from the link Button whose ContextFlyout it is declared in — that is the LinkSegment carrying the actual destination.</summary>
-    private async void OnCopyLinkClick(object? sender, RoutedEventArgs e)
-    {
-        // The window's clipboard rather than the menu's: the menu lives in a
-        // popup, which is a separate top level that may not offer one.
-        if (sender is not MenuItem { DataContext: LinkSegment segment } || Clipboard is not { } clipboard)
-        {
-            return;
-        }
-        try
-        {
-            await clipboard.SetTextAsync(segment.LinkUrl);
-        }
-        catch
-        {
-            // Not worth an error banner just for a failed copy.
-        }
     }
 
     private static void OnZoneDragOver(object? sender, DragEventArgs e)

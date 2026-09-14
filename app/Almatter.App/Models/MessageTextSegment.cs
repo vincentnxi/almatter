@@ -14,6 +14,19 @@ public abstract class MessageTextSegment
 {
     /// <summary>What's actually shown — the bare URL for an autolinked link, just the label for a Markdown [label](url) link, or "@username" for a mention.</summary>
     public required string Text { get; init; }
+
+    /// <summary>The Markdown emphasis this chunk sits inside — bold, italic, struck through, or inline code.</summary>
+    public TextStyle Style { get; init; }
+}
+
+[System.Flags]
+public enum TextStyle
+{
+    None = 0,
+    Bold = 1,
+    Italic = 2,
+    Strikethrough = 4,
+    Code = 8,
 }
 
 public sealed class PlainTextSegment : MessageTextSegment;

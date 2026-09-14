@@ -2,6 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:Almatter.App.ViewModels"
         xmlns:models="using:Almatter.App.Models"
+        xmlns:views="using:Almatter.App.Views"
         xmlns:conv="using:Avalonia.Data.Converters"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -173,6 +174,63 @@
         </DataTemplate>
     </Window.Resources>
 
+    <!-- How each block of a message's Markdown is drawn. Declared once here
+         and found by type from the channel, the thread root and the thread
+         replies alike, so the three can never render a message differently. -->
+    <Window.DataTemplates>
+        <DataTemplate DataType="models:ParagraphBlock">
+            <views:MessageInlineText Segments="{Binding Segments}"
+                                     BaseFontSize="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.MessageFontSize}"
+                                     LinkCommand="{Binding #RootWindow.((vm:MainViewModel)DataContext).OpenLinkCommand}" />
+        </DataTemplate>
+
+        <DataTemplate DataType="models:HeadingBlock">
+            <views:MessageInlineText Segments="{Binding Segments}" FontScale="{Binding FontScale}" FontWeight="Bold" Margin="0,4,0,2"
+                                     BaseFontSize="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.MessageFontSize}"
+                                     LinkCommand="{Binding #RootWindow.((vm:MainViewModel)DataContext).OpenLinkCommand}" />
+        </DataTemplate>
+
+        <DataTemplate DataType="models:QuoteBlock">
+            <Border BorderBrush="{DynamicResource DividerStrongBrush}" BorderThickness="3,0,0,0" Padding="10,1,0,1">
+                <views:MessageInlineText Segments="{Binding Segments}" Foreground="{DynamicResource TextSecondaryBrush}"
+                                         BaseFontSize="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.MessageFontSize}"
+                                         LinkCommand="{Binding #RootWindow.((vm:MainViewModel)DataContext).OpenLinkCommand}" />
+            </Border>
+        </DataTemplate>
+
+        <DataTemplate DataType="models:ListItemBlock">
+            <Grid ColumnDefinitions="Auto,*" Margin="{Binding IndentMargin}">
+                <TextBlock Text="{Binding Marker}" MinWidth="16" Margin="2,0,6,0" TextAlignment="Right"
+                           Foreground="{DynamicResource TextSecondaryBrush}"
+                           FontSize="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.MessageFontSize}" />
+                <views:MessageInlineText Grid.Column="1" Segments="{Binding Segments}"
+                                         BaseFontSize="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.MessageFontSize}"
+                                         LinkCommand="{Binding #RootWindow.((vm:MainViewModel)DataContext).OpenLinkCommand}" />
+            </Grid>
+        </DataTemplate>
+
+        <!-- Wrapped rather than scrolled sideways: a horizontal scroller in
+             every code block would be one more thing between the mouse wheel
+             and the conversation. -->
+        <DataTemplate DataType="models:CodeBlock">
+            <Border Background="{DynamicResource BgPanelBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1"
+                    CornerRadius="6" Padding="10,7" Margin="0,4">
+                <SelectableTextBlock Text="{Binding Code}" TextWrapping="Wrap" FontFamily="{x:Static views:MessageInlineText.MonospaceFont}"
+                                     FontSize="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.MessageFontSize}" />
+            </Border>
+        </DataTemplate>
+
+        <DataTemplate DataType="models:RuleBlock">
+            <Border Height="1" Margin="0,8" Background="{DynamicResource DividerStrongBrush}" />
+        </DataTemplate>
+
+        <DataTemplate DataType="models:TableBlock">
+            <views:MessageTable Table="{Binding}" Margin="0,4"
+                                BaseFontSize="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.MessageFontSize}"
+                                LinkCommand="{Binding #RootWindow.((vm:MainViewModel)DataContext).OpenLinkCommand}" />
+        </DataTemplate>
+    </Window.DataTemplates>
+
     <Window.Styles>
         <Style Selector="Button.row-button">
             <Setter Property="Background" Value="Transparent" />
@@ -207,18 +265,19 @@
             <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
         </Style>
 
-        <!-- A clickable link rendered inline within message text. -->
-        <Style Selector="Button.link-button">
-            <Setter Property="Background" Value="Transparent" />
-            <Setter Property="BorderThickness" Value="0" />
-            <Setter Property="Padding" Value="0" />
-            <Setter Property="Cursor" Value="Hand" />
-            <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
-            <Setter Property="Template" Value="{StaticResource FlatButtonTemplate}" />
+        <!-- The composer's "A" button stays tinted while its formatting bar is open. -->
+        <Style Selector="Button.format-toggle">
+            <Setter Property="HorizontalAlignment" Value="Left" />
+            <Setter Property="CornerRadius" Value="{DynamicResource RowRadiusValue}" />
         </Style>
-        <Style Selector="Button.link-button TextBlock">
-            <Setter Property="TextDecorations" Value="Underline" />
-            <Setter Property="TextWrapping" Value="Wrap" />
+        <Style Selector="Button.format-toggle Path">
+            <Setter Property="Stroke" Value="{DynamicResource TextSecondaryBrush}" />
+        </Style>
+        <Style Selector="Button.format-toggle.active">
+            <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
+        </Style>
+        <Style Selector="Button.format-toggle.active Path">
+            <Setter Property="Stroke" Value="{DynamicResource AccentBrush}" />
         </Style>
 
         <!-- One swatch in the accent-color picker. -->
@@ -585,62 +644,8 @@
                                                 </StackPanel>
                                             </Border>
                                         </Button>
-                                        <ItemsControl ItemsSource="{Binding TextLines}">
-                                            <ItemsControl.ItemsPanel>
-                                                <ItemsPanelTemplate>
-                                                    <StackPanel />
-                                                </ItemsPanelTemplate>
-                                            </ItemsControl.ItemsPanel>
-                                            <ItemsControl.ItemTemplate>
-                                                <DataTemplate DataType="models:MessageTextLine">
-                                                    <ItemsControl ItemsSource="{Binding Segments}">
-                                                        <ItemsControl.ItemsPanel>
-                                                            <ItemsPanelTemplate>
-                                                                <WrapPanel />
-                                                            </ItemsPanelTemplate>
-                                                        </ItemsControl.ItemsPanel>
-                                                        <!-- One control per segment, chosen by its type. The previous single
-                                                             template stacked a plain-text block, a mention block and a link
-                                                             button in a Panel and hid two of the three, so every chunk of
-                                                             every visible message built seven controls — a context menu
-                                                             among them — in order to show one. -->
-                                                        <ItemsControl.DataTemplates>
-                                                            <DataTemplate DataType="models:PlainTextSegment">
-                                                                <SelectableTextBlock Text="{Binding Text}" TextWrapping="Wrap" FontSize="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.MessageFontSize}" />
-                                                            </DataTemplate>
-                                                            <DataTemplate DataType="models:MentionSegment">
-                                                                <SelectableTextBlock Text="{Binding Text}" TextWrapping="Wrap"
-                                                                                     Foreground="{DynamicResource AccentBrush}" FontWeight="SemiBold" FontSize="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.MessageFontSize}" />
-                                                            </DataTemplate>
-                                                            <!-- A ":shortcode:" the standard table doesn't know: a custom emoji
-                                                                 typed by name. It shows as the text that was written until its
-                                                                 picture arrives, and keeps showing it if no such emoji exists. -->
-                                                            <DataTemplate DataType="models:CustomEmojiSegment">
-                                                                <Panel VerticalAlignment="Center">
-                                                                    <SelectableTextBlock Text="{Binding Text}" TextWrapping="Wrap" IsVisible="{Binding !HasImage}"
-                                                                                         FontSize="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.MessageFontSize}" />
-                                                                    <Image Source="{Binding Image}" IsVisible="{Binding HasImage}" Stretch="Uniform"
-                                                                           Height="{Binding #RootWindow.((vm:MainViewModel)DataContext).InlineEmojiSize}"
-                                                                           VerticalAlignment="Center" Margin="1,0" />
-                                                                </Panel>
-                                                            </DataTemplate>
-                                                            <DataTemplate DataType="models:LinkSegment">
-                                                                <Button Classes="link-button" Content="{Binding Text}"
-                                                                    FontSize="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.MessageFontSize}"
-                                                                    Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).OpenLinkCommand}"
-                                                                    CommandParameter="{Binding LinkUrl}">
-                                                                    <Button.ContextFlyout>
-                                                                        <MenuFlyout>
-                                                                            <MenuItem Header="Copier le lien" Click="OnCopyLinkClick" />
-                                                                        </MenuFlyout>
-                                                                    </Button.ContextFlyout>
-                                                                </Button>
-                                                            </DataTemplate>
-                                                        </ItemsControl.DataTemplates>
-                                                    </ItemsControl>
-                                                </DataTemplate>
-                                            </ItemsControl.ItemTemplate>
-                                        </ItemsControl>
+                                        <!-- The message's Markdown blocks; their templates are in Window.DataTemplates. -->
+                                        <ItemsControl ItemsSource="{Binding Blocks}" />
 
                                         <Border IsVisible="{Binding HasLinkPreview}" Margin="0,6,0,0" MaxWidth="420" HorizontalAlignment="Left">
                                             <Border IsVisible="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.ShowLinkPreviews}"
@@ -871,6 +876,10 @@
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
                     </Border>
+                    <Border IsVisible="{Binding Settings.ShowFormattingToolbar}" Margin="10,6,10,0" Padding="0,0,0,4"
+                            BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1">
+                        <views:FormattingToolbar x:Name="ComposerFormattingToolbar" />
+                    </Border>
                     <TextBox x:Name="ComposerBox" Classes="composer" Text="{Binding ComposeText}"
                              PlaceholderText="{Binding ActiveChannelName, StringFormat='Écrire dans #{0}…'}"
                              FontSize="{Binding Settings.MessageFontSize}"
@@ -895,6 +904,13 @@
                                       StrokeThickness="1.5" StrokeLineCap="Round" />
                             </Canvas>
                         </Button>
+                            <Button Classes="row-button format-toggle" Width="28" Height="28" ToolTip.Tip="Mise en forme"
+                                    Classes.active="{Binding Settings.ShowFormattingToolbar}"
+                                    Command="{Binding ToggleFormattingToolbarCommand}">
+                                <Path Data="M6 19 L12 4.5 L18 19 M8.3 13.5 H15.7" StrokeThickness="1.8"
+                                      StrokeLineCap="Round" StrokeJoin="Round" Width="15" Height="15" Stretch="Uniform"
+                                      HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Button>
                         </StackPanel>
                         <Button Grid.Column="2" Classes="row-button" Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).SendMessageCommand}">
                             <Border Width="30" Height="30" CornerRadius="7" Background="{DynamicResource AccentBrush}">
@@ -974,56 +990,7 @@
                                                 <TextBlock Text="Épinglé" FontSize="10.5" FontWeight="SemiBold" Foreground="{DynamicResource AccentBrush}" VerticalAlignment="Center" />
                                             </StackPanel>
                                         </StackPanel>
-                                        <ItemsControl ItemsSource="{Binding TextLines}">
-                                            <ItemsControl.ItemsPanel>
-                                                <ItemsPanelTemplate>
-                                                    <StackPanel />
-                                                </ItemsPanelTemplate>
-                                            </ItemsControl.ItemsPanel>
-                                            <ItemsControl.ItemTemplate>
-                                                <DataTemplate DataType="models:MessageTextLine">
-                                                    <ItemsControl ItemsSource="{Binding Segments}">
-                                                        <ItemsControl.ItemsPanel>
-                                                            <ItemsPanelTemplate>
-                                                                <WrapPanel />
-                                                            </ItemsPanelTemplate>
-                                                        </ItemsControl.ItemsPanel>
-                                                        <!-- One control per segment, chosen by its type. The previous single
-                                                             template stacked a plain-text block, a mention block and a link
-                                                             button in a Panel and hid two of the three, so every chunk of
-                                                             every visible message built seven controls — a context menu
-                                                             among them — in order to show one. -->
-                                                        <ItemsControl.DataTemplates>
-                                                            <DataTemplate DataType="models:PlainTextSegment">
-                                                                <SelectableTextBlock Text="{Binding Text}" TextWrapping="Wrap" FontSize="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.MessageFontSize}" />
-                                                            </DataTemplate>
-                                                            <DataTemplate DataType="models:MentionSegment">
-                                                                <SelectableTextBlock Text="{Binding Text}" TextWrapping="Wrap"
-                                                                                     Foreground="{DynamicResource AccentBrush}" FontWeight="SemiBold" FontSize="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.MessageFontSize}" />
-                                                            </DataTemplate>
-                                                            <!-- A ":shortcode:" the standard table doesn't know: a custom emoji
-                                                                 typed by name. It shows as the text that was written until its
-                                                                 picture arrives, and keeps showing it if no such emoji exists. -->
-                                                            <DataTemplate DataType="models:CustomEmojiSegment">
-                                                                <Panel VerticalAlignment="Center">
-                                                                    <SelectableTextBlock Text="{Binding Text}" TextWrapping="Wrap" IsVisible="{Binding !HasImage}"
-                                                                                         FontSize="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.MessageFontSize}" />
-                                                                    <Image Source="{Binding Image}" IsVisible="{Binding HasImage}" Stretch="Uniform"
-                                                                           Height="{Binding #RootWindow.((vm:MainViewModel)DataContext).InlineEmojiSize}"
-                                                                           VerticalAlignment="Center" Margin="1,0" />
-                                                                </Panel>
-                                                            </DataTemplate>
-                                                            <DataTemplate DataType="models:LinkSegment">
-                                                                <Button Classes="link-button" Content="{Binding Text}"
-                                                                    FontSize="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.MessageFontSize}"
-                                                                    Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).OpenLinkCommand}"
-                                                                    CommandParameter="{Binding LinkUrl}" />
-                                                            </DataTemplate>
-                                                        </ItemsControl.DataTemplates>
-                                                    </ItemsControl>
-                                                </DataTemplate>
-                                            </ItemsControl.ItemTemplate>
-                                        </ItemsControl>
+                                        <ItemsControl ItemsSource="{Binding Blocks}" />
 
                                         <Border IsVisible="{Binding HasLinkPreview}" Margin="0,6,0,0" MaxWidth="380" HorizontalAlignment="Left">
                                             <Border IsVisible="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.ShowLinkPreviews}"
@@ -1108,56 +1075,7 @@
                                                         <TextBlock Text="Épinglé" FontSize="10.5" FontWeight="SemiBold" Foreground="{DynamicResource AccentBrush}" VerticalAlignment="Center" />
                                                     </StackPanel>
                                                 </StackPanel>
-                                                <ItemsControl ItemsSource="{Binding TextLines}">
-                                                    <ItemsControl.ItemsPanel>
-                                                        <ItemsPanelTemplate>
-                                                            <StackPanel />
-                                                        </ItemsPanelTemplate>
-                                                    </ItemsControl.ItemsPanel>
-                                                    <ItemsControl.ItemTemplate>
-                                                        <DataTemplate DataType="models:MessageTextLine">
-                                                            <ItemsControl ItemsSource="{Binding Segments}">
-                                                                <ItemsControl.ItemsPanel>
-                                                                    <ItemsPanelTemplate>
-                                                                        <WrapPanel />
-                                                                    </ItemsPanelTemplate>
-                                                                </ItemsControl.ItemsPanel>
-                                                                <!-- One control per segment, chosen by its type. The previous single
-                                                                     template stacked a plain-text block, a mention block and a link
-                                                                     button in a Panel and hid two of the three, so every chunk of
-                                                                     every visible message built seven controls — a context menu
-                                                                     among them — in order to show one. -->
-                                                                <ItemsControl.DataTemplates>
-                                                                    <DataTemplate DataType="models:PlainTextSegment">
-                                                                        <SelectableTextBlock Text="{Binding Text}" TextWrapping="Wrap" FontSize="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.MessageFontSize}" />
-                                                                    </DataTemplate>
-                                                                    <DataTemplate DataType="models:MentionSegment">
-                                                                        <SelectableTextBlock Text="{Binding Text}" TextWrapping="Wrap"
-                                                                                             Foreground="{DynamicResource AccentBrush}" FontWeight="SemiBold" FontSize="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.MessageFontSize}" />
-                                                                    </DataTemplate>
-                                                                    <!-- A ":shortcode:" the standard table doesn't know: a custom emoji
-                                                                         typed by name. It shows as the text that was written until its
-                                                                         picture arrives, and keeps showing it if no such emoji exists. -->
-                                                                    <DataTemplate DataType="models:CustomEmojiSegment">
-                                                                        <Panel VerticalAlignment="Center">
-                                                                            <SelectableTextBlock Text="{Binding Text}" TextWrapping="Wrap" IsVisible="{Binding !HasImage}"
-                                                                                                 FontSize="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.MessageFontSize}" />
-                                                                            <Image Source="{Binding Image}" IsVisible="{Binding HasImage}" Stretch="Uniform"
-                                                                                   Height="{Binding #RootWindow.((vm:MainViewModel)DataContext).InlineEmojiSize}"
-                                                                                   VerticalAlignment="Center" Margin="1,0" />
-                                                                        </Panel>
-                                                                    </DataTemplate>
-                                                                    <DataTemplate DataType="models:LinkSegment">
-                                                                        <Button Classes="link-button" Content="{Binding Text}"
-                                                                            FontSize="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.MessageFontSize}"
-                                                                            Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).OpenLinkCommand}"
-                                                                            CommandParameter="{Binding LinkUrl}" />
-                                                                    </DataTemplate>
-                                                                </ItemsControl.DataTemplates>
-                                                            </ItemsControl>
-                                                        </DataTemplate>
-                                                    </ItemsControl.ItemTemplate>
-                                                </ItemsControl>
+                                                <ItemsControl ItemsSource="{Binding Blocks}" />
 
                                                 <Border IsVisible="{Binding HasLinkPreview}" Margin="0,6,0,0" MaxWidth="340" HorizontalAlignment="Left">
                                                     <Border IsVisible="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.ShowLinkPreviews}"
@@ -1236,6 +1154,10 @@
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
                         </Border>
+                        <Border IsVisible="{Binding Settings.ShowThreadFormattingToolbar}" Padding="0,0,0,4"
+                                BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1">
+                            <views:FormattingToolbar x:Name="ThreadFormattingToolbar" />
+                        </Border>
                         <TextBox x:Name="ThreadComposerBox" Classes="composer" Text="{Binding ThreadComposeText}"
                                  PlaceholderText="Répondre au fil…" Padding="0"
                                  FontSize="{Binding Settings.MessageFontSize}"
@@ -1259,6 +1181,13 @@
                                       StrokeThickness="1.5" StrokeLineCap="Round" />
                             </Canvas>
                         </Button>
+                            <Button Classes="row-button format-toggle" Width="24" Height="24" ToolTip.Tip="Mise en forme"
+                                    Classes.active="{Binding Settings.ShowThreadFormattingToolbar}"
+                                    Command="{Binding ToggleThreadFormattingToolbarCommand}">
+                                <Path Data="M6 19 L12 4.5 L18 19 M8.3 13.5 H15.7" StrokeThickness="1.8"
+                                      StrokeLineCap="Round" StrokeJoin="Round" Width="13" Height="13" Stretch="Uniform"
+                                      HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Button>
                         </StackPanel>
                     </StackPanel>
                 </Border>

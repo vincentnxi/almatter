@@ -986,7 +986,8 @@ public partial class MainViewModel : ViewModelBase
         var channel = _loadedChannels.FirstOrDefault(c => c.Id == mention.ChannelId);
         var channelLabel = channel is null || channel.Type == "D" ? null : ChannelDisplayName(channel);
         var title = channelLabel is null ? authorName : $"{authorName} · {channelLabel}";
-        var text = mention.Message.Length > 140 ? mention.Message[..140] + "…" : mention.Message;
+        var plain = MessageTextParser.ToPlainText(mention.Message);
+        var text = plain.Length > 140 ? plain[..140] + "…" : plain;
 
         var notification = new MentionNotification
         {
@@ -2104,7 +2105,7 @@ public partial class MainViewModel : ViewModelBase
                 AuthorInitials = author?.Initials ?? "?",
                 AvatarHex = AvatarColorFor(post.UserId),
                 TimeLabel = FormatSearchResultTime(post.CreateAt),
-                Text = post.Message,
+                Text = MessageTextParser.ToPlainText(post.Message),
             });
         }
         HasSearchResults = SearchResults.Count > 0;
@@ -2210,6 +2211,12 @@ public partial class MainViewModel : ViewModelBase
 
     [RelayCommand]
     private void SetFontSize(double size) => Settings.MessageFontSize = size;
+
+    [RelayCommand]
+    private void ToggleFormattingToolbar() => Settings.ShowFormattingToolbar = !Settings.ShowFormattingToolbar;
+
+    [RelayCommand]
+    private void ToggleThreadFormattingToolbar() => Settings.ShowThreadFormattingToolbar = !Settings.ShowThreadFormattingToolbar;
 
     /// <summary>Opens a clicked message link in the user's default browser.</summary>
     [RelayCommand]
@@ -2433,7 +2440,7 @@ public partial class MainViewModel : ViewModelBase
                 AuthorInitials = author?.Initials ?? "?",
                 AvatarHex = AvatarColorFor(post.UserId),
                 TimeLabel = FormatTime(post.CreateAt),
-                Text = post.Message,
+                Text = MessageTextParser.ToPlainText(post.Message),
             });
         }
         PinnedCount = PinnedMessages.Count;
@@ -4271,7 +4278,8 @@ public partial class MainViewModel : ViewModelBase
     private static string TruncateQuote(string text)
     {
         const int maxLength = 120;
-        var singleLine = string.Join(' ', text.Split('\n', StringSplitOptions.RemoveEmptyEntries)).Trim();
+        var plain = MessageTextParser.ToPlainText(text);
+        var singleLine = string.Join(' ', plain.Split('\n', StringSplitOptions.RemoveEmptyEntries)).Trim();
         return singleLine.Length > maxLength ? singleLine[..maxLength].TrimEnd() + "…" : singleLine;
     }
 

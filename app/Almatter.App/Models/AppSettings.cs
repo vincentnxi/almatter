@@ -121,4 +121,14 @@ public sealed partial class AppSettings : ObservableObject
 
     [ObservableProperty]
     public partial bool DirectMessagesExpanded { get; set; } = true;
+
+    /// <summary>
+    /// Whether the formatting bar shows above each composer. Separate for the
+    /// thread, whose panel is narrower: room there may matter more.
+    /// </summary>
+    [ObservableProperty]
+    public partial bool ShowFormattingToolbar { get; set; }
+
+    [ObservableProperty]
+    public partial bool ShowThreadFormattingToolbar { get; set; }
 }

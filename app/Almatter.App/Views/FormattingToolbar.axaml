@@ -1,0 +1,115 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="Almatter.App.Views.FormattingToolbar">
+
+    <!-- Icons are drawn on a 24-unit canvas scaled into a 16px box, so every
+         glyph has the same weight whatever its shape. Buttons don't take
+         focus: the composer keeps its caret and selection while clicking. -->
+    <UserControl.Styles>
+        <Style Selector="Button.format-button">
+            <Setter Property="Width" Value="28" />
+            <Setter Property="Height" Value="28" />
+            <Setter Property="HorizontalAlignment" Value="Left" />
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="CornerRadius" Value="{DynamicResource RowRadiusValue}" />
+        </Style>
+        <Style Selector="Button.format-button:pointerover">
+            <Setter Property="Background" Value="{DynamicResource BgHoverBrush}" />
+        </Style>
+        <Style Selector="Button.format-button Path">
+            <Setter Property="Stroke" Value="{DynamicResource TextSecondaryBrush}" />
+            <Setter Property="StrokeThickness" Value="2.3" />
+            <Setter Property="StrokeLineCap" Value="Round" />
+            <Setter Property="StrokeJoin" Value="Round" />
+        </Style>
+        <Style Selector="Button.format-button Viewbox">
+            <Setter Property="Width" Value="16" />
+            <Setter Property="Height" Value="16" />
+        </Style>
+        <Style Selector="Button.format-button TextBlock.letter">
+            <Setter Property="FontSize" Value="15" />
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Border.format-separator">
+            <Setter Property="Width" Value="1" />
+            <Setter Property="Height" Value="16" />
+            <Setter Property="Margin" Value="5,0" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Background" Value="{DynamicResource DividerBrush}" />
+        </Style>
+    </UserControl.Styles>
+
+    <WrapPanel Orientation="Horizontal">
+        <Button Classes="row-button format-button" Tag="Bold" Click="OnFormatClick" ToolTip.Tip="Gras (Ctrl+B)">
+            <TextBlock Classes="letter" Text="B" FontWeight="Bold" />
+        </Button>
+        <Button Classes="row-button format-button" Tag="Italic" Click="OnFormatClick" ToolTip.Tip="Italique (Ctrl+I)">
+            <TextBlock Classes="letter" Text="I" FontStyle="Italic" FontWeight="SemiBold" FontFamily="Georgia, Times New Roman, serif" FontSize="16" />
+        </Button>
+        <Button Classes="row-button format-button" Tag="Strikethrough" Click="OnFormatClick" ToolTip.Tip="Barré (Ctrl+Maj+X)">
+            <TextBlock Classes="letter" Text="S" FontWeight="SemiBold" TextDecorations="Strikethrough" />
+        </Button>
+
+        <Border Classes="format-separator" />
+
+        <Button Classes="row-button format-button" Tag="Heading" Click="OnFormatClick" ToolTip.Tip="Titre">
+            <Viewbox><Canvas Width="24" Height="24">
+                <Path Data="M5 5 V19 M17 5 V19 M5 12 H17" />
+            </Canvas></Viewbox>
+        </Button>
+        <Button Classes="row-button format-button" Tag="Quote" Click="OnFormatClick" ToolTip.Tip="Citation">
+            <Viewbox><Canvas Width="24" Height="24">
+                <Path Data="M4 4 V20 M9.5 7 H20 M9.5 12 H20 M9.5 17 H16" />
+            </Canvas></Viewbox>
+        </Button>
+        <Button Classes="row-button format-button" Tag="BulletList" Click="OnFormatClick" ToolTip.Tip="Liste à puces">
+            <Viewbox><Canvas Width="24" Height="24">
+                <Path Data="M9.5 6 H21 M9.5 12 H21 M9.5 18 H21" />
+                <Ellipse Canvas.Left="2.6" Canvas.Top="4.4" Width="3.2" Height="3.2" Fill="{DynamicResource TextSecondaryBrush}" />
+                <Ellipse Canvas.Left="2.6" Canvas.Top="10.4" Width="3.2" Height="3.2" Fill="{DynamicResource TextSecondaryBrush}" />
+                <Ellipse Canvas.Left="2.6" Canvas.Top="16.4" Width="3.2" Height="3.2" Fill="{DynamicResource TextSecondaryBrush}" />
+            </Canvas></Viewbox>
+        </Button>
+        <Button Classes="row-button format-button" Tag="NumberedList" Click="OnFormatClick" ToolTip.Tip="Liste numérotée">
+            <Viewbox><Canvas Width="24" Height="24">
+                <Path Data="M10.5 7 H21 M10.5 17 H21" />
+                <Path Data="M3.2 4.6 L5.2 3.2 V10.2" StrokeThickness="1.9" />
+                <Path Data="M2.8 15 Q3 13.3 4.6 13.3 Q6.4 13.3 6.4 14.9 Q6.4 16.3 2.8 20.2 H6.8" StrokeThickness="1.9" />
+            </Canvas></Viewbox>
+        </Button>
+
+        <Border Classes="format-separator" />
+
+        <Button Classes="row-button format-button" Tag="Code" Click="OnFormatClick" ToolTip.Tip="Code">
+            <Viewbox><Canvas Width="24" Height="24">
+                <Path Data="M8 6.5 L2.5 12 L8 17.5 M16 6.5 L21.5 12 L16 17.5" />
+            </Canvas></Viewbox>
+        </Button>
+        <Button Classes="row-button format-button" Tag="CodeBlock" Click="OnFormatClick" ToolTip.Tip="Bloc de code">
+            <Viewbox><Canvas Width="24" Height="24">
+                <Path Data="M5 3 H19 Q21 3 21 5 V19 Q21 21 19 21 H5 Q3 21 3 19 V5 Q3 3 5 3 Z M10 9 L7 12 L10 15 M14 9 L17 12 L14 15" />
+            </Canvas></Viewbox>
+        </Button>
+        <Button Classes="row-button format-button" Tag="Link" Click="OnFormatClick" ToolTip.Tip="Lien (Ctrl+Alt+K)">
+            <Viewbox><Canvas Width="24" Height="24">
+                <Path Data="M10.5 13.5 Q12.7 15.7 14.9 13.5 L18.8 9.6 Q21 7.4 18.8 5.2 Q16.6 3 14.4 5.2 L12.8 6.8 M13.5 10.5 Q11.3 8.3 9.1 10.5 L5.2 14.4 Q3 16.6 5.2 18.8 Q7.4 21 9.6 18.8 L11.2 17.2" />
+            </Canvas></Viewbox>
+        </Button>
+
+        <Border Classes="format-separator" />
+
+        <Button Classes="row-button format-button" Tag="Rule" Click="OnFormatClick" ToolTip.Tip="Ligne de séparation">
+            <Viewbox><Canvas Width="24" Height="24">
+                <Path Data="M7 5.5 H17 M7 18.5 H17" Opacity="0.45" />
+                <Path Data="M2.5 12 H21.5" />
+            </Canvas></Viewbox>
+        </Button>
+        <Button Classes="row-button format-button" Tag="Table" Click="OnFormatClick" ToolTip.Tip="Tableau">
+            <Viewbox><Canvas Width="24" Height="24">
+                <Path Data="M5 4 H19 Q21 4 21 6 V18 Q21 20 19 20 H5 Q3 20 3 18 V6 Q3 4 5 4 Z M3 9.5 H21 M3 14.8 H21 M12 4 V20" />
+            </Canvas></Viewbox>
+        </Button>
+    </WrapPanel>
+</UserControl>

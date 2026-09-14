@@ -58,6 +58,10 @@ Windows est isolé ci-dessous.
   souhaité plus tard, il suffira d'ajouter `-apple-system`/`Cantarell` en tête de pile :
   la police n'est déclarée qu'à deux endroits, l'attribut `FontFamily` de `MainWindow.axaml`
   et celui de `LoginWindow.axaml`, dont tout le reste hérite.
+- **Police du code dans les messages** (`Views/MessageInlineText.cs`, `MonospaceFont`) :
+  une pile `Cascadia Mono, Consolas, Menlo, DejaVu Sans Mono, Liberation Mono, Courier New`,
+  qui prend la première présente — Menlo sur macOS, DejaVu/Liberation sur la plupart des
+  Linux. Rien à faire au portage, sauf si une distribution n'a aucune des deux.
 
 ## Point d'entrée pour la reprise
 

@@ -61,14 +61,14 @@ public sealed partial class MessageItem : ObservableObject
     [ObservableProperty]
     public partial bool IsBeingEdited { get; set; }
 
-    /// <summary>Applies a server-confirmed edit — clears the cached TextLines split so it re-parses the new text next time it's bound.</summary>
+    /// <summary>Applies a server-confirmed edit — clears the cached Blocks so it re-parses the new text next time it's bound.</summary>
     public void ApplyEditedText(string newText)
     {
         Text = newText;
-        _textLines = null;
+        _blocks = null;
         IsEdited = true;
         OnPropertyChanged(nameof(Text));
-        OnPropertyChanged(nameof(TextLines));
+        OnPropertyChanged(nameof(Blocks));
     }
 
     /// <summary>True when this message follows one from the same author less than two minutes ago — the avatar/name header is skipped, official-client style, so a quick back-to-back exchange doesn't repeat it for every line.</summary>
@@ -117,7 +117,7 @@ public sealed partial class MessageItem : ObservableObject
     /// </summary>
     public Func<CustomEmojiSegment, Task>? EmojiImageResolver { get; init; }
 
-    private IReadOnlyList<MessageTextLine>? _textLines;
+    private IReadOnlyList<MessageBlock>? _blocks;
 
     /// <summary>
     /// Parsed on first bind rather than at construction: with the list
@@ -126,27 +126,46 @@ public sealed partial class MessageItem : ObservableObject
     /// same reason — an emoji in a message nobody has scrolled to is never
     /// downloaded.
     /// </summary>
-    public IReadOnlyList<MessageTextLine> TextLines => _textLines ??= BuildTextLines();
+    public IReadOnlyList<MessageBlock> Blocks => _blocks ??= BuildBlocks();
 
-    private IReadOnlyList<MessageTextLine> BuildTextLines()
+    private IReadOnlyList<MessageBlock> BuildBlocks()
     {
-        var lines = MessageTextParser.SplitLines(Text);
+        var blocks = MessageTextParser.ParseBlocks(Text);
         if (EmojiImageResolver is null)
         {
-            return lines;
+            return blocks;
         }
 
-        foreach (var line in lines)
+        foreach (var block in blocks)
         {
-            foreach (var segment in line.Segments)
+            switch (block)
             {
-                if (segment is CustomEmojiSegment custom)
-                {
-                    _ = EmojiImageResolver(custom);
-                }
+                case InlineBlock inline:
+                    ResolveEmoji(inline.Segments);
+                    break;
+                case TableBlock table:
+                    foreach (var row in table.Rows)
+                    {
+                        foreach (var cell in row)
+                        {
+                            ResolveEmoji(cell);
+                        }
+                    }
+                    break;
             }
         }
-        return lines;
+        return blocks;
+    }
+
+    private void ResolveEmoji(IReadOnlyList<MessageTextSegment> segments)
+    {
+        foreach (var segment in segments)
+        {
+            if (segment is CustomEmojiSegment custom)
+            {
+                _ = EmojiImageResolver!(custom);
+            }
+        }
     }
 
     public IBrush AvatarBrush => ColorTokens.Solid(AvatarHex);
