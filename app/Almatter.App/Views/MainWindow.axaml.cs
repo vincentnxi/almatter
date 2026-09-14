@@ -171,6 +171,19 @@ public partial class MainWindow : Window
                 ThreadComposerBox.CaretIndex = ThreadComposerBox.Text?.Length ?? 0;
             }, DispatcherPriority.Background);
 
+            // The ViewModel knows what to type but not where the caret is —
+            // that only exists on the TextBox, which lives here.
+            vm.EmojiInsertRequested += (_, request) =>
+                Dispatcher.UIThread.Post(() => InsertEmoji(request.Text, request.IsThread), DispatcherPriority.Background);
+
+            // Opening the picker should leave the keyboard usable: start
+            // typing to filter, Enter to take the first match.
+            vm.EmojiSearchFocusRequested += (_, _) => Dispatcher.UIThread.Post(() =>
+            {
+                EmojiSearchBox.Focus();
+                EmojiSearchBox.CaretIndex = 0;
+            }, DispatcherPriority.Background);
+
             // The ViewModel only knows which username was picked — replacing
             // the "@partial" token with it needs the composer's actual
             // caret/text, which lives here, not on the ViewModel.
@@ -189,6 +202,17 @@ public partial class MainWindow : Window
                     nameof(MainViewModel.IsSearchOpen) when vm.IsSearchOpen => SearchBox,
                     nameof(MainViewModel.IsBrowseChannelsOpen) when vm.IsBrowseChannelsOpen => BrowseChannelsBox,
                     nameof(MainViewModel.IsNewConversationOpen) when vm.IsNewConversationOpen => NewConversationBox,
+
+                    // Closing the emoji picker hands the caret back to the
+                    // composer. Not cosmetic: the picker took focus into its
+                    // search box, and on close focus would otherwise settle
+                    // on whatever comes next in the tree — landing inside the
+                    // message list scrolls the list to it, which reads as the
+                    // conversation jumping. The composer sits outside the
+                    // scroller, so focusing it can't move the conversation.
+                    nameof(MainViewModel.IsEmojiPickerOpen) when !vm.IsEmojiPickerOpen =>
+                        vm.EmojiPickerReturnsToThread ? ThreadComposerBox : ComposerBox,
+
                     _ => null,
                 };
                 if (box is not null)
@@ -223,6 +247,7 @@ public partial class MainWindow : Window
         ComposerBox.AddHandler(KeyDownEvent, OnComposerKeyDown, RoutingStrategies.Tunnel);
         ThreadComposerBox.AddHandler(KeyDownEvent, OnThreadComposerKeyDown, RoutingStrategies.Tunnel);
         SearchBox.AddHandler(KeyDownEvent, OnSearchKeyDown, RoutingStrategies.Tunnel);
+        EmojiSearchBox.AddHandler(KeyDownEvent, OnEmojiSearchKeyDown, RoutingStrategies.Tunnel);
 
         ComposerBox.TextChanged += (_, _) => UpdateMentionAutocomplete(ComposerBox, isThread: false);
         ThreadComposerBox.TextChanged += (_, _) => UpdateMentionAutocomplete(ThreadComposerBox, isThread: true);
@@ -919,6 +944,52 @@ public partial class MainWindow : Window
         }
         e.Handled = true;
         vm.RunSearchCommand.Execute(null);
+    }
+
+    private void OnEmojiSearchKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (DataContext is not MainViewModel vm)
+        {
+            return;
+        }
+
+        if (e.Key == Key.Escape)
+        {
+            e.Handled = true;
+            vm.CloseEmojiPickerCommand.Execute(null);
+        }
+        else if (e.Key == Key.Enter)
+        {
+            // A search box where Enter does nothing reads as broken: typing
+            // "tada" and pressing Enter should take the obvious match.
+            e.Handled = true;
+            vm.PickFirstEmojiResultCommand.Execute(null);
+        }
+    }
+
+    /// <summary>
+    /// Types a picked emoji into a composer at the caret rather than tacking
+    /// it onto the end — the picker is often opened mid-sentence, and landing
+    /// the emoji somewhere else would mean going back to move it. It gets a
+    /// space in front when it would otherwise run into the previous word, and
+    /// one after it so typing can carry straight on.
+    /// </summary>
+    private void InsertEmoji(string emoji, bool isThread)
+    {
+        var textBox = isThread ? ThreadComposerBox : ComposerBox;
+        var text = textBox.Text ?? "";
+        var caret = Math.Clamp(textBox.CaretIndex, 0, text.Length);
+
+        var prefix = caret > 0 && !char.IsWhiteSpace(text[caret - 1]) ? " " : "";
+        var inserted = prefix + emoji + " ";
+
+        textBox.Text = text[..caret] + inserted + text[caret..];
+
+        var newCaret = caret + inserted.Length;
+        textBox.CaretIndex = newCaret;
+        textBox.SelectionStart = newCaret;
+        textBox.SelectionEnd = newCaret;
+        textBox.Focus();
     }
 
     /// <summary>The MenuItem inherits its DataContext from the link Button whose ContextFlyout it is declared in — that is the LinkSegment carrying the actual destination.</summary>

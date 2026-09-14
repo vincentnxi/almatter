@@ -584,6 +584,18 @@
                                                                 <SelectableTextBlock Text="{Binding Text}" TextWrapping="Wrap"
                                                                                      Foreground="{DynamicResource AccentBrush}" FontWeight="SemiBold" FontSize="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.MessageFontSize}" />
                                                             </DataTemplate>
+                                                            <!-- A ":shortcode:" the standard table doesn't know: a custom emoji
+                                                                 typed by name. It shows as the text that was written until its
+                                                                 picture arrives, and keeps showing it if no such emoji exists. -->
+                                                            <DataTemplate DataType="models:CustomEmojiSegment">
+                                                                <Panel VerticalAlignment="Center">
+                                                                    <SelectableTextBlock Text="{Binding Text}" TextWrapping="Wrap" IsVisible="{Binding !HasImage}"
+                                                                                         FontSize="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.MessageFontSize}" />
+                                                                    <Image Source="{Binding Image}" IsVisible="{Binding HasImage}" Stretch="Uniform"
+                                                                           Height="{Binding #RootWindow.((vm:MainViewModel)DataContext).InlineEmojiSize}"
+                                                                           VerticalAlignment="Center" Margin="1,0" />
+                                                                </Panel>
+                                                            </DataTemplate>
                                                             <DataTemplate DataType="models:LinkSegment">
                                                                 <Button Classes="link-button" Content="{Binding Text}"
                                                                     FontSize="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.MessageFontSize}"
@@ -827,12 +839,25 @@
                              TextWrapping="Wrap"
                              Padding="12,10,12,4" AcceptsReturn="True" MinHeight="20" />
                     <Grid ColumnDefinitions="Auto,*,Auto" Margin="10,4,10,10">
-                        <Button Grid.Column="0" Classes="row-button" Width="28" Height="28" ToolTip.Tip="Joindre un fichier"
-                                Command="{Binding AttachFileCommand}">
-                            <Path Data="M21.4 11.1 L12.2 20.3 A5 5 0 0 1 5.1 13.2 L14.1 4.2 A3.5 3.5 0 0 1 19.1 9.2 L10.1 18.2 A2 2 0 0 1 7.3 15.4 L15.4 7.3"
-                                  Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.8" StrokeLineCap="Round" Width="17" Height="17" Stretch="Uniform"
-                                  HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="2">
+                            <Button Classes="row-button" Width="28" Height="28" ToolTip.Tip="Joindre un fichier"
+                                    Command="{Binding AttachFileCommand}">
+                                <Path Data="M21.4 11.1 L12.2 20.3 A5 5 0 0 1 5.1 13.2 L14.1 4.2 A3.5 3.5 0 0 1 19.1 9.2 L10.1 18.2 A2 2 0 0 1 7.3 15.4 L15.4 7.3"
+                                      Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.8" StrokeLineCap="Round" Width="17" Height="17" Stretch="Uniform"
+                                      HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Button>
+                            <Button Classes="row-button" Width="28" Height="28" ToolTip.Tip="Insérer un émoji"
+                                Command="{Binding OpenComposerEmojiPickerCommand}">
+                            <Canvas Width="17" Height="17" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <Ellipse Canvas.Left="1" Canvas.Top="1" Width="15" Height="15"
+                                         Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.6" />
+                                <Ellipse Canvas.Left="5" Canvas.Top="5.6" Width="1.9" Height="1.9" Fill="{DynamicResource TextSecondaryBrush}" />
+                                <Ellipse Canvas.Left="10.1" Canvas.Top="5.6" Width="1.9" Height="1.9" Fill="{DynamicResource TextSecondaryBrush}" />
+                                <Path Data="M5.2 10 Q8.5 13.4 11.8 10" Stroke="{DynamicResource TextSecondaryBrush}"
+                                      StrokeThickness="1.5" StrokeLineCap="Round" />
+                            </Canvas>
                         </Button>
+                        </StackPanel>
                         <Button Grid.Column="2" Classes="row-button" Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).SendMessageCommand}">
                             <Border Width="30" Height="30" CornerRadius="7" Background="{DynamicResource AccentBrush}">
                                 <Path Data="M3 11l18-8-8 18-2.5-7.5L3 11z" Fill="{DynamicResource OnAccentBrush}" Width="15" Height="15" Stretch="Uniform"
@@ -931,6 +956,18 @@
                                                             <DataTemplate DataType="models:MentionSegment">
                                                                 <SelectableTextBlock Text="{Binding Text}" TextWrapping="Wrap"
                                                                                      Foreground="{DynamicResource AccentBrush}" FontWeight="SemiBold" FontSize="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.MessageFontSize}" />
+                                                            </DataTemplate>
+                                                            <!-- A ":shortcode:" the standard table doesn't know: a custom emoji
+                                                                 typed by name. It shows as the text that was written until its
+                                                                 picture arrives, and keeps showing it if no such emoji exists. -->
+                                                            <DataTemplate DataType="models:CustomEmojiSegment">
+                                                                <Panel VerticalAlignment="Center">
+                                                                    <SelectableTextBlock Text="{Binding Text}" TextWrapping="Wrap" IsVisible="{Binding !HasImage}"
+                                                                                         FontSize="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.MessageFontSize}" />
+                                                                    <Image Source="{Binding Image}" IsVisible="{Binding HasImage}" Stretch="Uniform"
+                                                                           Height="{Binding #RootWindow.((vm:MainViewModel)DataContext).InlineEmojiSize}"
+                                                                           VerticalAlignment="Center" Margin="1,0" />
+                                                                </Panel>
                                                             </DataTemplate>
                                                             <DataTemplate DataType="models:LinkSegment">
                                                                 <Button Classes="link-button" Content="{Binding Text}"
@@ -1048,6 +1085,18 @@
                                                                         <SelectableTextBlock Text="{Binding Text}" TextWrapping="Wrap"
                                                                                              Foreground="{DynamicResource AccentBrush}" FontWeight="SemiBold" FontSize="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.MessageFontSize}" />
                                                                     </DataTemplate>
+                                                                    <!-- A ":shortcode:" the standard table doesn't know: a custom emoji
+                                                                         typed by name. It shows as the text that was written until its
+                                                                         picture arrives, and keeps showing it if no such emoji exists. -->
+                                                                    <DataTemplate DataType="models:CustomEmojiSegment">
+                                                                        <Panel VerticalAlignment="Center">
+                                                                            <SelectableTextBlock Text="{Binding Text}" TextWrapping="Wrap" IsVisible="{Binding !HasImage}"
+                                                                                                 FontSize="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.MessageFontSize}" />
+                                                                            <Image Source="{Binding Image}" IsVisible="{Binding HasImage}" Stretch="Uniform"
+                                                                                   Height="{Binding #RootWindow.((vm:MainViewModel)DataContext).InlineEmojiSize}"
+                                                                                   VerticalAlignment="Center" Margin="1,0" />
+                                                                        </Panel>
+                                                                    </DataTemplate>
                                                                     <DataTemplate DataType="models:LinkSegment">
                                                                         <Button Classes="link-button" Content="{Binding Text}"
                                                                             FontSize="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.MessageFontSize}"
@@ -1142,12 +1191,25 @@
                                  FontSize="{Binding Settings.MessageFontSize}"
                                  TextWrapping="Wrap"
                                  AcceptsReturn="True" />
-                        <Button Classes="row-button" Width="24" Height="24" HorizontalAlignment="Left" ToolTip.Tip="Joindre un fichier"
-                                Command="{Binding AttachThreadFileCommand}">
-                            <Path Data="M21.4 11.1 L12.2 20.3 A5 5 0 0 1 5.1 13.2 L14.1 4.2 A3.5 3.5 0 0 1 19.1 9.2 L10.1 18.2 A2 2 0 0 1 7.3 15.4 L15.4 7.3"
-                                  Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.8" StrokeLineCap="Round" Width="15" Height="15" Stretch="Uniform"
-                                  HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        <StackPanel Orientation="Horizontal" Spacing="2" HorizontalAlignment="Left">
+                            <Button Classes="row-button" Width="24" Height="24" ToolTip.Tip="Joindre un fichier"
+                                    Command="{Binding AttachThreadFileCommand}">
+                                <Path Data="M21.4 11.1 L12.2 20.3 A5 5 0 0 1 5.1 13.2 L14.1 4.2 A3.5 3.5 0 0 1 19.1 9.2 L10.1 18.2 A2 2 0 0 1 7.3 15.4 L15.4 7.3"
+                                      Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.8" StrokeLineCap="Round" Width="15" Height="15" Stretch="Uniform"
+                                      HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Button>
+                            <Button Classes="row-button" Width="24" Height="24" ToolTip.Tip="Insérer un émoji"
+                                Command="{Binding OpenThreadEmojiPickerCommand}">
+                            <Canvas Width="17" Height="17" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <Ellipse Canvas.Left="1" Canvas.Top="1" Width="15" Height="15"
+                                         Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.6" />
+                                <Ellipse Canvas.Left="5" Canvas.Top="5.6" Width="1.9" Height="1.9" Fill="{DynamicResource TextSecondaryBrush}" />
+                                <Ellipse Canvas.Left="10.1" Canvas.Top="5.6" Width="1.9" Height="1.9" Fill="{DynamicResource TextSecondaryBrush}" />
+                                <Path Data="M5.2 10 Q8.5 13.4 11.8 10" Stroke="{DynamicResource TextSecondaryBrush}"
+                                      StrokeThickness="1.5" StrokeLineCap="Round" />
+                            </Canvas>
                         </Button>
+                        </StackPanel>
                     </StackPanel>
                 </Border>
             </Grid>
@@ -1580,12 +1642,12 @@
                 Command="{Binding CloseEmojiPickerCommand}" Background="Transparent" Content="" />
 
         <Border Grid.Column="0" Grid.ColumnSpan="3" IsVisible="{Binding IsEmojiPickerOpen}"
-                HorizontalAlignment="Center" VerticalAlignment="Center" Width="340"
+                HorizontalAlignment="Center" VerticalAlignment="Center" Width="380"
                 Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource DividerStrongBrush}" BorderThickness="1"
                 CornerRadius="{DynamicResource SurfaceRadiusValue}" Padding="14" BoxShadow="{DynamicResource PopoverShadow}">
-            <Grid RowDefinitions="Auto,*">
+            <Grid RowDefinitions="Auto,Auto,Auto,*">
                 <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,10">
-                    <TextBlock Grid.Column="0" Text="Choisir une réaction" FontWeight="Bold" FontSize="14" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="0" Text="{Binding EmojiPickerTitle}" FontWeight="Bold" FontSize="14" VerticalAlignment="Center" />
                     <Button Grid.Column="1" Classes="row-button" Width="20" Height="20" Command="{Binding CloseEmojiPickerCommand}">
                         <Canvas Width="14" Height="14" HorizontalAlignment="Center" VerticalAlignment="Center">
                             <Line StartPoint="1,1" EndPoint="13,13" Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.6" StrokeLineCap="Round" />
@@ -1594,9 +1656,68 @@
                     </Button>
                 </Grid>
 
-                <ScrollViewer Grid.Row="1" MaxHeight="360">
+                <Border Grid.Row="1" BorderBrush="{DynamicResource DividerStrongBrush}" BorderThickness="1"
+                        CornerRadius="{DynamicResource SurfaceRadiusValue}" Margin="0,0,0,8">
+                    <TextBox x:Name="EmojiSearchBox" Classes="composer" Text="{Binding EmojiSearchText}"
+                             PlaceholderText="Rechercher un émoji…" Padding="10,7" />
+                </Border>
+
+                <!-- Skin tone is a preference rather than a per-pick choice, so
+                     it sits in the picker chrome instead of on every swatch. -->
+                <Grid Grid.Row="2" ColumnDefinitions="Auto,*" Margin="0,0,0,10">
+                    <TextBlock Grid.Column="0" Text="TEINT" FontSize="10.5" FontWeight="Bold"
+                               Foreground="{DynamicResource TextTertiaryBrush}" VerticalAlignment="Center" />
+                    <ItemsControl Grid.Column="1" ItemsSource="{Binding SkinToneOptions}" HorizontalAlignment="Right">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel Orientation="Horizontal" Spacing="2" />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="models:SkinToneOption">
+                                <Button Classes="swatch-button" ToolTip.Tip="{Binding Label}"
+                                        Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).PickSkinToneCommand}"
+                                        CommandParameter="{Binding Tone}">
+                                    <Border Width="26" Height="26" CornerRadius="{DynamicResource RowRadiusValue}" Background="{Binding RowBackground}">
+                                        <TextBlock Text="{Binding Swatch}" FontSize="15" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    </Border>
+                                </Button>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </Grid>
+
+                <ScrollViewer Grid.Row="3" MaxHeight="320">
                     <StackPanel Spacing="12">
-                        <StackPanel Spacing="6">
+                        <TextBlock Text="Aucun émoji ne correspond" IsVisible="{Binding HasNoEmojiResults}"
+                                   Foreground="{DynamicResource TextTertiaryBrush}" HorizontalAlignment="Center" Margin="0,24" />
+
+                        <StackPanel Spacing="6" IsVisible="{Binding ShowFrequentEmoji}">
+                            <TextBlock Text="LES PLUS UTILISÉS" FontSize="10.5" FontWeight="Bold" Foreground="{DynamicResource TextTertiaryBrush}" />
+                            <ItemsControl ItemsSource="{Binding FrequentEmojiOptions}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="models:EmojiPickerItem">
+                                        <Button Classes="swatch-button" Width="30" Height="30" Margin="0,0,2,2"
+                                                ToolTip.Tip="{Binding Name}"
+                                                Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).PickEmojiCommand}"
+                                                CommandParameter="{Binding Name}">
+                                            <Panel>
+                                                <TextBlock Text="{Binding Glyph}" FontSize="18" IsVisible="{Binding !IsCustom}"
+                                                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                <Image Source="{Binding Image}" Width="22" Height="22" Stretch="Uniform" IsVisible="{Binding IsCustom}" />
+                                            </Panel>
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+
+                        <StackPanel Spacing="6" IsVisible="{Binding HasStandardEmojiResults}">
                             <TextBlock Text="STANDARD" FontSize="10.5" FontWeight="Bold" Foreground="{DynamicResource TextTertiaryBrush}" />
                             <ItemsControl ItemsSource="{Binding StandardEmojiOptions}">
                                 <ItemsControl.ItemsPanel>
@@ -1617,7 +1738,7 @@
                             </ItemsControl>
                         </StackPanel>
 
-                        <StackPanel Spacing="6">
+                        <StackPanel Spacing="6" IsVisible="{Binding HasCustomEmojiResults}">
                             <TextBlock Text="PERSONNALISÉS" FontSize="10.5" FontWeight="Bold" Foreground="{DynamicResource TextTertiaryBrush}" />
                             <ItemsControl ItemsSource="{Binding CustomEmojiOptions}">
                                 <ItemsControl.ItemsPanel>

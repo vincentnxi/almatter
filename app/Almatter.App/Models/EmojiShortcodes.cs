@@ -352,14 +352,79 @@ public static class EmojiShortcodes
     /// first would strip the wrong amount off names like
     /// "ok_hand_medium_dark_skin_tone".
     /// </summary>
-    private static readonly (string Suffix, string Modifier)[] SkinToneSuffixes =
+    private static readonly (EmojiSkinTone Tone, string Suffix, string Modifier)[] SkinTones =
     [
-        ("_medium_light_skin_tone", "\U0001F3FC"),
-        ("_medium_dark_skin_tone", "\U0001F3FE"),
-        ("_medium_skin_tone", "\U0001F3FD"),
-        ("_light_skin_tone", "\U0001F3FB"),
-        ("_dark_skin_tone", "\U0001F3FF"),
+        (EmojiSkinTone.MediumLight, "_medium_light_skin_tone", "\U0001F3FC"),
+        (EmojiSkinTone.MediumDark, "_medium_dark_skin_tone", "\U0001F3FE"),
+        (EmojiSkinTone.Medium, "_medium_skin_tone", "\U0001F3FD"),
+        (EmojiSkinTone.Light, "_light_skin_tone", "\U0001F3FB"),
+        (EmojiSkinTone.Dark, "_dark_skin_tone", "\U0001F3FF"),
     ];
+
+    /// <summary>
+    /// The emoji in this table that actually accept a skin-tone modifier —
+    /// every one of them depicts a person or a body part. Appending a
+    /// modifier to anything else (🍕🏆) is not a valid sequence: it renders
+    /// as the emoji followed by a stray colored square, and Mattermost has
+    /// no such emoji name to store it under either.
+    ///
+    /// Listed by base name, so the aliases resolve too: "+1" and "thumbsup"
+    /// are the same glyph and both belong here.
+    /// </summary>
+    private static readonly HashSet<string> SkinToneCapable =
+    [
+        "+1", "thumbsup", "-1", "thumbsdown",
+        "clap", "raised_hands", "pray", "wave", "ok_hand", "muscle",
+        "point_up", "point_right", "point_left",
+        "raised_hand", "vulcan_salute", "metal", "call_me_hand",
+        "crossed_fingers", "punch", "fist", "v", "writing_hand", "selfie",
+        "running", "swimming",
+    ];
+
+    /// <summary>Whether appending a skin-tone modifier to this emoji produces a real emoji rather than a stray colored square.</summary>
+    public static bool SupportsSkinTone(string shortcode) => SkinToneCapable.Contains(shortcode);
+
+    /// <summary>
+    /// The name to actually send for <paramref name="shortcode"/> at the
+    /// chosen tone — unchanged for the default tone, and for any emoji that
+    /// doesn't take one.
+    /// </summary>
+    public static string ApplyTone(string shortcode, EmojiSkinTone tone)
+    {
+        if (tone == EmojiSkinTone.Default || !SupportsSkinTone(shortcode))
+        {
+            return shortcode;
+        }
+
+        foreach (var (candidate, suffix, _) in SkinTones)
+        {
+            if (candidate == tone)
+            {
+                return shortcode + suffix;
+            }
+        }
+        return shortcode;
+    }
+
+    /// <summary>
+    /// The base name behind a possibly skin-toned one. Usage counts are kept
+    /// per base emoji so that changing your tone preference doesn't split
+    /// your own history in two and empty the "most used" row.
+    /// </summary>
+    public static string StripTone(string shortcode)
+    {
+        foreach (var (_, suffix, _) in SkinTones)
+        {
+            if (shortcode.EndsWith(suffix, StringComparison.Ordinal))
+            {
+                return shortcode[..^suffix.Length];
+            }
+        }
+        return shortcode;
+    }
+
+    /// <summary>The raised hand in each tone — what the tone selector shows as its swatches.</summary>
+    public static string ToneSwatch(EmojiSkinTone tone) => ToGlyph(ApplyTone("raised_hand", tone));
 
     public static string ToGlyph(string shortcode) =>
         TryResolve(shortcode, out var glyph) ? glyph : $":{shortcode}:";
@@ -374,12 +439,12 @@ public static class EmojiShortcodes
             return true;
         }
 
-        foreach (var (suffix, modifier) in SkinToneSuffixes)
+        foreach (var (_, suffix, modifier) in SkinTones)
         {
             if (shortcode.EndsWith(suffix, StringComparison.Ordinal)
                 && Map.TryGetValue(shortcode[..^suffix.Length], out var baseGlyph))
             {
-                glyph = baseGlyph + modifier;
+                glyph = Compose(baseGlyph, modifier);
                 return true;
             }
         }
@@ -387,6 +452,17 @@ public static class EmojiShortcodes
         glyph = "";
         return false;
     }
+
+    /// <summary>
+    /// A skin-tone modifier replaces the emoji presentation selector U+FE0F
+    /// rather than following it: ☝️ is U+261D U+FE0F, and the toned form is
+    /// U+261D U+1F3FB, not U+261D U+FE0F U+1F3FB. Leaving the selector in
+    /// breaks the sequence, so it shows as the plain sign followed by a
+    /// loose colored square. Only ☝️ ✌️ ✍️ in this table are affected, but
+    /// they are exactly the kind of emoji people apply a tone to.
+    /// </summary>
+    private static string Compose(string baseGlyph, string modifier) =>
+        (baseGlyph.EndsWith('\uFE0F') ? baseGlyph[..^1] : baseGlyph) + modifier;
 
     /// <summary>One (shortcode, glyph) pair per distinct glyph — some shortcodes are aliases
     /// of each other ("+1"/"thumbsup"), so the reaction picker shows each emoji only once.</summary>

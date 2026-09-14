@@ -1,5 +1,7 @@
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -88,8 +90,44 @@ public sealed partial class MessageItem : ObservableObject
     [ObservableProperty]
     public partial bool IsHighlighted { get; set; }
 
+    /// <summary>
+    /// Fills in the picture for a custom emoji someone typed into the text.
+    /// Supplied by the ViewModel, which owns the name-to-id table and the
+    /// image cache; null leaves such an emoji showing as its shortcode.
+    /// </summary>
+    public Func<CustomEmojiSegment, Task>? EmojiImageResolver { get; init; }
+
     private IReadOnlyList<MessageTextLine>? _textLines;
-    public IReadOnlyList<MessageTextLine> TextLines => _textLines ??= MessageTextParser.SplitLines(Text);
+
+    /// <summary>
+    /// Parsed on first bind rather than at construction: with the list
+    /// virtualized, that confines the work to the messages actually on
+    /// screen. Fetching any custom emoji in the text rides along for the
+    /// same reason — an emoji in a message nobody has scrolled to is never
+    /// downloaded.
+    /// </summary>
+    public IReadOnlyList<MessageTextLine> TextLines => _textLines ??= BuildTextLines();
+
+    private IReadOnlyList<MessageTextLine> BuildTextLines()
+    {
+        var lines = MessageTextParser.SplitLines(Text);
+        if (EmojiImageResolver is null)
+        {
+            return lines;
+        }
+
+        foreach (var line in lines)
+        {
+            foreach (var segment in line.Segments)
+            {
+                if (segment is CustomEmojiSegment custom)
+                {
+                    _ = EmojiImageResolver(custom);
+                }
+            }
+        }
+        return lines;
+    }
 
     public IBrush AvatarBrush => ColorTokens.Solid(AvatarHex);
 

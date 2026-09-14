@@ -46,6 +46,28 @@ public sealed partial class AppSettings : ObservableObject
 
     partial void OnReducedContrastChanged(bool value) => OnPropertyChanged(nameof(ReducedContrastCheckBrush));
 
+    /// <summary>
+    /// Which skin tone the emoji picker offers for the emoji that accept
+    /// one. A preference rather than a per-pick choice, like the official
+    /// clients: choosing a tone on every single reaction would be tedious.
+    /// </summary>
+    [ObservableProperty]
+    public partial EmojiSkinTone SkinTone { get; set; } = EmojiSkinTone.Default;
+
+    /// <summary>
+    /// How many times each emoji has been picked, keyed by its toneless
+    /// shortcode — what the picker's "most used" row is ordered by. Kept
+    /// here rather than on the server because Mattermost has no API for it:
+    /// the official clients keep their own local tally too.
+    ///
+    /// Mutated in place, so a change raises nothing on its own; the picker
+    /// calls NotifyEmojiUsageChanged to get it written to disk.
+    /// </summary>
+    [ObservableProperty]
+    public partial Dictionary<string, int> EmojiUseCounts { get; set; } = [];
+
+    public void NotifyEmojiUsageChanged() => OnPropertyChanged(nameof(EmojiUseCounts));
+
     /// <summary>Whether a shared link gets an og:title/description/image preview card, or just renders as plain clickable text.</summary>
     [ObservableProperty]
     public partial bool ShowLinkPreviews { get; set; } = true;

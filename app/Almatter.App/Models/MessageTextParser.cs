@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Text;
 using System.Text.RegularExpressions;
 
 namespace Almatter.App.Models;
@@ -18,6 +19,14 @@ public static partial class MessageTextParser
     /// </summary>
     [GeneratedRegex(@"\[((?:\\.|[^\[\]])+)\]\((https?://[^\s()]+)\)|(https?://[^\s<>""]+)|(?<![\w.])@([A-Za-z][A-Za-z0-9_.-]*)", RegexOptions.IgnoreCase)]
     private static partial Regex LinkPattern();
+
+    /// <summary>
+    /// A ":shortcode:". Run only over the plain-text runs left by the pass
+    /// above, never over the whole line, so it can't fire on the colons
+    /// inside a URL that has already been recognised as a link.
+    /// </summary>
+    [GeneratedRegex(@":([A-Za-z0-9_+\-]{1,64}):")]
+    private static partial Regex EmojiPattern();
 
     private static string UnescapeLabel(string label) => Regex.Replace(label, @"\\(.)", "$1");
 
@@ -44,7 +53,7 @@ public static partial class MessageTextParser
         {
             if (match.Index > lastIndex)
             {
-                segments.Add(new PlainTextSegment { Text = text[lastIndex..match.Index] });
+                AddText(segments, text[lastIndex..match.Index]);
             }
 
             if (match.Groups[1].Success)
@@ -68,7 +77,7 @@ public static partial class MessageTextParser
 
         if (lastIndex < text.Length)
         {
-            segments.Add(new PlainTextSegment { Text = text[lastIndex..] });
+            AddText(segments, text[lastIndex..]);
         }
 
         if (segments.Count == 0)
@@ -77,5 +86,82 @@ public static partial class MessageTextParser
         }
 
         return segments;
+    }
+
+    /// <summary>
+    /// Adds a run of ordinary text, expanding any ":shortcode:" in it.
+    ///
+    /// A standard emoji is substituted straight into the text, so it stays
+    /// part of the sentence and wraps with it rather than becoming its own
+    /// control. Anything else becomes a segment of its own, because a custom
+    /// emoji has to be drawn as a picture once the server's copy arrives.
+    /// </summary>
+    private static void AddText(List<MessageTextSegment> segments, string text)
+    {
+        if (text.Length == 0)
+        {
+            return;
+        }
+
+        StringBuilder? rebuilt = null;
+        var lastIndex = 0;
+
+        foreach (Match match in EmojiPattern().Matches(text))
+        {
+            var name = match.Groups[1].Value;
+            var known = EmojiShortcodes.IsKnown(name);
+
+            // "10:30:45" is a time, not an emoji called "30". A name made
+            // only of digits is never a real shortcode, and treating one as
+            // a custom emoji would mean silently replacing a timestamp with
+            // a picture if the server happened to have that name.
+            if (!known && !HasLetter(name))
+            {
+                continue;
+            }
+
+            rebuilt ??= new StringBuilder();
+            rebuilt.Append(text, lastIndex, match.Index - lastIndex);
+            lastIndex = match.Index + match.Length;
+
+            if (known)
+            {
+                rebuilt.Append(EmojiShortcodes.ToGlyph(name));
+                continue;
+            }
+
+            if (rebuilt.Length > 0)
+            {
+                segments.Add(new PlainTextSegment { Text = rebuilt.ToString() });
+                rebuilt.Clear();
+            }
+            segments.Add(new CustomEmojiSegment { Text = match.Value, EmojiName = name });
+        }
+
+        // Nothing in this run was a shortcode — hand back the one segment the
+        // parser produced before any of this existed.
+        if (rebuilt is null)
+        {
+            segments.Add(new PlainTextSegment { Text = text });
+            return;
+        }
+
+        rebuilt.Append(text, lastIndex, text.Length - lastIndex);
+        if (rebuilt.Length > 0)
+        {
+            segments.Add(new PlainTextSegment { Text = rebuilt.ToString() });
+        }
+    }
+
+    private static bool HasLetter(string name)
+    {
+        foreach (var c in name)
+        {
+            if (char.IsAsciiLetter(c))
+            {
+                return true;
+            }
+        }
+        return false;
     }
 }

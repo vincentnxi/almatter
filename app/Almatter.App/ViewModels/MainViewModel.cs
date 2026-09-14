@@ -311,9 +311,38 @@ public partial class MainViewModel : ViewModelBase
         OnPropertyChanged(nameof(MyPresenceBrush));
     }
 
-    /// <summary>Reaction picker — opened via the "+" button next to a message's reactions.</summary>
+    /// <summary>Emoji picker — opened from a message's "+" button, or from either composer's smiley.</summary>
     [ObservableProperty]
     public partial bool IsEmojiPickerOpen { get; set; }
+
+    /// <summary>Narrows both emoji grids as it's typed. Cleared every time the picker opens — a stale filter would look like an empty picker.</summary>
+    [ObservableProperty]
+    public partial string EmojiSearchText { get; set; } = "";
+
+    partial void OnEmojiSearchTextChanged(string value) => RefreshEmojiResults();
+
+    private EmojiPickerTarget _emojiPickerTarget = EmojiPickerTarget.Reaction;
+
+    public string EmojiPickerTitle =>
+        _emojiPickerTarget == EmojiPickerTarget.Reaction ? "Choisir une réaction" : "Insérer un émoji";
+
+    public bool IsEmojiSearchActive => EmojiPickerItem.NormalizeQuery(EmojiSearchText).Length > 0;
+
+    /// <summary>
+    /// Which composer gets the caret back when the picker closes. The picker
+    /// takes focus into its search box on open, so something has to hand it
+    /// back deliberately — left to itself, focus lands on whatever comes next
+    /// in the tree, and if that happens to be inside the message list, the
+    /// list scrolls to it and the conversation appears to jump.
+    /// </summary>
+    public bool EmojiPickerReturnsToThread { get; private set; }
+
+    /// <summary>The most-used row is a shortcut, not a search result — a search that excludes it would still show it, which reads as a bug.</summary>
+    public bool ShowFrequentEmoji => !IsEmojiSearchActive && FrequentEmojiOptions.Count > 0;
+
+    public bool HasStandardEmojiResults => StandardEmojiOptions.Count > 0;
+    public bool HasCustomEmojiResults => CustomEmojiOptions.Count > 0;
+    public bool HasNoEmojiResults => !HasStandardEmojiResults && !HasCustomEmojiResults;
 
     private string? _emojiPickerTargetPostId;
     private Task? _customEmojiLoadTask;
@@ -479,11 +508,45 @@ public partial class MainViewModel : ViewModelBase
     /// </summary>
     public event EventHandler? LoggedOut;
 
-    public ObservableCollection<EmojiPickerItem> StandardEmojiOptions { get; } = new(
-        EmojiShortcodes.PickerEntries.Select(e => new EmojiPickerItem { Name = e.Shortcode, Glyph = e.Glyph }));
+    /// <summary>
+    /// An emoji was picked for one of the composers. Carries what to type
+    /// and which box to type it into; the code-behind does the inserting,
+    /// because putting it at the caret (rather than tacked onto the end)
+    /// needs the TextBox itself.
+    /// </summary>
+    public event EventHandler<(string Text, bool IsThread)>? EmojiInsertRequested;
+
+    /// <summary>The emoji picker just opened — its search box should take the caret, so the keyboard is usable straight away.</summary>
+    public event EventHandler? EmojiSearchFocusRequested;
+
+    /// <summary>
+    /// Every emoji there is, built once. The picker's visible lists are
+    /// filtered out of these rather than rebuilt from scratch, so an entry
+    /// keeps its identity across keystrokes — which for a custom emoji means
+    /// keeping its already-downloaded image instead of re-fetching it.
+    /// </summary>
+    private readonly List<EmojiPickerItem> _allStandardEmoji = [];
+
+    private readonly List<EmojiPickerItem> _allCustomEmoji = [];
+
+    /// <summary>What the picker shows: the standard set, narrowed by the search box.</summary>
+    public ObservableCollection<EmojiPickerItem> StandardEmojiOptions { get; } = [];
 
     /// <summary>The server's custom emoji — loaded (cache-first, then network) the first time the picker opens.</summary>
     public ObservableCollection<EmojiPickerItem> CustomEmojiOptions { get; } = [];
+
+    /// <summary>The ten emoji picked most often, most-used first — the row at the top of the picker.</summary>
+    public ObservableCollection<EmojiPickerItem> FrequentEmojiOptions { get; } = [];
+
+    public ObservableCollection<SkinToneOption> SkinToneOptions { get; } = [];
+
+    /// <summary>
+    /// How tall a custom emoji is drawn inside a line of message text. A
+    /// little larger than the text itself, as the official client does —
+    /// an emoji set to exactly the font size reads as undersized next to
+    /// the letters around it.
+    /// </summary>
+    public double InlineEmojiSize => Settings.MessageFontSize * 1.35;
 
     public MainViewModel(Session session)
     {
@@ -514,6 +577,7 @@ public partial class MainViewModel : ViewModelBase
         ApplyTheme();
         RefreshFontChoiceSelection();
         RefreshFontSizeSelection();
+        InitializeEmojiPicker();
         Settings.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName is nameof(AppSettings.ThemeMode) or nameof(AppSettings.ReducedContrast))
@@ -530,6 +594,7 @@ public partial class MainViewModel : ViewModelBase
             else if (e.PropertyName == nameof(AppSettings.MessageFontSize))
             {
                 RefreshFontSizeSelection();
+                OnPropertyChanged(nameof(InlineEmojiSize));
             }
             SettingsStore.Save(Settings);
         };
@@ -2151,19 +2216,65 @@ public partial class MainViewModel : ViewModelBase
     private async Task OpenEmojiPickerAsync(string postId)
     {
         _emojiPickerTargetPostId = postId;
-        IsEmojiPickerOpen = true;
+        OpenEmojiPickerFor(EmojiPickerTarget.Reaction);
         await EnsureCustomEmojiLoadedAsync();
+    }
+
+    /// <summary>Bound to the channel composer's smiley — same picker, but a pick types the emoji instead of reacting with it.</summary>
+    [RelayCommand]
+    private async Task OpenComposerEmojiPickerAsync()
+    {
+        OpenEmojiPickerFor(EmojiPickerTarget.Composer);
+        await EnsureCustomEmojiLoadedAsync();
+    }
+
+    [RelayCommand]
+    private async Task OpenThreadEmojiPickerAsync()
+    {
+        OpenEmojiPickerFor(EmojiPickerTarget.ThreadComposer);
+        await EnsureCustomEmojiLoadedAsync();
+    }
+
+    private void OpenEmojiPickerFor(EmojiPickerTarget target)
+    {
+        _emojiPickerTarget = target;
+        EmojiPickerReturnsToThread = target == EmojiPickerTarget.ThreadComposer;
+        OnPropertyChanged(nameof(EmojiPickerTitle));
+
+        // Assigning "" raises nothing when the box is already empty, so the
+        // refresh is called outright rather than left to the change handler.
+        EmojiSearchText = "";
+        RefreshEmojiResults();
+        RefreshFrequentEmoji();
+
+        IsEmojiPickerOpen = true;
+        EmojiSearchFocusRequested?.Invoke(this, EventArgs.Empty);
     }
 
     [RelayCommand]
     private void CloseEmojiPicker() => IsEmojiPickerOpen = false;
 
-    /// <summary>Bound to a swatch in the emoji picker — adds that reaction to whichever message opened the picker.</summary>
+    /// <summary>
+    /// Bound to a swatch in the emoji picker: adds the reaction, or types the
+    /// emoji into a composer, depending on which button opened the picker.
+    /// Either way the pick is counted, so the "most used" row reflects how
+    /// this person actually writes rather than only how they react.
+    /// </summary>
     [RelayCommand]
     private async Task PickEmojiAsync(string emojiName)
     {
+        var target = _emojiPickerTarget;
         var postId = _emojiPickerTargetPostId;
         IsEmojiPickerOpen = false;
+        RecordEmojiUse(emojiName);
+
+        if (target != EmojiPickerTarget.Reaction)
+        {
+            EmojiInsertRequested?.Invoke(
+                this, (EmojiInsertText(emojiName), target == EmojiPickerTarget.ThreadComposer));
+            return;
+        }
+
         if (postId is null)
         {
             return;
@@ -2178,6 +2289,214 @@ public partial class MainViewModel : ViewModelBase
         {
             ErrorMessage = ex.Message;
         }
+    }
+
+    /// <summary>
+    /// What a picked emoji actually types. A standard emoji goes in as the
+    /// character itself rather than as ":tada:" — both render here, but the
+    /// character also survives anywhere that doesn't expand shortcodes, and
+    /// it's what Windows' own emoji panel produces, so the two ways of
+    /// inserting one agree. A custom emoji has no character to type, so it
+    /// goes in as its shortcode, which is the only form the server knows.
+    /// </summary>
+    private static string EmojiInsertText(string emojiName) =>
+        EmojiShortcodes.IsKnown(emojiName) ? EmojiShortcodes.ToGlyph(emojiName) : $":{emojiName}:";
+
+    /// <summary>
+    /// Enter in the search box takes the obvious match. It does nothing
+    /// while no search is running: the first entry in the full grid is
+    /// arbitrary, and picking it would be a surprise rather than a shortcut.
+    /// </summary>
+    [RelayCommand]
+    private async Task PickFirstEmojiResultAsync()
+    {
+        if (!IsEmojiSearchActive)
+        {
+            return;
+        }
+
+        var first = StandardEmojiOptions.FirstOrDefault() ?? CustomEmojiOptions.FirstOrDefault();
+        if (first is not null)
+        {
+            await PickEmojiAsync(first.Name);
+        }
+    }
+
+    /// <summary>Bound to a swatch in the tone strip. The choice is a persisted preference, so it's applied to every entry in place rather than only to this pick.</summary>
+    [RelayCommand]
+    private void PickSkinTone(EmojiSkinTone tone)
+    {
+        Settings.SkinTone = tone;
+        ApplySkinTone();
+    }
+
+    /// <summary>How many entries the "most used" row holds — two rows of five in the picker's width.</summary>
+    private const int FrequentEmojiCount = 10;
+
+    /// <summary>
+    /// What the "most used" row falls back to before anyone has picked
+    /// anything, and what tops it up while the tally is still short. An empty
+    /// row on day one would just look broken, and these are the ones people
+    /// reach for first anyway.
+    /// </summary>
+    private static readonly string[] DefaultFrequentEmoji =
+        ["+1", "smile", "joy", "heart", "tada", "rocket", "eyes", "pray", "clap", "fire"];
+
+    private static readonly (EmojiSkinTone Tone, string Label)[] SkinToneLabels =
+    [
+        (EmojiSkinTone.Default, "Par défaut"),
+        (EmojiSkinTone.Light, "Clair"),
+        (EmojiSkinTone.MediumLight, "Moyen clair"),
+        (EmojiSkinTone.Medium, "Moyen"),
+        (EmojiSkinTone.MediumDark, "Moyen foncé"),
+        (EmojiSkinTone.Dark, "Foncé"),
+    ];
+
+    /// <summary>
+    /// Builds the standard emoji set and the tone strip once, at startup,
+    /// rather than on first open: the picker is opened mid-conversation and
+    /// should appear instantly, and this is a few hundred small objects.
+    /// </summary>
+    private void InitializeEmojiPicker()
+    {
+        foreach (var (shortcode, glyph) in EmojiShortcodes.PickerEntries)
+        {
+            _allStandardEmoji.Add(EmojiPickerItem.Standard(shortcode, glyph, Settings.SkinTone));
+        }
+
+        foreach (var (tone, label) in SkinToneLabels)
+        {
+            SkinToneOptions.Add(new SkinToneOption
+            {
+                Tone = tone,
+                Label = label,
+                Swatch = EmojiShortcodes.ToneSwatch(tone),
+            });
+        }
+
+        ApplySkinTone();
+        RefreshEmojiResults();
+        RefreshFrequentEmoji();
+    }
+
+    /// <summary>Re-skins every entry that takes a tone, in place, and moves the selection ring in the tone strip.</summary>
+    private void ApplySkinTone()
+    {
+        foreach (var option in SkinToneOptions)
+        {
+            option.IsSelected = option.Tone == Settings.SkinTone;
+        }
+
+        foreach (var item in _allStandardEmoji)
+        {
+            item.ApplyTone(Settings.SkinTone);
+        }
+    }
+
+    /// <summary>Narrows both grids to the search box's contents — everything, when it's empty.</summary>
+    private void RefreshEmojiResults()
+    {
+        var query = EmojiPickerItem.NormalizeQuery(EmojiSearchText);
+        Narrow(StandardEmojiOptions, _allStandardEmoji, query);
+        Narrow(CustomEmojiOptions, _allCustomEmoji, query);
+
+        OnPropertyChanged(nameof(IsEmojiSearchActive));
+        OnPropertyChanged(nameof(ShowFrequentEmoji));
+        OnPropertyChanged(nameof(HasStandardEmojiResults));
+        OnPropertyChanged(nameof(HasCustomEmojiResults));
+        OnPropertyChanged(nameof(HasNoEmojiResults));
+
+        /// <summary>
+        /// Reconciles in place instead of Clear-then-refill. The unfiltered
+        /// standard set is several hundred swatches, and a Clear tears down
+        /// and rebuilds every one of them — on each keystroke, and again on
+        /// each backspace. What's shown is always a subsequence of the
+        /// master list in the same order, which is what lets a single walk
+        /// do it: anything found out of place has simply dropped out.
+        /// </summary>
+        static void Narrow(ObservableCollection<EmojiPickerItem> shown, List<EmojiPickerItem> all, string query)
+        {
+            var index = 0;
+            foreach (var item in all)
+            {
+                if (query.Length != 0 && !item.Matches(query))
+                {
+                    continue;
+                }
+
+                while (index < shown.Count && !ReferenceEquals(shown[index], item))
+                {
+                    shown.RemoveAt(index);
+                }
+
+                if (index == shown.Count)
+                {
+                    shown.Add(item);
+                }
+                index++;
+            }
+
+            while (shown.Count > index)
+            {
+                shown.RemoveAt(index);
+            }
+        }
+    }
+
+    /// <summary>Rebuilds the "most used" row from the saved tally, topped up from the defaults while it's still short.</summary>
+    private void RefreshFrequentEmoji()
+    {
+        var names = Settings.EmojiUseCounts
+            .OrderByDescending(kv => kv.Value)
+            .ThenBy(kv => kv.Key, StringComparer.Ordinal)
+            .Select(kv => kv.Key)
+            .Take(FrequentEmojiCount)
+            .ToList();
+
+        foreach (var fallback in DefaultFrequentEmoji)
+        {
+            if (names.Count >= FrequentEmojiCount)
+            {
+                break;
+            }
+            if (!names.Contains(fallback))
+            {
+                names.Add(fallback);
+            }
+        }
+
+        FrequentEmojiOptions.Clear();
+        foreach (var name in names)
+        {
+            // A custom emoji that has since been deleted from the server —
+            // or one whose list hasn't loaded yet — simply drops out of the
+            // row rather than showing as a broken swatch.
+            var item = _allStandardEmoji.FirstOrDefault(e => e.BaseName == name)
+                ?? _allCustomEmoji.FirstOrDefault(e => e.BaseName == name);
+            if (item is not null)
+            {
+                FrequentEmojiOptions.Add(item);
+            }
+        }
+
+        OnPropertyChanged(nameof(ShowFrequentEmoji));
+    }
+
+    /// <summary>
+    /// Counts one pick. The tally is kept per toneless emoji, so switching
+    /// your skin-tone preference doesn't split your own history in two and
+    /// leave the row looking reset.
+    /// </summary>
+    private void RecordEmojiUse(string emojiName)
+    {
+        var key = EmojiShortcodes.IsKnown(emojiName) ? EmojiShortcodes.StripTone(emojiName) : emojiName;
+        Settings.EmojiUseCounts.TryGetValue(key, out var count);
+        Settings.EmojiUseCounts[key] = count + 1;
+
+        // The dictionary is mutated in place, so nothing has been raised —
+        // this is what gets the new tally written to settings.json.
+        Settings.NotifyEmojiUsageChanged();
+        RefreshFrequentEmoji();
     }
 
     /// <summary>Rebuilds one message's reactions from a freshly re-fetched post, wherever that message is currently shown.</summary>
@@ -2247,15 +2566,21 @@ public partial class MainViewModel : ViewModelBase
 
     private void PopulateCustomEmojiOptions(List<CustomEmojiDto> emoji)
     {
-        CustomEmojiOptions.Clear();
+        _allCustomEmoji.Clear();
         _customEmojiIdByName.Clear();
         foreach (var e in emoji)
         {
             _customEmojiIdByName[e.Name] = e.Id;
-            var item = new EmojiPickerItem { Name = e.Name, EmojiId = e.Id };
-            CustomEmojiOptions.Add(item);
+            var item = EmojiPickerItem.Custom(e.Name, e.Id);
+            _allCustomEmoji.Add(item);
             _ = LoadCustomEmojiImageAsync(item);
         }
+
+        // The list arrives twice — once from the cache, once from the network
+        // — and a custom emoji may well be among the most-used, so both the
+        // grid and the top row are rebuilt each time rather than only once.
+        RefreshEmojiResults();
+        RefreshFrequentEmoji();
     }
 
     /// <summary>Downloads (or reads back from disk, once cached by the core) one custom emoji's image off the UI thread.</summary>
@@ -2264,6 +2589,25 @@ public partial class MainViewModel : ViewModelBase
         if (item.EmojiId is not null)
         {
             item.Image = await GetCustomEmojiBitmapAsync(item.EmojiId);
+        }
+    }
+
+    /// <summary>
+    /// Fetches the picture for a custom emoji someone typed into a message.
+    /// Goes through the same name-to-id table and the same bitmap cache as
+    /// the reactions and the picker, so an emoji that appears in all three
+    /// is downloaded and decoded once for the whole session.
+    ///
+    /// A name that resolves to nothing is left alone: it stays on screen as
+    /// the ":shortcode:" that was typed, which is both the honest rendering
+    /// and what the message looked like before any of this.
+    /// </summary>
+    private async Task ResolveTextEmojiAsync(CustomEmojiSegment segment)
+    {
+        await EnsureCustomEmojiLoadedAsync();
+        if (_customEmojiIdByName.TryGetValue(segment.EmojiName, out var emojiId))
+        {
+            segment.Image = await GetCustomEmojiBitmapAsync(emojiId);
         }
     }
 
@@ -2567,6 +2911,11 @@ public partial class MainViewModel : ViewModelBase
             option.RefreshColors();
         }
 
+        foreach (var option in SkinToneOptions)
+        {
+            option.RefreshColors();
+        }
+
         OnPropertyChanged(nameof(MyPresenceBrush));
 
         foreach (var channel in Channels.Concat(FavoriteChannels))
@@ -2692,6 +3041,7 @@ public partial class MainViewModel : ViewModelBase
                 IsContinuation = IsContinuationOf(previous, post.UserId, post.CreateAt),
                 Reactions = BuildReactions(post),
                 Attachments = BuildAttachments(post),
+                EmojiImageResolver = ResolveTextEmojiAsync,
             };
             _ = ResolveMessageAvatarAsync(item, post.UserId);
             return item;
@@ -3445,6 +3795,7 @@ public partial class MainViewModel : ViewModelBase
                 IsContinuation = IsContinuationOf(previous, post.UserId, post.CreateAt),
                 Reactions = BuildReactions(post),
                 Attachments = BuildAttachments(post),
+                EmojiImageResolver = ResolveTextEmojiAsync,
             };
             _ = ResolveMessageAvatarAsync(item, post.UserId);
             Messages.Add(item);
