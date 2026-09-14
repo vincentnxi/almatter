@@ -320,6 +320,20 @@ public partial class MainViewModel : ViewModelBase
     private readonly Dictionary<string, string> _customEmojiIdByName = [];
     private readonly Dictionary<string, Bitmap> _customEmojiImageCache = [];
     private readonly Dictionary<string, Bitmap> _avatarImageCache = [];
+
+    /// <summary>
+    /// Last known presence per user. The DM list is rebuilt from the cache
+    /// whenever a badge changes, which happens on every incoming message —
+    /// and a cache-only rebuild cannot ask the server who is online. Without
+    /// somewhere to remember it, the first message of the session turned
+    /// every contact grey until the app was restarted.
+    /// </summary>
+    private readonly Dictionary<string, PresenceStatus> _presenceByUserId = [];
+
+    /// <summary>Presence goes stale quickly, so it is re-fetched on this cadence rather than only at startup.</summary>
+    private static readonly TimeSpan PresenceRefreshInterval = TimeSpan.FromSeconds(60);
+
+    private DateTime _lastPresenceRefreshAt = DateTime.MinValue;
     private readonly Dictionary<string, Bitmap> _linkPreviewImageCache = [];
 
     private string? _openThreadRootId;
@@ -648,6 +662,12 @@ public partial class MainViewModel : ViewModelBase
                     {
                         // Still offline — try again at the next flush window.
                     }
+                }
+
+                if (DateTime.UtcNow - _lastPresenceRefreshAt >= PresenceRefreshInterval)
+                {
+                    _lastPresenceRefreshAt = DateTime.UtcNow;
+                    await RefreshPresenceAsync();
                 }
 
                 try
@@ -3074,6 +3094,64 @@ public partial class MainViewModel : ViewModelBase
     /// comes from a separate `GetChannelMembers` call instead (cache-first,
     /// refreshed over the network when allowed).
     /// </summary>
+    /// <summary>Mattermost's own status strings. Anything unrecognised reads as offline.</summary>
+    private static PresenceStatus ToPresence(string status) => status switch
+    {
+        "online" => PresenceStatus.Online,
+        "away" => PresenceStatus.Away,
+        "dnd" => PresenceStatus.DoNotDisturb,
+        _ => PresenceStatus.Offline,
+    };
+
+    /// <summary>
+    /// Re-asks the server who is online and updates the existing rows in
+    /// place. Presence is never cached by the core — it is meaningless once
+    /// stale — so it has to be refreshed on a timer; fetching it only at
+    /// startup left every contact frozen at whatever they were when the app
+    /// opened. Updating in place rather than rebuilding the list keeps this
+    /// off the UI's critical path entirely.
+    /// </summary>
+    private async Task RefreshPresenceAsync()
+    {
+        var userIds = DirectMessages.Concat(FavoriteDirectMessages)
+            .Where(dm => !dm.IsGroup && dm.OtherUserId.Length > 0)
+            .Select(dm => dm.OtherUserId)
+            .Distinct()
+            .ToList();
+        if (userIds.Count == 0)
+        {
+            return;
+        }
+
+        List<UserStatusDto> statuses;
+        try
+        {
+            statuses = await _service.GetStatusesAsync(_session.BaseUrl, _session.Token, userIds);
+        }
+        catch
+        {
+            // Presence is cosmetic — a failed refresh just leaves the last
+            // known values in place until the next attempt.
+            return;
+        }
+
+        foreach (var status in statuses)
+        {
+            _presenceByUserId[status.UserId] = ToPresence(status.Status);
+        }
+
+        await Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            foreach (var dm in DirectMessages.Concat(FavoriteDirectMessages))
+            {
+                if (!dm.IsGroup && _presenceByUserId.TryGetValue(dm.OtherUserId, out var presence))
+                {
+                    dm.Presence = presence;
+                }
+            }
+        });
+    }
+
     private async Task PopulateDirectMessagesAsync(List<ChannelDto> allChannels, bool allowNetwork)
     {
         // Mattermost creates the DM/GM channel record the moment a
@@ -3152,6 +3230,10 @@ public partial class MainViewModel : ViewModelBase
             {
                 statuses = (await _service.GetStatusesAsync(_session.BaseUrl, _session.Token, otherUserIds))
                     .ToDictionary(s => s.UserId, s => s.Status);
+                foreach (var (userId, status) in statuses)
+                {
+                    _presenceByUserId[userId] = ToPresence(status);
+                }
             }
             catch
             {
@@ -3203,14 +3285,11 @@ public partial class MainViewModel : ViewModelBase
             var otherDisplayName = user?.DisplayName ?? "Utilisateur inconnu";
             _dmDisplayNames[c.Id] = otherDisplayName;
 
-            var presence = statuses.TryGetValue(otherId, out var status)
-                ? status switch
-                {
-                    "online" => PresenceStatus.Online,
-                    "away" => PresenceStatus.Away,
-                    "dnd" => PresenceStatus.DoNotDisturb,
-                    _ => PresenceStatus.Offline,
-                }
+            // Falls back to what was last known rather than to Offline: a
+            // rebuild that couldn't reach the network knows nothing new, and
+            // "nothing new" is not the same as "everyone left".
+            var presence = _presenceByUserId.TryGetValue(otherId, out var known)
+                ? known
                 : PresenceStatus.Offline;
 
             var dmItem = new DirectMessageItem
@@ -3219,6 +3298,7 @@ public partial class MainViewModel : ViewModelBase
                 DisplayName = otherDisplayName,
                 Initials = user?.Initials ?? "?",
                 AvatarHex = AvatarColorFor(otherId),
+                OtherUserId = otherId,
                 Presence = presence,
                 IsSelected = c.Id == _activeChannelId,
                 IsFavorite = _favoriteChannelIds.Contains(c.Id),

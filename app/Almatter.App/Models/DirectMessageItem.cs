@@ -13,6 +13,9 @@ public sealed partial class DirectMessageItem : ObservableObject, IChannelListIt
     /// <summary>True for a group DM (3+ participants) — no single presence dot to show, and the avatar falls back to a generic group glyph instead of one person's initials/photo.</summary>
     public bool IsGroup { get; init; }
 
+    /// <summary>The person on the other end of a 1:1 conversation — empty for a group. Kept so presence can be refreshed in place.</summary>
+    public string OtherUserId { get; init; } = "";
+
     [ObservableProperty]
     public partial PresenceStatus Presence { get; set; }
 
