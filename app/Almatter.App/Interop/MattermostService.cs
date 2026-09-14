@@ -199,6 +199,43 @@ public sealed class MattermostService
         return data.Users;
     }
 
+    /// <summary>The channel's pinned posts, from the server — this also reconciles the cache, since a post missing from the answer is one that was unpinned.</summary>
+    public async Task<List<PostDto>> GetPinnedPostsAsync(string baseUrl, string token, string channelId)
+    {
+        var request = new JsonObject
+        {
+            ["command"] = "get_pinned_posts",
+            ["base_url"] = baseUrl,
+            ["token"] = token,
+            ["channel_id"] = channelId,
+        };
+        return (await CallAsync<PostsData>(request)).Posts;
+    }
+
+    public async Task<List<PostDto>> GetCachedPinnedPostsAsync(string channelId)
+    {
+        var request = new JsonObject
+        {
+            ["command"] = "get_cached_pinned_posts",
+            ["channel_id"] = channelId,
+        };
+        return (await CallAsync<PostsData>(request)).Posts;
+    }
+
+    /// <summary>Pins or unpins a post, returning the re-read post so the caller can update what it shows from the server's own answer rather than assuming.</summary>
+    public async Task<PostDto> SetPostPinnedAsync(string baseUrl, string token, string postId, bool pinned)
+    {
+        var request = new JsonObject
+        {
+            ["command"] = pinned ? "pin_post" : "unpin_post",
+            ["base_url"] = baseUrl,
+            ["token"] = token,
+            ["post_id"] = postId,
+        };
+        var data = await CallAsync<PostData>(request);
+        return data.Post;
+    }
+
     public async Task<PostDto> AddReactionAsync(string baseUrl, string token, string userId, string postId, string emojiName)
     {
         var request = new JsonObject
@@ -378,7 +415,7 @@ public sealed class MattermostService
     /// 455-message channel: ~0.06 ms and a handful of bytes here, against
     /// ~2.3 ms and 150 KB for the full read.
     /// </summary>
-    public async Task<(long, long, long, long, long)> GetChannelRevisionAsync(string channelId)
+    public async Task<(long, long, long, long, long, long)> GetChannelRevisionAsync(string channelId)
     {
         var request = new JsonObject
         {
@@ -389,7 +426,7 @@ public sealed class MattermostService
     }
 
     /// <summary>Same probe for the open thread panel.</summary>
-    public async Task<(long, long, long, long, long)> GetThreadRevisionAsync(string rootId)
+    public async Task<(long, long, long, long, long, long)> GetThreadRevisionAsync(string rootId)
     {
         var request = new JsonObject
         {

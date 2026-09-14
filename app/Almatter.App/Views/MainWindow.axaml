@@ -481,20 +481,30 @@
         <Grid Grid.Column="1" RowDefinitions="52,*,Auto">
 
             <Border Grid.Row="0" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1" Padding="16,0">
-                <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto">
+                <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto,Auto">
                     <Path Grid.Column="0" Data="M9 4l-1 16M16 4l-1 16M4 9h16M3 15h16" Stroke="{DynamicResource TextPrimaryBrush}" StrokeThickness="1.8"
                           Width="16" Height="16" Stretch="Uniform" VerticalAlignment="Center" />
                     <TextBlock Grid.Column="1" Text="{Binding ActiveChannelName}" FontWeight="Bold" FontSize="15" Margin="10,0,0,0" VerticalAlignment="Center" />
                     <Border Grid.Column="2" Width="1" Height="16" Background="{DynamicResource DividerStrongBrush}" Margin="12,0" />
                     <TextBlock Grid.Column="3" Text="{Binding ActiveChannelTopic}" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-                    <Button Grid.Column="4" Classes="row-button" Width="28" Height="28" ToolTip.Tip="Rechercher" Margin="4,0"
+                    <Button Grid.Column="4" Classes="row-button" Height="28" ToolTip.Tip="Messages épinglés" Margin="4,0"
+                            Command="{Binding OpenPinnedPanelCommand}">
+                        <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                            <Path Data="M12 17v5 M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"
+                                  Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.6" StrokeLineCap="Round" StrokeJoin="Round"
+                                  Width="16" Height="16" Stretch="Uniform" VerticalAlignment="Center" />
+                            <TextBlock Text="{Binding PinnedCount}" IsVisible="{Binding HasPinnedMessages}"
+                                       FontSize="11.5" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                    <Button Grid.Column="5" Classes="row-button" Width="28" Height="28" ToolTip.Tip="Rechercher" Margin="4,0"
                             Command="{Binding OpenSearchCommand}">
                         <Canvas Width="16" Height="16" HorizontalAlignment="Center" VerticalAlignment="Center">
                             <Ellipse Canvas.Left="1" Canvas.Top="1" Width="9" Height="9" Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.6" />
                             <Line StartPoint="9,9" EndPoint="15,15" Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.6" StrokeLineCap="Round" />
                         </Canvas>
                     </Button>
-                    <TextBlock Grid.Column="5" VerticalAlignment="Center" Foreground="{DynamicResource TextTertiaryBrush}" FontSize="11">
+                    <TextBlock Grid.Column="6" VerticalAlignment="Center" Foreground="{DynamicResource TextTertiaryBrush}" FontSize="11">
                         <Run Text="core v" /><Run Text="{Binding CoreVersion}" />
                     </TextBlock>
                 </Grid>
@@ -518,7 +528,7 @@
                             <Border Classes="message-row" Classes.tinted="{Binding IsTinted}" Opacity="{Binding BodyOpacity}" CornerRadius="{DynamicResource RowRadiusValue}" Padding="{Binding RowPadding}">
                                 <Panel>
                                 <Grid ColumnDefinitions="36,*">
-                                    <Button Grid.Column="0" Classes="row-button" Width="36" Height="36" VerticalAlignment="Top" IsVisible="{Binding !IsContinuation}">
+                                    <Button Grid.Column="0" Classes="row-button" Width="36" Height="36" VerticalAlignment="Top" IsVisible="{Binding ShowHeader}">
                                         <Button.Flyout>
                                             <Flyout Placement="RightEdgeAlignedTop">
                                                 <StackPanel Width="220" Spacing="10">
@@ -549,11 +559,21 @@
                                         </Border>
                                     </Button>
                                     <StackPanel Grid.Column="1" Margin="10,0,0,0">
-                                        <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,0,0,14" IsVisible="{Binding !IsContinuation}">
+                                        <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,0,0,14" IsVisible="{Binding ShowHeader}">
                                             <TextBlock Text="{Binding AuthorName}" FontWeight="Bold"
                                                        FontSize="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.MessageFontSize}" />
                                             <TextBlock Text="{Binding TimeLabel}" FontSize="11.5" Foreground="{DynamicResource TextTertiaryBrush}" VerticalAlignment="Center" />
                                             <TextBlock Text="Envoi en cours…" FontSize="11.5" FontStyle="Italic" Foreground="{DynamicResource TextTertiaryBrush}" VerticalAlignment="Center" IsVisible="{Binding IsPending}" />
+                                            <!-- Sits on the header line, which already exists, so marking a
+                                                 message pinned costs the row no extra height — and with the
+                                                 list virtualized, a height change is what makes the
+                                                 conversation visibly jump. -->
+                                            <StackPanel Orientation="Horizontal" Spacing="3" VerticalAlignment="Center" IsVisible="{Binding IsPinned}">
+                                                <Path Data="M12 17v5 M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"
+                                                      Stroke="{DynamicResource AccentBrush}" StrokeThickness="1.7" StrokeLineCap="Round" StrokeJoin="Round"
+                                                      Width="11" Height="11" Stretch="Uniform" VerticalAlignment="Center" />
+                                                <TextBlock Text="Épinglé" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource AccentBrush}" VerticalAlignment="Center" />
+                                            </StackPanel>
                                         </StackPanel>
                                         <Button IsVisible="{Binding HasQuotedMessage}" Classes="row-button" Margin="0,0,0,2"
                                                 Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).JumpToQuotedMessageCommand}"
@@ -728,6 +748,16 @@
                                         <Border CornerRadius="13" Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1" BoxShadow="{DynamicResource CardShadow}">
                                             <Path Data="M3 6h18 M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2 M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"
                                                   Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.4" StrokeLineCap="Round" StrokeJoin="Round"
+                                                  Width="14" Height="14" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                        </Border>
+                                    </Button>
+                                    <Button Classes="row-button hover-reveal-btn" Width="26" Height="26"
+                                            ToolTip.Tip="{Binding PinActionLabel}"
+                                            Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).TogglePinCommand}"
+                                            CommandParameter="{Binding}">
+                                        <Border CornerRadius="13" Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1" BoxShadow="{DynamicResource CardShadow}">
+                                            <Path Data="M12 17v5 M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"
+                                                  Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.5" StrokeLineCap="Round" StrokeJoin="Round"
                                                   Width="14" Height="14" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center" />
                                         </Border>
                                     </Button>
@@ -937,6 +967,12 @@
                                             <TextBlock Text="{Binding AuthorName}" FontWeight="Bold"
                                                        FontSize="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.MessageFontSize}" />
                                             <TextBlock Text="{Binding TimeLabel}" FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}" VerticalAlignment="Center" />
+                                            <StackPanel Orientation="Horizontal" Spacing="3" VerticalAlignment="Center" IsVisible="{Binding IsPinned}">
+                                                <Path Data="M12 17v5 M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"
+                                                      Stroke="{DynamicResource AccentBrush}" StrokeThickness="1.7" StrokeLineCap="Round" StrokeJoin="Round"
+                                                      Width="10" Height="10" Stretch="Uniform" VerticalAlignment="Center" />
+                                                <TextBlock Text="Épinglé" FontSize="10.5" FontWeight="SemiBold" Foreground="{DynamicResource AccentBrush}" VerticalAlignment="Center" />
+                                            </StackPanel>
                                         </StackPanel>
                                         <ItemsControl ItemsSource="{Binding TextLines}">
                                             <ItemsControl.ItemsPanel>
@@ -1029,7 +1065,7 @@
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate DataType="models:MessageItem">
                                         <Grid ColumnDefinitions="30,*" Opacity="{Binding BodyOpacity}">
-                                            <Button Grid.Column="0" Classes="row-button" Width="30" Height="30" VerticalAlignment="Top" IsVisible="{Binding !IsContinuation}">
+                                            <Button Grid.Column="0" Classes="row-button" Width="30" Height="30" VerticalAlignment="Top" IsVisible="{Binding ShowHeader}">
                                                 <Button.Flyout>
                                                     <Flyout Placement="RightEdgeAlignedTop">
                                                         <StackPanel Width="220" Spacing="10">
@@ -1060,11 +1096,17 @@
                                                 </Border>
                                             </Button>
                                             <StackPanel Grid.Column="1" Margin="8,0,0,0" Spacing="1">
-                                                <StackPanel Orientation="Horizontal" Spacing="6" IsVisible="{Binding !IsContinuation}">
+                                                <StackPanel Orientation="Horizontal" Spacing="6" IsVisible="{Binding ShowHeader}">
                                                     <TextBlock Text="{Binding AuthorName}" FontWeight="Bold"
                                                                FontSize="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.MessageFontSize}" />
                                                     <TextBlock Text="{Binding TimeLabel}" FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}" VerticalAlignment="Center" />
                                                     <TextBlock Text="Envoi en cours…" FontSize="11" FontStyle="Italic" Foreground="{DynamicResource TextTertiaryBrush}" VerticalAlignment="Center" IsVisible="{Binding IsPending}" />
+                                                    <StackPanel Orientation="Horizontal" Spacing="3" VerticalAlignment="Center" IsVisible="{Binding IsPinned}">
+                                                        <Path Data="M12 17v5 M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"
+                                                              Stroke="{DynamicResource AccentBrush}" StrokeThickness="1.7" StrokeLineCap="Round" StrokeJoin="Round"
+                                                              Width="10" Height="10" Stretch="Uniform" VerticalAlignment="Center" />
+                                                        <TextBlock Text="Épinglé" FontSize="10.5" FontWeight="SemiBold" Foreground="{DynamicResource AccentBrush}" VerticalAlignment="Center" />
+                                                    </StackPanel>
                                                 </StackPanel>
                                                 <ItemsControl ItemsSource="{Binding TextLines}">
                                                     <ItemsControl.ItemsPanel>
@@ -1636,6 +1678,83 @@
                                             </Grid>
                                         </Border>
                                     </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </ScrollViewer>
+            </Grid>
+        </Border>
+
+        <!-- PINNED MESSAGES PANEL -->
+        <Button Classes="row-button" Grid.Column="0" Grid.ColumnSpan="3" IsVisible="{Binding IsPinnedPanelOpen}"
+                HorizontalAlignment="Stretch" VerticalAlignment="Stretch" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"
+                Command="{Binding ClosePinnedPanelCommand}" Background="Transparent" Content="" />
+
+        <Border Grid.Column="0" Grid.ColumnSpan="2" IsVisible="{Binding IsPinnedPanelOpen}"
+                HorizontalAlignment="Center" VerticalAlignment="Top" Width="480" Margin="0,16,0,0"
+                Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource DividerStrongBrush}" BorderThickness="1"
+                CornerRadius="{DynamicResource SurfaceRadiusValue}" Padding="14" BoxShadow="{DynamicResource PopoverShadow}">
+            <Grid RowDefinitions="Auto,*">
+                <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,10">
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                        <TextBlock Text="Messages épinglés" FontWeight="Bold" FontSize="14" VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding ActiveChannelName, StringFormat='#{0}'}" FontSize="12"
+                                   Foreground="{DynamicResource TextTertiaryBrush}" VerticalAlignment="Center" />
+                    </StackPanel>
+                    <Button Grid.Column="1" Classes="row-button" Width="20" Height="20" Command="{Binding ClosePinnedPanelCommand}">
+                        <Canvas Width="14" Height="14" HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <Line StartPoint="1,1" EndPoint="13,13" Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.6" StrokeLineCap="Round" />
+                            <Line StartPoint="13,1" EndPoint="1,13" Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.6" StrokeLineCap="Round" />
+                        </Canvas>
+                    </Button>
+                </Grid>
+
+                <ScrollViewer Grid.Row="1" MaxHeight="460">
+                    <StackPanel Spacing="2">
+                        <TextBlock IsVisible="{Binding !HasPinnedMessages}" TextWrapping="Wrap" Margin="0,16,0,20"
+                                   Foreground="{DynamicResource TextTertiaryBrush}" HorizontalAlignment="Center" TextAlignment="Center"
+                                   Text="Aucun message épinglé dans ce canal. Survolez un message et utilisez l'épingle pour en garder un sous la main." />
+
+                        <ItemsControl ItemsSource="{Binding PinnedMessages}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Spacing="2" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="models:PinnedMessageItem">
+                                    <Grid ColumnDefinitions="*,Auto">
+                                        <Button Grid.Column="0" Classes="row-button" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                                                ToolTip.Tip="Aller à ce message"
+                                                Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).JumpToPinnedMessageCommand}"
+                                                CommandParameter="{Binding}">
+                                            <Border CornerRadius="{DynamicResource RowRadiusValue}" Padding="8,7">
+                                                <Grid ColumnDefinitions="Auto,*">
+                                                    <Border Grid.Column="0" Width="28" Height="28" CornerRadius="14" Background="{Binding AvatarBrush}" VerticalAlignment="Top" Margin="0,0,8,0">
+                                                        <TextBlock Text="{Binding AuthorInitials}" Foreground="White" FontWeight="Bold" FontSize="11"
+                                                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                    </Border>
+                                                    <StackPanel Grid.Column="1" Spacing="2">
+                                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                                            <TextBlock Text="{Binding AuthorName}" FontWeight="SemiBold" FontSize="13" />
+                                                            <TextBlock Text="{Binding TimeLabel}" FontSize="11.5" Foreground="{DynamicResource TextTertiaryBrush}" VerticalAlignment="Center" />
+                                                        </StackPanel>
+                                                        <TextBlock Text="{Binding Text}" FontSize="12.5" TextWrapping="Wrap" MaxLines="4" TextTrimming="CharacterEllipsis" />
+                                                    </StackPanel>
+                                                </Grid>
+                                            </Border>
+                                        </Button>
+                                        <Button Grid.Column="1" Classes="row-button" Width="26" Height="26" VerticalAlignment="Top" Margin="4,8,0,0"
+                                                ToolTip.Tip="Détacher du canal"
+                                                Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).UnpinFromPanelCommand}"
+                                                CommandParameter="{Binding}">
+                                            <Canvas Width="14" Height="14" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                <Line StartPoint="1,1" EndPoint="13,13" Stroke="{DynamicResource TextTertiaryBrush}" StrokeThickness="1.6" StrokeLineCap="Round" />
+                                                <Line StartPoint="13,1" EndPoint="1,13" Stroke="{DynamicResource TextTertiaryBrush}" StrokeThickness="1.6" StrokeLineCap="Round" />
+                                            </Canvas>
+                                        </Button>
+                                    </Grid>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>

@@ -248,6 +248,27 @@ impl MattermostClient {
         Ok(list.into_ordered_posts())
     }
 
+    /// Every post pinned in this channel, in the order the server reports.
+    pub async fn get_pinned_posts(&self, channel_id: &str) -> Result<Vec<Post>, ApiError> {
+        let list: PostList = self.get_json(&format!("/channels/{channel_id}/pinned")).await?;
+        Ok(list.into_ordered_posts())
+    }
+
+    /// Pins a post to its channel. Mattermost answers {"status":"OK"} rather
+    /// than the updated post, so the caller re-reads the post afterwards to
+    /// get the cache back in step — the same shape as adding a reaction.
+    pub async fn pin_post(&self, post_id: &str) -> Result<(), ApiError> {
+        let _: serde_json::Value =
+            self.post_json(&format!("/posts/{post_id}/pin"), &serde_json::json!({})).await?;
+        Ok(())
+    }
+
+    pub async fn unpin_post(&self, post_id: &str) -> Result<(), ApiError> {
+        let _: serde_json::Value =
+            self.post_json(&format!("/posts/{post_id}/unpin"), &serde_json::json!({})).await?;
+        Ok(())
+    }
+
     /// Presence for a batch of users — not cached anywhere (see db.rs):
     /// it's ephemeral by nature, so re-asking the server each time the DM
     /// list loads is simpler than trying to keep a stored copy fresh.

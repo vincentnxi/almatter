@@ -225,6 +225,11 @@ pub struct Post {
     /// own field name and meaning, used to show a subtle "(modifié)" tag.
     #[serde(default)]
     pub edit_at: i64,
+    /// Pinned to its channel. Mattermost's own field name and meaning — the
+    /// server owns this, so it arrives on the post like reply_count does
+    /// rather than being tracked separately.
+    #[serde(default)]
+    pub is_pinned: bool,
     #[serde(default)]
     pub metadata: PostMetadata,
 }

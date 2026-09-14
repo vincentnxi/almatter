@@ -109,6 +109,26 @@ enum Request {
         base_url: String,
         token: String,
     },
+    /// The channel's pinned posts, straight from the server — also reconciles
+    /// the cache's pinned flags against the answer.
+    GetPinnedPosts {
+        base_url: String,
+        token: String,
+        channel_id: String,
+    },
+    GetCachedPinnedPosts {
+        channel_id: String,
+    },
+    PinPost {
+        base_url: String,
+        token: String,
+        post_id: String,
+    },
+    UnpinPost {
+        base_url: String,
+        token: String,
+        post_id: String,
+    },
     GetCachedCustomEmoji,
     /// Downloads (once — cached to disk after that) one custom emoji's
     /// image and returns the local file path for the UI to load directly.
@@ -542,6 +562,44 @@ async fn handle(request_json: &str, db: &'static Mutex<Database>) -> Value {
         Request::RemoveReaction { base_url, token, user_id, post_id, emoji_name } => {
             let client = MattermostClient::new(base_url).with_token(token);
             match client.remove_reaction(&user_id, &post_id, &emoji_name).await {
+                Ok(()) => refetch_post_into_cache(&client, db, &post_id).await,
+                Err(e) => Err(e.to_string()),
+            }
+        }
+        Request::GetPinnedPosts { base_url, token, channel_id } => MattermostClient::new(base_url)
+            .with_token(token)
+            .get_pinned_posts(&channel_id)
+            .await
+            .map(|posts| {
+                cache_write(db, |cache| {
+                    // Clear before writing, inside the one transaction: the
+                    // answer says what is pinned, so anything no longer in it
+                    // has to lose its flag by omission.
+                    cache.clear_pinned_for_channel(&channel_id)?;
+                    for post in &posts {
+                        cache.upsert_post(post)?;
+                    }
+                    Ok(())
+                });
+                json!({ "posts": posts })
+            })
+            .map_err(|e| e.to_string()),
+        Request::GetCachedPinnedPosts { channel_id } => db
+            .lock()
+            .expect("cache db mutex poisoned")
+            .cached_pinned_posts(&channel_id)
+            .map(|posts| json!({ "posts": posts }))
+            .map_err(|e| e.to_string()),
+        Request::PinPost { base_url, token, post_id } => {
+            let client = MattermostClient::new(base_url).with_token(token);
+            match client.pin_post(&post_id).await {
+                Ok(()) => refetch_post_into_cache(&client, db, &post_id).await,
+                Err(e) => Err(e.to_string()),
+            }
+        }
+        Request::UnpinPost { base_url, token, post_id } => {
+            let client = MattermostClient::new(base_url).with_token(token);
+            match client.unpin_post(&post_id).await {
                 Ok(()) => refetch_post_into_cache(&client, db, &post_id).await,
                 Err(e) => Err(e.to_string()),
             }
@@ -1251,6 +1309,7 @@ mod tests {
             create_at: 1000,
             reply_count: 0,
             edit_at: 0,
+            is_pinned: false,
             metadata: Default::default(),
         }).unwrap();
 
@@ -1636,6 +1695,7 @@ mod tests {
             create_at: 1000,
             reply_count: 0,
             edit_at: 0,
+            is_pinned: false,
             metadata: Default::default(),
         }).unwrap();
 

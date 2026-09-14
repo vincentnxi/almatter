@@ -77,6 +77,7 @@ public sealed class PostDto
     [JsonPropertyName("create_at")] public long CreateAt { get; set; }
     [JsonPropertyName("reply_count")] public long ReplyCount { get; set; }
     [JsonPropertyName("edit_at")] public long EditAt { get; set; }
+    [JsonPropertyName("is_pinned")] public bool IsPinned { get; set; }
     [JsonPropertyName("metadata")] public PostMetadataDto Metadata { get; set; } = new();
 }
 
@@ -169,8 +170,11 @@ internal sealed class RevisionData
     [JsonPropertyName("reactions")] public long Reactions { get; set; }
     [JsonPropertyName("last_reaction_seq")] public long LastReactionSeq { get; set; }
 
-    public (long, long, long, long, long) AsKey() =>
-        (Count, LastCreateAt, LastEditAt, Reactions, LastReactionSeq);
+    /// <summary>How many posts are pinned. Its own term because pinning moves neither create_at nor edit_at — without it, a colleague pinning something would go unnoticed until the channel was reopened.</summary>
+    [JsonPropertyName("pinned")] public long Pinned { get; set; }
+
+    public (long, long, long, long, long, long) AsKey() =>
+        (Count, LastCreateAt, LastEditAt, Reactions, LastReactionSeq, Pinned);
 }
 
 internal sealed class PublicChannelsData

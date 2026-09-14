@@ -83,6 +83,26 @@ public sealed partial class MessageItem : ObservableObject
     public bool HasAttachments => Attachments.Count > 0;
     public bool HasReactions => Reactions.Count > 0;
 
+    /// <summary>Pinned to the channel — drives the marker in the header and the wording of the pin action.</summary>
+    [ObservableProperty]
+    public partial bool IsPinned { get; set; }
+
+    /// <summary>
+    /// A pinned message always shows its header, even when it would
+    /// otherwise be grouped under the one above it: the pin marker lives
+    /// there, and a pinned message with nowhere to say so isn't much use.
+    /// The official client does the same.
+    /// </summary>
+    public bool ShowHeader => !IsContinuation || IsPinned;
+
+    public string PinActionLabel => IsPinned ? "Détacher du canal" : "Épingler au canal";
+
+    partial void OnIsPinnedChanged(bool value)
+    {
+        OnPropertyChanged(nameof(ShowHeader));
+        OnPropertyChanged(nameof(PinActionLabel));
+    }
+
     /// <summary>True for an outbox entry not yet confirmed by the server — queued while offline, or just fired off and still in flight.</summary>
     public bool IsPending { get; init; }
 

@@ -520,6 +520,7 @@ mod tests {
                 create_at: 1000,
                 reply_count: 0,
                 edit_at: 0,
+                is_pinned: false,
                 metadata: PostMetadata {
                     reactions: vec![Reaction { user_id: "u2".into(), emoji_name: "+1".into() }],
                     ..Default::default()

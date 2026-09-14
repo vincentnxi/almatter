@@ -125,7 +125,8 @@ impl Database {
                 create_at   INTEGER NOT NULL,
                 reply_count INTEGER NOT NULL DEFAULT 0,
                 edit_at     INTEGER NOT NULL DEFAULT 0,
-                embeds_json TEXT NOT NULL DEFAULT '[]'
+                embeds_json TEXT NOT NULL DEFAULT '[]',
+                is_pinned   INTEGER NOT NULL DEFAULT 0
             );
             CREATE INDEX IF NOT EXISTS idx_posts_channel ON posts(channel_id, create_at);
             CREATE INDEX IF NOT EXISTS idx_posts_root ON posts(root_id);
@@ -265,6 +266,9 @@ impl Database {
         let _ = self
             .conn
             .execute("ALTER TABLE posts ADD COLUMN embeds_json TEXT NOT NULL DEFAULT '[]'", []);
+        let _ = self
+            .conn
+            .execute("ALTER TABLE posts ADD COLUMN is_pinned INTEGER NOT NULL DEFAULT 0", []);
 
         Ok(())
     }
@@ -335,14 +339,15 @@ impl Database {
         // to actually trigger.
         let embeds_json = serde_json::to_string(&post.metadata.embeds).unwrap_or_else(|_| "[]".to_string());
         self.conn.execute(
-            "INSERT INTO posts (id, channel_id, root_id, user_id, message, create_at, reply_count, edit_at, embeds_json)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+            "INSERT INTO posts (id, channel_id, root_id, user_id, message, create_at, reply_count, edit_at, embeds_json, is_pinned)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
              ON CONFLICT(id) DO UPDATE SET
                 message = excluded.message,
                 root_id = excluded.root_id,
                 reply_count = excluded.reply_count,
                 edit_at = excluded.edit_at,
-                embeds_json = excluded.embeds_json",
+                embeds_json = excluded.embeds_json,
+                is_pinned = excluded.is_pinned",
             params![
                 post.id,
                 post.channel_id,
@@ -353,6 +358,7 @@ impl Database {
                 post.reply_count,
                 post.edit_at,
                 embeds_json,
+                post.is_pinned,
             ],
         )?;
 
@@ -761,14 +767,14 @@ impl Database {
     /// covering them would need a per-post lookup, the very cost this
     /// exists to avoid.
     pub fn channel_revision(&self, channel_id: &str) -> rusqlite::Result<ChannelRevision> {
-        let (posts, last_create_at, last_edit_at) = self.conn.query_row(
-            "SELECT COUNT(*), COALESCE(MAX(create_at), 0), COALESCE(MAX(edit_at), 0)
+        let (posts, last_create_at, last_edit_at, pinned) = self.conn.query_row(
+            "SELECT COUNT(*), COALESCE(MAX(create_at), 0), COALESCE(MAX(edit_at), 0), COALESCE(SUM(is_pinned), 0)
              FROM posts WHERE channel_id = ?1",
             params![channel_id],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
         )?;
         let (reactions, last_reaction_seq) = self.reaction_fingerprint_for_channel(channel_id)?;
-        Ok(ChannelRevision { posts, last_create_at, last_edit_at, reactions, last_reaction_seq })
+        Ok(ChannelRevision { posts, last_create_at, last_edit_at, reactions, last_reaction_seq, pinned })
     }
 
     /// Count plus highest rowid, so all three reaction moves are visible:
@@ -787,11 +793,11 @@ impl Database {
 
     /// Same idea as channel_revision, for the open thread panel.
     pub fn thread_revision(&self, root_id: &str) -> rusqlite::Result<ChannelRevision> {
-        let (posts, last_create_at, last_edit_at) = self.conn.query_row(
-            "SELECT COUNT(*), COALESCE(MAX(create_at), 0), COALESCE(MAX(edit_at), 0)
+        let (posts, last_create_at, last_edit_at, pinned) = self.conn.query_row(
+            "SELECT COUNT(*), COALESCE(MAX(create_at), 0), COALESCE(MAX(edit_at), 0), COALESCE(SUM(is_pinned), 0)
              FROM posts WHERE id = ?1 OR root_id = ?1",
             params![root_id],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
         )?;
         let (reactions, last_reaction_seq) = self.conn.query_row(
             "SELECT COUNT(*), COALESCE(MAX(r.write_seq), 0)
@@ -800,13 +806,13 @@ impl Database {
             params![root_id],
             |row| Ok((row.get(0)?, row.get(1)?)),
         )?;
-        Ok(ChannelRevision { posts, last_create_at, last_edit_at, reactions, last_reaction_seq })
+        Ok(ChannelRevision { posts, last_create_at, last_edit_at, reactions, last_reaction_seq, pinned })
     }
 
     pub fn cached_posts_for_channel(&self, channel_id: &str) -> rusqlite::Result<Vec<Post>> {
         let mut stmt = self.conn.prepare(
             "SELECT p.id, p.channel_id, p.root_id, p.user_id, p.message, p.create_at,
-                    (SELECT COUNT(*) FROM posts r WHERE r.root_id = p.id) AS reply_count, p.edit_at, p.embeds_json
+                    (SELECT COUNT(*) FROM posts r WHERE r.root_id = p.id) AS reply_count, p.edit_at, p.embeds_json, p.is_pinned
              FROM posts p
              WHERE p.channel_id = ?1 ORDER BY p.create_at ASC",
         )?;
@@ -819,12 +825,40 @@ impl Database {
     pub fn cached_thread_posts(&self, root_id: &str) -> rusqlite::Result<Vec<Post>> {
         let mut stmt = self.conn.prepare(
             "SELECT p.id, p.channel_id, p.root_id, p.user_id, p.message, p.create_at,
-                    (SELECT COUNT(*) FROM posts r WHERE r.root_id = p.id) AS reply_count, p.edit_at, p.embeds_json
+                    (SELECT COUNT(*) FROM posts r WHERE r.root_id = p.id) AS reply_count, p.edit_at, p.embeds_json, p.is_pinned
              FROM posts p
              WHERE p.id = ?1 OR p.root_id = ?1 ORDER BY p.create_at ASC",
         )?;
         let rows = stmt.query_map(params![root_id], Self::post_from_row)?;
         self.attach_metadata(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+    }
+
+    /// The channel's pinned posts, newest first — the order the pinned panel
+    /// reads in, and the same one the official client uses.
+    pub fn cached_pinned_posts(&self, channel_id: &str) -> rusqlite::Result<Vec<Post>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT p.id, p.channel_id, p.root_id, p.user_id, p.message, p.create_at,
+                    (SELECT COUNT(*) FROM posts r WHERE r.root_id = p.id) AS reply_count, p.edit_at, p.embeds_json, p.is_pinned
+             FROM posts p
+             WHERE p.channel_id = ?1 AND p.is_pinned = 1 ORDER BY p.create_at DESC",
+        )?;
+        let rows = stmt.query_map(params![channel_id], Self::post_from_row)?;
+        self.attach_metadata(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+    }
+
+    /// Wipes the channel's pinned flags so a freshly fetched pinned list can
+    /// be laid down over the top.
+    ///
+    /// The server's pinned endpoint reports only what IS pinned, never what
+    /// stopped being — so a post someone else unpinned is recognised purely
+    /// by its absence from the answer. Without this, an unpinned post would
+    /// stay flagged locally until something else happened to refetch it.
+    pub fn clear_pinned_for_channel(&self, channel_id: &str) -> rusqlite::Result<()> {
+        self.conn.execute(
+            "UPDATE posts SET is_pinned = 0 WHERE channel_id = ?1 AND is_pinned = 1",
+            params![channel_id],
+        )?;
+        Ok(())
     }
 
     /// Local full-text search across every cached message, any channel or
@@ -838,7 +872,7 @@ impl Database {
         }
         let mut stmt = self.conn.prepare(
             "SELECT p.id, p.channel_id, p.root_id, p.user_id, p.message, p.create_at,
-                    (SELECT COUNT(*) FROM posts r WHERE r.root_id = p.id) AS reply_count, p.edit_at, p.embeds_json
+                    (SELECT COUNT(*) FROM posts r WHERE r.root_id = p.id) AS reply_count, p.edit_at, p.embeds_json, p.is_pinned
              FROM posts_fts f
              JOIN posts p ON p.rowid = f.rowid
              WHERE posts_fts MATCH ?1
@@ -873,6 +907,7 @@ impl Database {
             create_at: row.get(5)?,
             reply_count: row.get(6)?,
             edit_at: row.get(7)?,
+            is_pinned: row.get(9)?,
             metadata: PostMetadata { embeds, ..Default::default() },
         })
     }
@@ -922,6 +957,10 @@ pub struct ChannelRevision {
     pub last_edit_at: i64,
     pub reactions: i64,
     pub last_reaction_seq: i64,
+    /// How many of the channel's posts are pinned. Part of the fingerprint
+    /// because pinning changes neither create_at nor edit_at, so nothing
+    /// else here would move when a colleague pins something.
+    pub pinned: i64,
 }
 
 fn app_data_dir() -> PathBuf {
@@ -1116,6 +1155,89 @@ mod tests {
         assert!(cached.iter().any(|c| c.id == "dm1"));
     }
 
+    fn pinned_fixture(id: &str, channel_id: &str, create_at: i64, is_pinned: bool) -> Post {
+        Post {
+            id: id.into(),
+            channel_id: channel_id.into(),
+            root_id: "".into(),
+            user_id: "u1".into(),
+            message: "hello".into(),
+            create_at,
+            reply_count: 0,
+            edit_at: 0,
+            is_pinned,
+            metadata: Default::default(),
+        }
+    }
+
+    #[test]
+    fn cached_pinned_posts_returns_only_pinned_newest_first() {
+        let db = Database::open_in_memory().unwrap();
+        db.upsert_post(&pinned_fixture("old", "c1", 1000, true)).unwrap();
+        db.upsert_post(&pinned_fixture("plain", "c1", 2000, false)).unwrap();
+        db.upsert_post(&pinned_fixture("new", "c1", 3000, true)).unwrap();
+        db.upsert_post(&pinned_fixture("elsewhere", "c2", 4000, true)).unwrap();
+
+        let pinned = db.cached_pinned_posts("c1").unwrap();
+        let ids: Vec<&str> = pinned.iter().map(|p| p.id.as_str()).collect();
+        assert_eq!(ids, vec!["new", "old"], "newest first, this channel only");
+    }
+
+    #[test]
+    fn upsert_post_carries_the_pinned_flag_both_ways() {
+        let db = Database::open_in_memory().unwrap();
+        db.upsert_post(&pinned_fixture("p1", "c1", 1000, false)).unwrap();
+        assert_eq!(db.cached_pinned_posts("c1").unwrap().len(), 0);
+
+        db.upsert_post(&pinned_fixture("p1", "c1", 1000, true)).unwrap();
+        assert_eq!(db.cached_pinned_posts("c1").unwrap().len(), 1);
+
+        // An unpin arriving as a refetched post has to clear the flag again —
+        // ON CONFLICT DO UPDATE must actually list is_pinned, or the post
+        // would stay pinned locally for good.
+        db.upsert_post(&pinned_fixture("p1", "c1", 1000, false)).unwrap();
+        assert_eq!(db.cached_pinned_posts("c1").unwrap().len(), 0);
+    }
+
+    #[test]
+    fn refetching_the_pinned_list_unpins_by_omission() {
+        let db = Database::open_in_memory().unwrap();
+        db.upsert_post(&pinned_fixture("kept", "c1", 1000, true)).unwrap();
+        db.upsert_post(&pinned_fixture("dropped", "c1", 2000, true)).unwrap();
+        db.upsert_post(&pinned_fixture("other_channel", "c2", 3000, true)).unwrap();
+
+        // What the dispatcher does when the server answers with the pinned
+        // list: clear the channel's flags, then lay the answer down over it.
+        db.clear_pinned_for_channel("c1").unwrap();
+        db.upsert_post(&pinned_fixture("kept", "c1", 1000, true)).unwrap();
+
+        let ids: Vec<String> = db.cached_pinned_posts("c1").unwrap().into_iter().map(|p| p.id).collect();
+        assert_eq!(ids, vec!["kept".to_string()], "a post missing from the answer loses its pin");
+
+        // The clear is scoped to one channel — another channel's pins survive.
+        assert_eq!(db.cached_pinned_posts("c2").unwrap().len(), 1);
+
+        // And the post itself is still there, just no longer pinned.
+        assert!(db.cached_posts_for_channel("c1").unwrap().iter().any(|p| p.id == "dropped"));
+    }
+
+    #[test]
+    fn channel_revision_moves_when_a_post_is_pinned() {
+        let db = Database::open_in_memory().unwrap();
+        db.upsert_post(&pinned_fixture("p1", "c1", 1000, false)).unwrap();
+        let before = db.channel_revision("c1").unwrap();
+
+        // Pinning changes neither create_at nor edit_at, so without its own
+        // term in the fingerprint the poll would never notice.
+        db.upsert_post(&pinned_fixture("p1", "c1", 1000, true)).unwrap();
+        let after = db.channel_revision("c1").unwrap();
+
+        assert_eq!(before.posts, after.posts);
+        assert_eq!(before.last_create_at, after.last_create_at);
+        assert_eq!(before.last_edit_at, after.last_edit_at);
+        assert_ne!(before.pinned, after.pinned, "the pinned count is what moves");
+    }
+
     #[test]
     fn round_trips_posts_in_creation_order() {
         let db = Database::open_in_memory().unwrap();
@@ -1142,8 +1264,8 @@ mod tests {
             last_name: "".into(),
         })
         .unwrap();
-        db.upsert_post(&Post { id: "p2".into(), channel_id: "c1".into(), root_id: "".into(), user_id: "u1".into(), message: "second".into(), create_at: 2000, reply_count: 0, edit_at: 0, metadata: Default::default() }).unwrap();
-        db.upsert_post(&Post { id: "p1".into(), channel_id: "c1".into(), root_id: "".into(), user_id: "u1".into(), message: "first".into(), create_at: 1000, reply_count: 0, edit_at: 0, metadata: Default::default() }).unwrap();
+        db.upsert_post(&Post { id: "p2".into(), channel_id: "c1".into(), root_id: "".into(), user_id: "u1".into(), message: "second".into(), create_at: 2000, reply_count: 0, edit_at: 0, is_pinned: false, metadata: Default::default() }).unwrap();
+        db.upsert_post(&Post { id: "p1".into(), channel_id: "c1".into(), root_id: "".into(), user_id: "u1".into(), message: "first".into(), create_at: 1000, reply_count: 0, edit_at: 0, is_pinned: false, metadata: Default::default() }).unwrap();
 
         let posts = db.cached_posts_for_channel("c1").unwrap();
         assert_eq!(posts.len(), 2);
@@ -1154,9 +1276,9 @@ mod tests {
     #[test]
     fn cached_thread_posts_returns_root_and_replies_only() {
         let db = Database::open_in_memory().unwrap();
-        db.upsert_post(&Post { id: "root".into(), channel_id: "c1".into(), root_id: "".into(), user_id: "u1".into(), message: "root".into(), create_at: 1000, reply_count: 1, edit_at: 0, metadata: Default::default() }).unwrap();
-        db.upsert_post(&Post { id: "reply".into(), channel_id: "c1".into(), root_id: "root".into(), user_id: "u2".into(), message: "reply".into(), create_at: 2000, reply_count: 0, edit_at: 0, metadata: Default::default() }).unwrap();
-        db.upsert_post(&Post { id: "other".into(), channel_id: "c1".into(), root_id: "".into(), user_id: "u1".into(), message: "unrelated".into(), create_at: 3000, reply_count: 0, edit_at: 0, metadata: Default::default() }).unwrap();
+        db.upsert_post(&Post { id: "root".into(), channel_id: "c1".into(), root_id: "".into(), user_id: "u1".into(), message: "root".into(), create_at: 1000, reply_count: 1, edit_at: 0, is_pinned: false, metadata: Default::default() }).unwrap();
+        db.upsert_post(&Post { id: "reply".into(), channel_id: "c1".into(), root_id: "root".into(), user_id: "u2".into(), message: "reply".into(), create_at: 2000, reply_count: 0, edit_at: 0, is_pinned: false, metadata: Default::default() }).unwrap();
+        db.upsert_post(&Post { id: "other".into(), channel_id: "c1".into(), root_id: "".into(), user_id: "u1".into(), message: "unrelated".into(), create_at: 3000, reply_count: 0, edit_at: 0, is_pinned: false, metadata: Default::default() }).unwrap();
 
         let thread = db.cached_thread_posts("root").unwrap();
         assert_eq!(thread.len(), 2);
@@ -1167,9 +1289,9 @@ mod tests {
     #[test]
     fn search_posts_matches_by_word_prefix_newest_first_and_ignores_others() {
         let db = Database::open_in_memory().unwrap();
-        db.upsert_post(&Post { id: "p1".into(), channel_id: "c1".into(), root_id: "".into(), user_id: "u1".into(), message: "let's grab coffee tomorrow".into(), create_at: 1000, reply_count: 0, edit_at: 0, metadata: Default::default() }).unwrap();
-        db.upsert_post(&Post { id: "p2".into(), channel_id: "c2".into(), root_id: "".into(), user_id: "u2".into(), message: "the coffee machine is broken".into(), create_at: 2000, reply_count: 0, edit_at: 0, metadata: Default::default() }).unwrap();
-        db.upsert_post(&Post { id: "p3".into(), channel_id: "c1".into(), root_id: "".into(), user_id: "u1".into(), message: "unrelated message".into(), create_at: 3000, reply_count: 0, edit_at: 0, metadata: Default::default() }).unwrap();
+        db.upsert_post(&Post { id: "p1".into(), channel_id: "c1".into(), root_id: "".into(), user_id: "u1".into(), message: "let's grab coffee tomorrow".into(), create_at: 1000, reply_count: 0, edit_at: 0, is_pinned: false, metadata: Default::default() }).unwrap();
+        db.upsert_post(&Post { id: "p2".into(), channel_id: "c2".into(), root_id: "".into(), user_id: "u2".into(), message: "the coffee machine is broken".into(), create_at: 2000, reply_count: 0, edit_at: 0, is_pinned: false, metadata: Default::default() }).unwrap();
+        db.upsert_post(&Post { id: "p3".into(), channel_id: "c1".into(), root_id: "".into(), user_id: "u1".into(), message: "unrelated message".into(), create_at: 3000, reply_count: 0, edit_at: 0, is_pinned: false, metadata: Default::default() }).unwrap();
 
         // A partial word ("coff") should still match via prefix search, and
         // results should come back newest first, across every channel.
@@ -1182,7 +1304,7 @@ mod tests {
     #[test]
     fn search_posts_with_special_characters_does_not_error() {
         let db = Database::open_in_memory().unwrap();
-        db.upsert_post(&Post { id: "p1".into(), channel_id: "c1".into(), root_id: "".into(), user_id: "u1".into(), message: "does C++ compile?".into(), create_at: 1000, reply_count: 0, edit_at: 0, metadata: Default::default() }).unwrap();
+        db.upsert_post(&Post { id: "p1".into(), channel_id: "c1".into(), root_id: "".into(), user_id: "u1".into(), message: "does C++ compile?".into(), create_at: 1000, reply_count: 0, edit_at: 0, is_pinned: false, metadata: Default::default() }).unwrap();
 
         // Raw FTS5 syntax characters (unbalanced quote, operators) must not
         // turn a search into a MATCH syntax error.
@@ -1237,14 +1359,14 @@ mod tests {
     #[test]
     fn reply_count_is_computed_live_from_whats_actually_cached() {
         let db = Database::open_in_memory().unwrap();
-        db.upsert_post(&Post { id: "root".into(), channel_id: "c1".into(), root_id: "".into(), user_id: "u1".into(), message: "root".into(), create_at: 1000, reply_count: 0, edit_at: 0, metadata: Default::default() }).unwrap();
+        db.upsert_post(&Post { id: "root".into(), channel_id: "c1".into(), root_id: "".into(), user_id: "u1".into(), message: "root".into(), create_at: 1000, reply_count: 0, edit_at: 0, is_pinned: false, metadata: Default::default() }).unwrap();
 
         let before = db.cached_posts_for_channel("c1").unwrap();
         assert_eq!(before[0].reply_count, 0);
 
         // A reply arriving later (e.g. over the WebSocket) needs no separate
         // bookkeeping step — the next read just sees it.
-        db.upsert_post(&Post { id: "reply".into(), channel_id: "c1".into(), root_id: "root".into(), user_id: "u2".into(), message: "reply".into(), create_at: 2000, reply_count: 0, edit_at: 0, metadata: Default::default() }).unwrap();
+        db.upsert_post(&Post { id: "reply".into(), channel_id: "c1".into(), root_id: "root".into(), user_id: "u2".into(), message: "reply".into(), create_at: 2000, reply_count: 0, edit_at: 0, is_pinned: false, metadata: Default::default() }).unwrap();
 
         let after = db.cached_posts_for_channel("c1").unwrap();
         assert_eq!(after.iter().find(|p| p.id == "root").unwrap().reply_count, 1);
@@ -1262,6 +1384,7 @@ mod tests {
             create_at: 1000,
             reply_count: 0,
             edit_at: 0,
+            is_pinned: false,
             metadata: Default::default(),
         };
         db.upsert_post(&post).unwrap();
@@ -1292,6 +1415,7 @@ mod tests {
             create_at: 1000,
             reply_count: 0,
             edit_at: 0,
+            is_pinned: false,
             metadata: Default::default(),
         };
         db.upsert_post(&post).unwrap();
@@ -1335,6 +1459,7 @@ mod tests {
             create_at: 1000,
             reply_count: 0,
             edit_at: 0,
+            is_pinned: false,
             metadata: PostMetadata {
                 reactions: vec![
                     Reaction { user_id: "u1".into(), emoji_name: "+1".into() },
@@ -1381,6 +1506,7 @@ mod tests {
             create_at,
             reply_count: 0,
             edit_at: 0,
+            is_pinned: false,
             metadata,
         };
 
@@ -1440,6 +1566,7 @@ mod tests {
             create_at,
             reply_count: 0,
             edit_at: 0,
+            is_pinned: false,
             metadata: Default::default(),
         };
 
@@ -1492,6 +1619,7 @@ mod tests {
             create_at: 1000,
             reply_count: 0,
             edit_at: 0,
+            is_pinned: false,
             metadata: Default::default(),
         })
         .unwrap();
@@ -1538,6 +1666,7 @@ mod tests {
             create_at,
             reply_count: 0,
             edit_at,
+            is_pinned: false,
             metadata: Default::default(),
         };
 
@@ -1588,6 +1717,7 @@ mod tests {
             create_at: 1000,
             reply_count: 0,
             edit_at: 0,
+            is_pinned: false,
             metadata: PostMetadata {
                 reactions: vec![Reaction { user_id: "u1".into(), emoji_name: "+1".into() }],
                 files: vec![FileInfo { id: "f1".into(), name: "diagram.png".into(), size: 2048 }],

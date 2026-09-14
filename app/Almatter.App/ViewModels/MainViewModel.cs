@@ -49,10 +49,10 @@ public partial class MainViewModel : ViewModelBase
     /// re-marshalling, and re-deserializing) every message just to find out
     /// that nothing moved — the overwhelmingly common case.
     /// </summary>
-    private (string ChannelId, (long, long, long, long, long) Revision)? _lastChannelRevision;
+    private (string ChannelId, (long, long, long, long, long, long) Revision)? _lastChannelRevision;
 
     /// <summary>Same, for the open thread panel.</summary>
-    private (string RootId, (long, long, long, long, long) Revision)? _lastThreadRevision;
+    private (string RootId, (long, long, long, long, long, long) Revision)? _lastThreadRevision;
     private List<string> _lastRenderedOutboxIds = [];
     private bool _pollingStarted;
     private CancellationTokenSource? _pollingCts;
@@ -310,6 +310,20 @@ public partial class MainViewModel : ViewModelBase
         OnPropertyChanged(nameof(MyStatusLabel));
         OnPropertyChanged(nameof(MyPresenceBrush));
     }
+
+    /// <summary>The channel's pinned-messages panel.</summary>
+    [ObservableProperty]
+    public partial bool IsPinnedPanelOpen { get; set; }
+
+    /// <summary>What the channel header's pin button shows next to it — 0 hides the count entirely rather than showing a zero.</summary>
+    [ObservableProperty]
+    public partial int PinnedCount { get; set; }
+
+    partial void OnPinnedCountChanged(int value) => OnPropertyChanged(nameof(HasPinnedMessages));
+
+    public bool HasPinnedMessages => PinnedCount > 0;
+
+    public ObservableCollection<PinnedMessageItem> PinnedMessages { get; } = [];
 
     /// <summary>Emoji picker — opened from a message's "+" button, or from either composer's smiley.</summary>
     [ObservableProperty]
@@ -1000,7 +1014,16 @@ public partial class MainViewModel : ViewModelBase
         MarkChannelViewed(channelId);
         ComposerFocusRequested?.Invoke(this, EventArgs.Empty);
 
+        IsPinnedPanelOpen = false;
+        PinnedMessages.Clear();
+        PinnedCount = 0;
+
         var paintedFromCache = await TryPaintMessagesFromCacheAsync(channelId);
+
+        // Not awaited: the header's pin count is peripheral, and making the
+        // channel switch itself wait on it would trade a visible delay for
+        // information nobody is looking at yet.
+        _ = RefreshPinnedMessagesAsync(channelId);
 
         try
         {
@@ -2211,6 +2234,171 @@ public partial class MainViewModel : ViewModelBase
         }
     }
 
+    /// <summary>
+    /// Pins or unpins a message. The conversation and the panel are both
+    /// updated from the post the server hands back rather than from what we
+    /// assumed — if the pin were refused (no permission, message deleted
+    /// under us), showing it as pinned anyway would be a lie the next poll
+    /// would silently undo.
+    /// </summary>
+    [RelayCommand]
+    private async Task TogglePinAsync(MessageItem? message)
+    {
+        if (message is null || message.IsPending)
+        {
+            return;
+        }
+
+        var wanted = !message.IsPinned;
+        try
+        {
+            var updated = await _service.SetPostPinnedAsync(_session.BaseUrl, _session.Token, message.Id, wanted);
+            ApplyPinnedState(updated.Id, updated.IsPinned);
+            await RefreshPinnedMessagesAsync(_activeChannelId);
+        }
+        catch (MattermostServiceException ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+    }
+
+    /// <summary>Moves one message's pin marker wherever that message is currently on screen — the conversation, a thread reply, or the thread's root.</summary>
+    private void ApplyPinnedState(string postId, bool isPinned)
+    {
+        foreach (var message in Messages)
+        {
+            if (message.Id == postId)
+            {
+                message.IsPinned = isPinned;
+            }
+        }
+        foreach (var reply in ThreadReplies)
+        {
+            if (reply.Id == postId)
+            {
+                reply.IsPinned = isPinned;
+            }
+        }
+        if (ThreadRootMessage is { } root && root.Id == postId)
+        {
+            root.IsPinned = isPinned;
+        }
+    }
+
+    [RelayCommand]
+    private async Task OpenPinnedPanelAsync()
+    {
+        IsPinnedPanelOpen = true;
+        await RefreshPinnedMessagesAsync(_activeChannelId);
+    }
+
+    [RelayCommand]
+    private void ClosePinnedPanel() => IsPinnedPanelOpen = false;
+
+    /// <summary>Bound to a row in the pinned panel — closes it and jumps the conversation to that message.</summary>
+    [RelayCommand]
+    private async Task JumpToPinnedMessageAsync(PinnedMessageItem? item)
+    {
+        if (item is null)
+        {
+            return;
+        }
+        IsPinnedPanelOpen = false;
+        if (_activeChannelId is { } channelId)
+        {
+            await JumpToMessageAsync(channelId, item.PostId);
+        }
+    }
+
+    [RelayCommand]
+    private async Task UnpinFromPanelAsync(PinnedMessageItem? item)
+    {
+        if (item is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var updated = await _service.SetPostPinnedAsync(_session.BaseUrl, _session.Token, item.PostId, false);
+            ApplyPinnedState(updated.Id, updated.IsPinned);
+            await RefreshPinnedMessagesAsync(_activeChannelId);
+        }
+        catch (MattermostServiceException ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+    }
+
+    /// <summary>
+    /// Cache first, then the network — the same shape as everything else
+    /// here, so the panel and the header count paint instantly on a channel
+    /// already visited and correct themselves a moment later.
+    ///
+    /// The network pass also reconciles: the server's pinned list says what
+    /// IS pinned, so the core clears the channel's flags before laying the
+    /// answer down, and a message unpinned by someone else disappears from
+    /// here by being absent rather than by being reported.
+    /// </summary>
+    private async Task RefreshPinnedMessagesAsync(string? channelId)
+    {
+        if (string.IsNullOrEmpty(channelId))
+        {
+            return;
+        }
+
+        try
+        {
+            await PopulatePinnedAsync(channelId, await _service.GetCachedPinnedPostsAsync(channelId));
+        }
+        catch (MattermostServiceException ex)
+        {
+            CrashLogger.Write("pinned: cached read failed", ex);
+        }
+
+        try
+        {
+            await PopulatePinnedAsync(
+                channelId,
+                await _service.GetPinnedPostsAsync(_session.BaseUrl, _session.Token, channelId));
+        }
+        catch (MattermostServiceException ex)
+        {
+            // Offline, or the server refused — whatever the cache had stays up.
+            CrashLogger.Write("pinned: network read failed", ex);
+        }
+    }
+
+    private async Task PopulatePinnedAsync(string channelId, List<PostDto> posts)
+    {
+        // The user may have clicked away while this was in flight; painting
+        // another channel's pins over the current one would be worse than
+        // painting nothing.
+        if (channelId != _activeChannelId)
+        {
+            return;
+        }
+
+        var authors = (await _service.GetCachedUsersAsync(posts.Select(p => p.UserId).Distinct()))
+            .ToDictionary(u => u.Id);
+
+        PinnedMessages.Clear();
+        foreach (var post in posts)
+        {
+            authors.TryGetValue(post.UserId, out var author);
+            PinnedMessages.Add(new PinnedMessageItem
+            {
+                PostId = post.Id,
+                AuthorName = author?.DisplayName ?? "Utilisateur inconnu",
+                AuthorInitials = author?.Initials ?? "?",
+                AvatarHex = AvatarColorFor(post.UserId),
+                TimeLabel = FormatTime(post.CreateAt),
+                Text = post.Message,
+            });
+        }
+        PinnedCount = PinnedMessages.Count;
+    }
+
     /// <summary>Bound to a message's "+" button — opens the emoji picker targeting that specific message.</summary>
     [RelayCommand]
     private async Task OpenEmojiPickerAsync(string postId)
@@ -3041,6 +3229,7 @@ public partial class MainViewModel : ViewModelBase
                 IsContinuation = IsContinuationOf(previous, post.UserId, post.CreateAt),
                 Reactions = BuildReactions(post),
                 Attachments = BuildAttachments(post),
+                IsPinned = post.IsPinned,
                 EmojiImageResolver = ResolveTextEmojiAsync,
             };
             _ = ResolveMessageAvatarAsync(item, post.UserId);
@@ -3078,6 +3267,10 @@ public partial class MainViewModel : ViewModelBase
                 if (EditPartOfKey(_lastRenderedThreadKeys[i]) != EditPartOfKey(keys[i]))
                 {
                     ThreadReplies[i].ApplyEditedText(replies[i].Message);
+                }
+                if (PinnedPartOfKey(_lastRenderedThreadKeys[i]) != PinnedPartOfKey(keys[i]))
+                {
+                    ThreadReplies[i].IsPinned = replies[i].IsPinned;
                 }
                 if (ReactionPartOfKey(_lastRenderedThreadKeys[i]) != ReactionPartOfKey(keys[i]))
                 {
@@ -3750,6 +3943,10 @@ public partial class MainViewModel : ViewModelBase
                 {
                     ReplaceReactionsInPlace(Messages[i], ordered[i]);
                 }
+                if (PinnedPartOfKey(_lastRenderedPostKeys[i]) != PinnedPartOfKey(keys[i]))
+                {
+                    Messages[i].IsPinned = ordered[i].IsPinned;
+                }
             }
         }
         else
@@ -3795,6 +3992,7 @@ public partial class MainViewModel : ViewModelBase
                 IsContinuation = IsContinuationOf(previous, post.UserId, post.CreateAt),
                 Reactions = BuildReactions(post),
                 Attachments = BuildAttachments(post),
+                IsPinned = post.IsPinned,
                 EmojiImageResolver = ResolveTextEmojiAsync,
             };
             _ = ResolveMessageAvatarAsync(item, post.UserId);
@@ -3813,10 +4011,11 @@ public partial class MainViewModel : ViewModelBase
 
     /// <summary>
     /// Everything about a message that the view renders and that can change
-    /// under it without the message itself being replaced: its edit stamp
-    /// and its reactions. Compared field by field so each change updates
-    /// only what it affects. The separator is a control character precisely
-    /// because no id, emoji name or user id can contain one.
+    /// under it without the message itself being replaced: its edit stamp,
+    /// its reactions and whether it's pinned. Compared field by field so
+    /// each change updates only what it affects. The separator is a control
+    /// character precisely because no id, emoji name or user id can contain
+    /// one.
     /// </summary>
     private static string RenderKey(PostDto post)
     {
@@ -3825,12 +4024,13 @@ public partial class MainViewModel : ViewModelBase
             post.Metadata.Reactions
                 .Select(r => $"{r.EmojiName}={r.UserId}")
                 .OrderBy(r => r, StringComparer.Ordinal));
-        return $"{post.Id}{post.EditAt}{reactions}";
+        return $"{post.Id}{post.EditAt}{reactions}{(post.IsPinned ? 1 : 0)}";
     }
 
     private static string PostIdOfKey(string key) => PartOfKey(key, 0);
     private static string EditPartOfKey(string key) => PartOfKey(key, 1);
     private static string ReactionPartOfKey(string key) => PartOfKey(key, 2);
+    private static string PinnedPartOfKey(string key) => PartOfKey(key, 3);
 
     private static string PartOfKey(string key, int index)
     {
