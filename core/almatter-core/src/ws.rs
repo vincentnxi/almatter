@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Mutex;
 use std::time::Duration;
@@ -51,6 +52,16 @@ struct EventData {
     /// Set on a `typing` event: who's typing. Absent (not this user's own
     /// typing being echoed back) on every other event type this app reads.
     user_id: Option<String>,
+    /// Set on `channel_viewed`: the channel this user just read, possibly
+    /// on another device (the phone, the web app).
+    channel_id: Option<String>,
+    /// Set on `multiple_channels_viewed`, the newer servers' batched form
+    /// of `channel_viewed`: channel id → when it was viewed.
+    channel_times: Option<HashMap<String, i64>>,
+    /// Set on `post_unread`, when this user marks a channel unread from a
+    /// message on another device: the read state the server now holds.
+    msg_count: Option<i64>,
+    mention_count: Option<i64>,
 }
 
 #[derive(Deserialize)]
@@ -158,8 +169,13 @@ pub fn start(base_url: String, token: String, user_id: String, db: &'static Mute
         // them, quietly stop arriving. So reconnect, backing off so a server
         // that is genuinely down is not hammered.
         let mut backoff = RECONNECT_MIN;
+        // The first connection comes right alongside the app's own channel
+        // fetch; only a reconnection has a gap of missed events to make up.
+        let mut is_reconnect = false;
         loop {
-            match run(base_url.clone(), token.clone(), user_id.clone(), db).await {
+            let outcome = run(base_url.clone(), token.clone(), user_id.clone(), db, is_reconnect).await;
+            is_reconnect = true;
+            match outcome {
                 Ok(Ended::ByRequest) => break,
                 Ok(Ended::Dropped) => {
                     // It connected and ran, so the server is reachable and
@@ -195,7 +211,13 @@ enum Ended {
     Dropped,
 }
 
-async fn run(base_url: String, token: String, user_id: String, db: &'static Mutex<Database>) -> Result<Ended, WsError> {
+async fn run(
+    base_url: String,
+    token: String,
+    user_id: String,
+    db: &'static Mutex<Database>,
+    is_reconnect: bool,
+) -> Result<Ended, WsError> {
     let url = websocket_url(&base_url);
     crate::db::log("ws", &format!("connecting to {url}"));
     let (stream, _response) = match tokio_tungstenite::connect_async(&url).await {
@@ -227,6 +249,22 @@ async fn run(base_url: String, token: String, user_id: String, db: &'static Mute
     *WS_STOP.lock().expect("ws stop mutex poisoned") = Some(stop_tx);
 
     let client = MattermostClient::new(base_url).with_token(token);
+
+    // Whatever happened while the socket was down — a laptop asleep while
+    // the phone read half the conversations — sent no event this app will
+    // ever see. Re-read every cached team's channels and read state once,
+    // in the background so live events keep flowing meanwhile.
+    if is_reconnect {
+        let client = client.clone();
+        tokio::spawn(async move {
+            let teams = db.lock().expect("cache db mutex poisoned").cached_teams().unwrap_or_default();
+            for team in teams {
+                if let Err(e) = crate::dispatch::refresh_team_channels(&client, db, &team.id).await {
+                    crate::db::log("ws", &format!("read-state resync failed for team {}: {e}", team.id));
+                }
+            }
+        });
+    }
 
     let mut event_count = 0u64;
     let mut ended = Ended::Dropped;
@@ -358,6 +396,42 @@ async fn handle_event(text: &str, user_id: &str, client: &MattermostClient, db: 
                 };
                 if let Err(e) = result {
                     crate::db::log("ws", &format!("failed to apply a reaction: {e}"));
+                }
+            }
+            return;
+        }
+        // This user read a channel somewhere else — the phone, the web app,
+        // or this very app, whose own view comes back as an echo (harmless:
+        // it's already marked read). Older servers send one channel per
+        // event; newer ones batch them into `channel_times`.
+        Some("channel_viewed") | Some("multiple_channels_viewed") => {
+            let Some(data) = envelope.data.as_ref() else {
+                return;
+            };
+            let viewed: Vec<&str> = data
+                .channel_id
+                .as_deref()
+                .into_iter()
+                .chain(data.channel_times.iter().flat_map(|times| times.keys().map(String::as_str)))
+                .collect();
+            let cache = db.lock().expect("cache db mutex poisoned");
+            for channel_id in viewed {
+                if let Err(e) = cache.mark_channel_read(channel_id) {
+                    crate::db::log("ws", &format!("failed to apply a channel view: {e}"));
+                }
+            }
+            return;
+        }
+        // The reverse: "mark as unread" from another device. The event
+        // carries the resulting counts, so they are applied as-is.
+        Some("post_unread") => {
+            let channel_id = envelope.broadcast.as_ref().and_then(|b| b.channel_id.as_deref());
+            let data = envelope.data.as_ref();
+            if let (Some(channel_id), Some(msg_count)) = (channel_id, data.and_then(|d| d.msg_count)) {
+                let mention_count = data.and_then(|d| d.mention_count).unwrap_or(0);
+                let cache = db.lock().expect("cache db mutex poisoned");
+                if let Err(e) = cache.set_channel_read_state(channel_id, msg_count, mention_count) {
+                    crate::db::log("ws", &format!("failed to apply a mark-unread: {e}"));
                 }
             }
             return;
@@ -668,6 +742,85 @@ mod tests {
 
         handle_event(&event.to_string(), "me", &client, db).await;
         assert!(db.lock().unwrap().drain_mention_events().unwrap().is_empty());
+    }
+
+    /// A database holding one team with `channel_ids`, each 10 messages
+    /// long with 7 already read and 2 mentions among the rest.
+    fn db_with_unread_channels(channel_ids: &[&str]) -> &'static Mutex<Database> {
+        use crate::models::{Channel, ChannelType, Team};
+
+        let db: &'static Mutex<Database> =
+            Box::leak(Box::new(Mutex::new(Database::open_in_memory().unwrap())));
+        let cache = db.lock().unwrap();
+        cache.upsert_team(&Team { id: "t1".into(), name: "acme".into(), display_name: "Acme".into() }).unwrap();
+        for id in channel_ids {
+            cache
+                .upsert_channel(&Channel {
+                    id: (*id).into(),
+                    team_id: "t1".into(),
+                    name: (*id).into(),
+                    display_name: (*id).into(),
+                    channel_type: ChannelType::Public,
+                    total_msg_count: 10,
+                    last_post_at: 0,
+                    msg_count: 7,
+                    mention_count: 2,
+                    is_muted: false,
+                })
+                .unwrap();
+        }
+        drop(cache);
+        db
+    }
+
+    fn read_state(db: &Mutex<Database>, channel_id: &str) -> (i64, i64) {
+        let channels = db.lock().unwrap().cached_channels_for_team("t1").unwrap();
+        let channel = channels.iter().find(|c| c.id == channel_id).unwrap();
+        (channel.total_msg_count - channel.msg_count, channel.mention_count)
+    }
+
+    #[tokio::test]
+    async fn handle_event_marks_a_channel_read_on_another_devices_view() {
+        let db = db_with_unread_channels(&["c1", "c2"]);
+        let client = MattermostClient::new("http://127.0.0.1:1");
+
+        let event = json!({ "event": "channel_viewed", "data": { "channel_id": "c1" } });
+        handle_event(&event.to_string(), "me", &client, db).await;
+
+        assert_eq!(read_state(db, "c1"), (0, 0));
+        assert_eq!(read_state(db, "c2"), (3, 2), "only the viewed channel is cleared");
+    }
+
+    #[tokio::test]
+    async fn handle_event_marks_every_channel_in_a_batched_view_read() {
+        let db = db_with_unread_channels(&["c1", "c2", "c3"]);
+        let client = MattermostClient::new("http://127.0.0.1:1");
+
+        let event = json!({
+            "event": "multiple_channels_viewed",
+            "data": { "channel_times": { "c1": 1_700_000_000_000i64, "c2": 1_700_000_000_000i64 } }
+        });
+        handle_event(&event.to_string(), "me", &client, db).await;
+
+        assert_eq!(read_state(db, "c1"), (0, 0));
+        assert_eq!(read_state(db, "c2"), (0, 0));
+        assert_eq!(read_state(db, "c3"), (3, 2));
+    }
+
+    #[tokio::test]
+    async fn handle_event_applies_a_mark_unread_from_another_device() {
+        let db = db_with_unread_channels(&["c1"]);
+        let client = MattermostClient::new("http://127.0.0.1:1");
+        db.lock().unwrap().mark_channel_read("c1").unwrap();
+
+        let event = json!({
+            "event": "post_unread",
+            "data": { "msg_count": 4, "mention_count": 1, "post_id": "p5", "last_viewed_at": 0 },
+            "broadcast": { "channel_id": "c1" }
+        });
+        handle_event(&event.to_string(), "me", &client, db).await;
+
+        assert_eq!(read_state(db, "c1"), (6, 1));
     }
 
     #[test]

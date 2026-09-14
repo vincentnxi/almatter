@@ -393,67 +393,10 @@ async fn handle(request_json: &str, db: &'static Mutex<Database>) -> Value {
             .map_err(|e| e.to_string()),
         Request::GetChannels { base_url, token, team_id } => {
             let client = MattermostClient::new(base_url).with_token(token);
-            match client.get_channels_for_team(&team_id).await {
-                Ok(mut channels) => {
-                    // Per-user read state comes from a separate endpoint —
-                    // a failure here must NOT fall through to caching these
-                    // channels with their freshly-fetched (and therefore
-                    // defaulted 0/0/false) msg_count/mention_count/is_muted:
-                    // that would clobber whatever was genuinely cached for
-                    // them already, silently unmuting channels and resetting
-                    // unread/mention counts on a transient network hiccup.
-                    // Falling back to the previous cache is a safe-ish
-                    // default for a channel that's never been cached before
-                    // too (0/0/false, "looks unread") — no worse than not
-                    // having the feature at all.
-                    let merged = if let Ok(members) = client.get_channel_members_for_team(&team_id).await {
-                        let by_channel: std::collections::HashMap<String, (i64, i64, bool)> = members
-                            .into_iter()
-                            .map(|m| {
-                                let muted = m.is_muted();
-                                (m.channel_id, (m.msg_count, m.mention_count, muted))
-                            })
-                            .collect();
-                        for channel in &mut channels {
-                            if let Some(&(msg_count, mention_count, is_muted)) = by_channel.get(&channel.id) {
-                                channel.msg_count = msg_count;
-                                channel.mention_count = mention_count;
-                                channel.is_muted = is_muted;
-                            }
-                        }
-                        true
-                    } else {
-                        false
-                    };
-
-                    if !merged {
-                        let previously_cached: std::collections::HashMap<String, crate::models::Channel> = db
-                            .lock()
-                            .expect("cache db mutex poisoned")
-                            .cached_channels_for_team(&team_id)
-                            .unwrap_or_default()
-                            .into_iter()
-                            .map(|c| (c.id.clone(), c))
-                            .collect();
-                        for channel in &mut channels {
-                            if let Some(prev) = previously_cached.get(&channel.id) {
-                                channel.msg_count = prev.msg_count;
-                                channel.mention_count = prev.mention_count;
-                                channel.is_muted = prev.is_muted;
-                            }
-                        }
-                    }
-
-                    cache_write(db, |cache| {
-                        for channel in &channels {
-                            cache.upsert_channel(channel)?;
-                        }
-                        Ok(())
-                    });
-                    Ok(json!({ "channels": channels }))
-                }
-                Err(e) => Err(e.to_string()),
-            }
+            refresh_team_channels(&client, db, &team_id)
+                .await
+                .map(|channels| json!({ "channels": channels }))
+                .map_err(|e| e.to_string())
         }
         Request::GetPosts { base_url, token, channel_id } => MattermostClient::new(base_url)
             .with_token(token)
@@ -975,6 +918,73 @@ fn cache_write(db: &Mutex<Database>, f: impl FnOnce(&Database) -> rusqlite::Resu
     if let Err(e) = cache.in_transaction(|| f(&cache)) {
         eprintln!("almatter-core: failed to update local cache: {e}");
     }
+}
+
+/// Fetches a team's channels together with this user's read state for each
+/// one, and caches the result. Shared by `get_channels` and by the
+/// WebSocket's reconnect, which uses it to catch up on channels that were
+/// read on another device while the connection was down.
+pub(crate) async fn refresh_team_channels(
+    client: &MattermostClient,
+    db: &Mutex<Database>,
+    team_id: &str,
+) -> Result<Vec<crate::models::Channel>, ApiError> {
+    let mut channels = client.get_channels_for_team(team_id).await?;
+
+    // Per-user read state comes from a separate endpoint — a failure here
+    // must NOT fall through to caching these channels with their
+    // freshly-fetched (and therefore defaulted 0/0/false)
+    // msg_count/mention_count/is_muted: that would clobber whatever was
+    // genuinely cached for them already, silently unmuting channels and
+    // resetting unread/mention counts on a transient network hiccup.
+    // Falling back to the previous cache is a safe-ish default for a channel
+    // that's never been cached before too (0/0/false, "looks unread") — no
+    // worse than not having the feature at all.
+    let merged = if let Ok(members) = client.get_channel_members_for_team(team_id).await {
+        let by_channel: std::collections::HashMap<String, (i64, i64, bool)> = members
+            .into_iter()
+            .map(|m| {
+                let muted = m.is_muted();
+                (m.channel_id, (m.msg_count, m.mention_count, muted))
+            })
+            .collect();
+        for channel in &mut channels {
+            if let Some(&(msg_count, mention_count, is_muted)) = by_channel.get(&channel.id) {
+                channel.msg_count = msg_count;
+                channel.mention_count = mention_count;
+                channel.is_muted = is_muted;
+            }
+        }
+        true
+    } else {
+        false
+    };
+
+    if !merged {
+        let previously_cached: std::collections::HashMap<String, crate::models::Channel> = db
+            .lock()
+            .expect("cache db mutex poisoned")
+            .cached_channels_for_team(team_id)
+            .unwrap_or_default()
+            .into_iter()
+            .map(|c| (c.id.clone(), c))
+            .collect();
+        for channel in &mut channels {
+            if let Some(prev) = previously_cached.get(&channel.id) {
+                channel.msg_count = prev.msg_count;
+                channel.mention_count = prev.mention_count;
+                channel.is_muted = prev.is_muted;
+            }
+        }
+    }
+
+    cache_write(db, |cache| {
+        for channel in &channels {
+            cache.upsert_channel(channel)?;
+        }
+        Ok(())
+    });
+    Ok(channels)
 }
 
 /// After a reaction is added/removed, re-fetching the single post is simpler

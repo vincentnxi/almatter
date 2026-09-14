@@ -539,6 +539,17 @@ impl Database {
         Ok(())
     }
 
+    /// The server's word on this user's read state for one channel, as
+    /// carried by a live `post_unread` event (the channel was marked unread
+    /// from another device).
+    pub fn set_channel_read_state(&self, channel_id: &str, msg_count: i64, mention_count: i64) -> rusqlite::Result<()> {
+        self.conn.execute(
+            "UPDATE channels SET msg_count = ?2, mention_count = ?3 WHERE id = ?1",
+            params![channel_id, msg_count, mention_count],
+        )?;
+        Ok(())
+    }
+
     /// Called by the WebSocket handler the moment it sees a `posted` event
     /// mentioning the current user. `INSERT OR IGNORE` since the same post
     /// can occasionally be redelivered over the socket.

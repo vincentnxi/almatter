@@ -52,6 +52,7 @@ impl ApiError {
 
 /// Thin REST client for a single Mattermost server. Every call here is what
 /// keeps the local SQLite cache warm; the UI never calls the network directly.
+#[derive(Clone)]
 pub struct MattermostClient {
     base_url: String,
     token: Option<String>,
