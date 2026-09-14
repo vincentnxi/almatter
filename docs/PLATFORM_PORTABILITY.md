@@ -26,20 +26,29 @@ depuis, est spécifique à Windows et à réécrire.
 
 ## Spécifique à Windows (ajouté depuis le début du projet)
 
-Tout ce qui suit vient de `Almatter.App.csproj` : `<TargetFramework>net10.0-windows</TargetFramework>`
-et `<UseWindowsForms>true</UseWindowsForms>` — un vrai portage doit d'abord cibler
-`net10.0` (ou multi-cibler) et retirer/remplacer chaque usage de WinForms listé ici.
+Le projet cible encore `<TargetFramework>net10.0-windows</TargetFramework>` ; un vrai
+portage doit d'abord cibler `net10.0` (ou multi-cibler). **Windows Forms n'est plus utilisé
+depuis le 2026-09-14** (`UseWindowsForms` retiré) : il coûtait ~13 Mo pour une icône de
+notification et le presse-papiers, et n'existe pas hors Windows. Ce qui reste propre à
+Windows est isolé ci-dessous.
 
 | Fonctionnalité | Fichier | Mécanisme Windows | Piste macOS / Linux |
 |---|---|---|---|
-| Icône barre système + notifications | `Views/MainWindow.axaml.cs` (`SetupTrayIcon`, `ShowMentionNotification`) | `System.Windows.Forms.NotifyIcon` + `ShowBalloonTip` | Avalonia a son **propre** `TrayIcon` cross-platform (`Avalonia.Controls.TrayIcon`) — à utiliser à la place plutôt que du code par OS. Pour les notifications elles-mêmes, pas d'équivalent Avalonia intégré : notification native macOS (`UNUserNotificationCenter` via interop) et `org.freedesktop.Notifications` (D-Bus) sur Linux. |
-| Presse-papiers lors du collage de liens | `Views/MainWindow.axaml.cs` (`TryHandleLinkAwarePaste`, `ExtractHtmlFragment`) | `System.Windows.Forms.Clipboard`, format `CF_HTML` (en-tête StartFragment/EndFragment propre à Windows) | Utiliser l'`IClipboard`/`TopLevel.Clipboard` d'Avalonia (déjà cross-platform) ; l'extraction du fragment HTML doit être adaptée, macOS/Linux n'exposent pas le même format d'en-tête que CF_HTML. |
+| Notifications de mention (+ icône de la zone de notification) | `Services/DesktopNotifier.cs` (`WindowsTrayNotifier`), utilisé via l'interface `IDesktopNotifier` | `Shell_NotifyIconW` (shell32, P/Invoke sans `unsafe`) ; le clic revient comme message fenêtre, reçu par `Win32Properties.AddWndProcHookCallback` d'Avalonia | Écrire une implémentation de `IDesktopNotifier` par OS et la brancher dans `DesktopNotifier.Create` — hors Windows, elle renvoie aujourd'hui une implémentation vide (l'app marche, sans notifications). Linux : `org.freedesktop.Notifications` (D-Bus), qui gère aussi le clic (signal `ActionInvoked`). macOS : `UNUserNotificationCenter`. |
 | Barre de titre sombre | `Views/MainWindow.axaml.cs` (`ApplyTitleBarTheme`, P/Invoke `dwmapi.dll`) | `DwmSetWindowAttribute` (Windows uniquement) | macOS : `NSWindow.appearance` (interop Cocoa/Avalonia natif). Linux : dépend du gestionnaire de fenêtres, généralement non pilotable depuis l'appli — probablement à laisser tomber ou no-op. |
-| Badge sur l'icône (barre des tâches) | `Services/TaskbarBadge.cs` (interop COM `ITaskbarList3`) | Shell Windows uniquement | macOS : `NSDockTile.badgeLabel` (interop Cocoa). Linux : pas d'équivalent standard (quelques DE supportent l'API Unity Launcher, la plupart non) — no-op probable. |
-| Session persistée de façon sécurisée | `Services/SessionStore.cs` | `System.Security.Cryptography.ProtectedData` (DPAPI, Windows uniquement) | macOS : Keychain (interop Security.framework). Linux : Secret Service / libsecret (D-Bus), avec repli sur un fichier à permissions restreintes si indisponible. |
+| Badge sur l'icône (barre des tâches) | `Services/TaskbarBadge.cs` (interop COM `ITaskbarList3`, `CreateIconIndirect`) | Shell Windows uniquement. Le **dessin** de la pastille (`RenderPixels`) passe par Skia et est portable ; seule sa pose sur le bouton est propre à Windows | macOS : `NSDockTile.badgeLabel` (interop Cocoa). Linux : pas d'équivalent standard (quelques DE supportent l'API Unity Launcher, la plupart non) — no-op probable. |
+| Session persistée de façon sécurisée | `Services/SessionStore.cs` | `System.Security.Cryptography.ProtectedData` (DPAPI, Windows uniquement) — paquet NuGet explicite depuis le retrait de Windows Forms, qui l'apportait implicitement | macOS : Keychain (interop Security.framework). Linux : Secret Service / libsecret (D-Bus), avec repli sur un fichier à permissions restreintes si indisponible. |
 
 ## Déjà cross-platform, à ne pas confondre
 
+- **Collage qui conserve les liens** (`Services/LinkAwarePaste.cs`) : passe par le
+  presse-papiers d'Avalonia. Le nom du format HTML est choisi par OS (`HTML Format` sous
+  Windows, `text/html` sous Linux, `public.html` sous macOS) et lu en octets. Vérifié sous
+  Windows avec du HTML écrit comme par un navigateur (UTF-8, accents, tirets, émoji). **Non
+  testé** sous Linux/macOS : l'extraction du fragment se replie sur le HTML entier quand les
+  marqueurs `StartFragment` propres à Windows sont absents, ce qui devrait suffire, à vérifier.
+- **Décodage des images d'aperçu de lien** (`ViewModels/CardImageDecoder.cs`) : SkiaSharp,
+  livré avec Avalonia sur les trois OS.
 - **Suivi du thème clair/sombre du système** (`Services/SystemTheme.cs`) : passe par
   `PlatformSettings.GetColorValues()` d'Avalonia, implémenté sur les trois OS. Seule
   la *teinte de la barre de titre* qui en découle est propre à Windows (ligne ci-dessus).
@@ -53,10 +62,10 @@ et `<UseWindowsForms>true</UseWindowsForms>` — un vrai portage doit d'abord ci
 ## Point d'entrée pour la reprise
 
 1. Faire cibler `net10.0` (multi-ciblage `net10.0-windows`/`net10.0` si Windows doit
-   rester supporté en parallèle) et retirer `UseWindowsForms`.
-2. Remplacer le tray icon par `Avalonia.Controls.TrayIcon` (fonctionne déjà sur les
-   trois OS) ; ne garder du code par-OS que pour les notifications et le badge/dock,
-   qui n'ont pas d'API commune.
+   rester supporté en parallèle). `UseWindowsForms` est déjà retiré.
+2. Écrire l'implémentation Linux de `IDesktopNotifier` (D-Bus). Si une icône permanente
+   dans la zone de notification est voulue sur les autres OS, `Avalonia.Controls.TrayIcon`
+   existe — mais il ne sait pas afficher de notification, d'où l'interface.
 3. Encapsuler chaque bloc du tableau ci-dessus derrière une vérification de plateforme
    (`OperatingSystem.IsWindows()` / `IsMacOS()` / `IsLinux()`) avec une implémentation
    (ou un no-op assumé) par OS.

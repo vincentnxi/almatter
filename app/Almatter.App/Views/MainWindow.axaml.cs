@@ -7,11 +7,13 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Almatter.App.Models;
+using Almatter.App.Services;
 using Almatter.App.ViewModels;
 
 namespace Almatter.App.Views;
@@ -40,14 +42,21 @@ public partial class MainWindow : Window
     private bool _reorderPlaceAfter;
     private bool _reorderMoveToRegular;
 
-    private System.Windows.Forms.NotifyIcon? _trayIcon;
+    private IDesktopNotifier? _notifier;
     private (string ChannelId, string PostId)? _pendingNotificationTarget;
 
     public MainWindow()
     {
         InitializeComponent();
-        SetupTrayIcon();
-        Closed += (_, _) => _trayIcon?.Dispose();
+
+        // Once the window is open, so it has the native handle the Windows
+        // notifier routes its click messages through.
+        Opened += (_, _) =>
+        {
+            _notifier ??= DesktopNotifier.Create(this);
+            _notifier.Clicked += OnNotificationClicked;
+        };
+        Closed += (_, _) => _notifier?.Dispose();
 
         // Remembers the window size across restarts — read once on the way
         // in, written back on the way out. Closing (not Closed) fires while
@@ -678,103 +687,43 @@ public partial class MainWindow : Window
     /// original. Anything without a link in it pastes exactly as before —
     /// this only ever adds information, never removes any.
     /// </summary>
-    private static bool TryHandleLinkAwarePaste(KeyEventArgs e, TextBox? textBox)
+    private bool TryHandleLinkAwarePaste(KeyEventArgs e, TextBox? textBox)
     {
-        if (textBox is null || e.Key != Key.V || e.KeyModifiers != KeyModifiers.Control)
+        if (textBox is null || e.Key != Key.V || e.KeyModifiers != KeyModifiers.Control || Clipboard is not { } clipboard)
         {
             return false;
         }
 
-        string? pasteText;
-        try
-        {
-            if (!System.Windows.Forms.Clipboard.ContainsText(System.Windows.Forms.TextDataFormat.Html))
-            {
-                return false;
-            }
-            var html = System.Windows.Forms.Clipboard.GetText(System.Windows.Forms.TextDataFormat.Html);
-            pasteText = ExtractTextPreservingLinks(html);
-        }
-        catch
-        {
-            // Clipboard access can transiently fail (another app briefly holding it, unsupported format, ...) — fall back to the default plain-text paste.
-            return false;
-        }
-
-        if (pasteText is null)
-        {
-            // No link in the clipboard's HTML — nothing to recover, let the default paste (plain text) happen normally.
-            return false;
-        }
-
+        // Avalonia's clipboard is asynchronous, and whether the key press is
+        // handled has to be decided now, before anything can be read. So every
+        // Ctrl+V is taken over here, and the paste finishes a moment later:
+        // with the link recovered when there is one, and as the TextBox's
+        // own ordinary paste when there isn't.
         e.Handled = true;
-        InsertTextAtCaret(textBox, pasteText);
+        _ = PasteKeepingLinksAsync(clipboard, textBox);
         return true;
     }
 
-    private static readonly Regex AnchorTagRegex = new(
-        @"<a\b[^>]*\bhref\s*=\s*[""']([^""']+)[""'][^>]*>(.*?)</a>",
-        RegexOptions.IgnoreCase | RegexOptions.Singleline);
-
-    /// <summary>
-    /// Windows' clipboard HTML format (CF_HTML) is the whole descriptor —
-    /// a "Version:0.9 / StartHTML:.../ EndHTML:..." header followed by the
-    /// actual markup — not just the fragment; Clipboard.GetText(Html)
-    /// hands that back verbatim rather than stripping it. The real content
-    /// is standardized as sitting between "&lt;!--StartFragment--&gt;" and
-    /// "&lt;!--EndFragment--&gt;" comments, which sidesteps needing to
-    /// parse the header's byte offsets (awkward together with Unicode).
-    /// </summary>
-    private static string ExtractHtmlFragment(string cfHtml)
+    private static async Task PasteKeepingLinksAsync(Avalonia.Input.Platform.IClipboard clipboard, TextBox textBox)
     {
-        const string startMarker = "<!--StartFragment-->";
-        const string endMarker = "<!--EndFragment-->";
-        var start = cfHtml.IndexOf(startMarker, StringComparison.Ordinal);
-        var end = cfHtml.IndexOf(endMarker, StringComparison.Ordinal);
-        return start >= 0 && end > start
-            ? cfHtml[(start + startMarker.Length)..end]
-            : cfHtml;
-    }
-
-    /// <summary>Null means "no link found" — the caller falls back to the normal plain-text paste in that case.</summary>
-    private static string? ExtractTextPreservingLinks(string cfHtml)
-    {
-        var html = ExtractHtmlFragment(cfHtml);
-        var matches = AnchorTagRegex.Matches(html);
-        if (matches.Count == 0)
+        string? withLinks = null;
+        try
         {
-            return null;
+            withLinks = await LinkAwarePaste.TryReadTextWithLinksAsync(clipboard);
+        }
+        catch (Exception ex)
+        {
+            // Clipboard access can transiently fail (another app briefly
+            // holding it, an unexpected format) — the plain paste below still happens.
+            Diagnostics.CrashLogger.Write("paste: reading the HTML clipboard failed", ex);
         }
 
-        var result = new StringBuilder();
-        var lastEnd = 0;
-        foreach (Match match in matches)
+        if (withLinks is null)
         {
-            result.Append(HtmlFragmentToText(html[lastEnd..match.Index]));
-            var href = System.Net.WebUtility.HtmlDecode(match.Groups[1].Value).Trim();
-            var innerText = System.Net.WebUtility.HtmlDecode(HtmlFragmentToText(match.Groups[2].Value)).Trim();
-            result.Append(innerText.Length == 0 || string.Equals(innerText, href, StringComparison.OrdinalIgnoreCase)
-                ? href
-                // The label can itself contain "[" or "]" (e.g. a page title
-                // like "[Comparatif] ..."), which would otherwise break out
-                // of the Markdown link early — escaped the same way
-                // Markdown escapes any other literal special character.
-                : $"[{innerText.Replace("[", "\\[").Replace("]", "\\]")}]({href})");
-            lastEnd = match.Index + match.Length;
+            textBox.Paste();
+            return;
         }
-        result.Append(HtmlFragmentToText(html[lastEnd..]));
-
-        var text = System.Net.WebUtility.HtmlDecode(result.ToString());
-        text = Regex.Replace(text, @"[ \t]+", " ");
-        text = Regex.Replace(text, @"\n{3,}", "\n\n");
-        return text.Trim();
-    }
-
-    private static string HtmlFragmentToText(string html)
-    {
-        html = Regex.Replace(html, @"<br\s*/?>", "\n", RegexOptions.IgnoreCase);
-        html = Regex.Replace(html, @"</(p|div|li|tr)\s*>", "\n", RegexOptions.IgnoreCase);
-        return Regex.Replace(html, "<[^>]+>", "");
+        InsertTextAtCaret(textBox, withLinks);
     }
 
     private static void InsertTextAtCaret(TextBox textBox, string text)
@@ -788,50 +737,18 @@ public partial class MainWindow : Window
         textBox.SelectionEnd = textBox.CaretIndex;
     }
 
-    /// <summary>
-    /// A real Windows tray icon + balloon notification for mentions —
-    /// Avalonia has no built-in equivalent, so this reaches for
-    /// System.Windows.Forms.NotifyIcon instead (fully qualified everywhere
-    /// to avoid clashing with Avalonia's own like-named types).
-    /// </summary>
-    private void SetupTrayIcon()
-    {
-        try
-        {
-            var exePath = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName;
-            var icon = exePath is not null
-                ? System.Drawing.Icon.ExtractAssociatedIcon(exePath)
-                : System.Drawing.SystemIcons.Application;
-
-            _trayIcon = new System.Windows.Forms.NotifyIcon
-            {
-                Icon = icon,
-                Text = "Almatter",
-                Visible = true,
-            };
-            _trayIcon.BalloonTipClicked += OnTrayBalloonClicked;
-        }
-        catch
-        {
-            // No tray/notification support available on this system — the
-            // app still works fine, just silently without desktop notifications.
-            _trayIcon = null;
-        }
-    }
-
     private void ShowMentionNotification(MentionNotification notification)
     {
-        Diagnostics.CrashLogger.Write("mentions", $"ShowMentionNotification called, trayIcon={(_trayIcon is null ? "null" : "present")}, title='{notification.Title}'");
-        if (_trayIcon is null)
+        if (_notifier is null)
         {
             return;
         }
         _pendingNotificationTarget = (notification.ChannelId, notification.PostId);
-        _trayIcon.ShowBalloonTip(6000, notification.Title, notification.Text, System.Windows.Forms.ToolTipIcon.Info);
+        _notifier.Show(notification.Title, notification.Text);
     }
 
-    /// <summary>Clicking the balloon brings the window to front and jumps straight to the mentioned message.</summary>
-    private void OnTrayBalloonClicked(object? sender, EventArgs e)
+    /// <summary>Clicking the notification brings the window to front and jumps straight to the mentioned message.</summary>
+    private void OnNotificationClicked(object? sender, EventArgs e)
     {
         if (_pendingNotificationTarget is not { } target || DataContext is not MainViewModel vm)
         {
@@ -1003,15 +920,17 @@ public partial class MainWindow : Window
     }
 
     /// <summary>The MenuItem inherits its DataContext from the link Button whose ContextFlyout it is declared in — that is the LinkSegment carrying the actual destination.</summary>
-    private static void OnCopyLinkClick(object? sender, RoutedEventArgs e)
+    private async void OnCopyLinkClick(object? sender, RoutedEventArgs e)
     {
-        if (sender is not MenuItem { DataContext: LinkSegment segment })
+        // The window's clipboard rather than the menu's: the menu lives in a
+        // popup, which is a separate top level that may not offer one.
+        if (sender is not MenuItem { DataContext: LinkSegment segment } || Clipboard is not { } clipboard)
         {
             return;
         }
         try
         {
-            System.Windows.Forms.Clipboard.SetText(segment.LinkUrl);
+            await clipboard.SetTextAsync(segment.LinkUrl);
         }
         catch
         {

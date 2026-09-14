@@ -1,7 +1,6 @@
 using System;
-using System.Drawing;
-using System.Drawing.Drawing2D;
 using System.Runtime.InteropServices;
+using SkiaSharp;
 
 namespace Almatter.App.Services;
 
@@ -65,6 +64,26 @@ internal static class TaskbarBadge
     [DllImport("user32.dll")]
     private static extern bool DestroyIcon(IntPtr hIcon);
 
+    [StructLayout(LayoutKind.Sequential)]
+    private struct ICONINFO
+    {
+        [MarshalAs(UnmanagedType.Bool)] public bool fIcon;
+        public int xHotspot;
+        public int yHotspot;
+        public IntPtr hbmMask;
+        public IntPtr hbmColor;
+    }
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr CreateIconIndirect(ref ICONINFO iconInfo);
+
+    [DllImport("gdi32.dll")]
+    private static extern IntPtr CreateBitmap(int width, int height, uint planes, uint bitsPerPixel, byte[] bits);
+
+    [DllImport("gdi32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool DeleteObject(IntPtr gdiObject);
+
     private static ITaskbarList3? _taskbarList;
     private static bool _initFailed;
 
@@ -103,8 +122,11 @@ internal static class TaskbarBadge
                 return;
             }
 
-            using var bitmap = kind == TaskbarBadgeKind.Dot ? BuildDotBitmap() : BuildNumberBitmap(count);
-            var hIcon = bitmap.GetHicon();
+            var hIcon = BuildIcon(kind == TaskbarBadgeKind.Dot ? null : count);
+            if (hIcon == IntPtr.Zero)
+            {
+                return;
+            }
             try
             {
                 var description = kind == TaskbarBadgeKind.Dot ? "Nouveaux messages" : $"{count} notification(s)";
@@ -123,36 +145,78 @@ internal static class TaskbarBadge
         }
     }
 
-    private static Bitmap BuildDotBitmap()
+    internal const int IconSize = 32;
+
+    /// <summary>
+    /// Draws the badge — a red dot, or a red circle with the count — as raw
+    /// pixels. Skia rather than GDI+ (System.Drawing): Avalonia already
+    /// renders with Skia, so this adds nothing to load, where System.Drawing
+    /// was one of the reasons the app had to pull in Windows Forms. It also
+    /// means the drawing is reusable as-is for a macOS dock badge later.
+    ///
+    /// Straight (unpremultiplied) BGRA, rows top to bottom — the layout
+    /// CreateBitmap expects for a 32-bit icon bitmap, and what GDI+ used to
+    /// hand the shell, so the badge's anti-aliased edge looks as before.
+    /// </summary>
+    internal static byte[] RenderPixels(int? count)
     {
-        var bitmap = new Bitmap(32, 32);
-        using var g = Graphics.FromImage(bitmap);
-        g.SmoothingMode = SmoothingMode.AntiAlias;
-        using var fill = new SolidBrush(Color.FromArgb(220, 38, 38));
-        using var border = new Pen(Color.White, 2.5f);
-        g.FillEllipse(fill, 4, 4, 24, 24);
-        g.DrawEllipse(border, 4, 4, 24, 24);
-        return bitmap;
+        var info = new SKImageInfo(IconSize, IconSize, SKColorType.Bgra8888, SKAlphaType.Unpremul);
+        using var bitmap = new SKBitmap(info);
+        using (var canvas = new SKCanvas(bitmap))
+        {
+            canvas.Clear(SKColors.Transparent);
+            using var fill = new SKPaint { Color = new SKColor(220, 38, 38), IsAntialias = true, Style = SKPaintStyle.Fill };
+            using var border = new SKPaint { Color = SKColors.White, IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeWidth = 2.5f };
+
+            if (count is null)
+            {
+                canvas.DrawCircle(16, 16, 12, fill);
+                canvas.DrawCircle(16, 16, 12, border);
+            }
+            else
+            {
+                canvas.DrawCircle(16, 16, 15, fill);
+                canvas.DrawCircle(16, 16, 15, border);
+
+                var label = count > 99 ? "99+" : count.Value.ToString();
+                var size = label.Length > 2 ? 11f : label.Length > 1 ? 13f : 16f;
+                using var typeface = SKTypeface.FromFamilyName("Segoe UI", SKFontStyle.Bold) ?? SKTypeface.Default;
+                using var font = new SKFont(typeface, size) { Edging = SKFontEdging.Antialias };
+                using var text = new SKPaint { Color = SKColors.White, IsAntialias = true };
+
+                // Centre on the glyphs' own height: the baseline sits half the
+                // ascent-to-descent span below the middle.
+                font.GetFontMetrics(out var metrics);
+                var baseline = 16 - (metrics.Ascent + metrics.Descent) / 2;
+                canvas.DrawText(label, 16, baseline, SKTextAlign.Center, font, text);
+            }
+        }
+        return bitmap.Bytes;
     }
 
-    private static Bitmap BuildNumberBitmap(int count)
+    /// <summary>A Windows icon handle for the badge, or zero on failure. The caller destroys it.</summary>
+    private static IntPtr BuildIcon(int? count)
     {
-        var label = count > 99 ? "99+" : count.ToString();
-        var bitmap = new Bitmap(32, 32);
-        using var g = Graphics.FromImage(bitmap);
-        g.SmoothingMode = SmoothingMode.AntiAlias;
-        g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAlias;
-        using var fill = new SolidBrush(Color.FromArgb(220, 38, 38));
-        using var border = new Pen(Color.White, 2.5f);
-        g.FillEllipse(fill, 1, 1, 30, 30);
-        g.DrawEllipse(border, 1, 1, 30, 30);
+        var color = CreateBitmap(IconSize, IconSize, 1, 32, RenderPixels(count));
 
-        var fontSize = label.Length > 2 ? 11f : label.Length > 1 ? 13f : 16f;
-        using var font = new Font("Segoe UI", fontSize, FontStyle.Bold, GraphicsUnit.Pixel);
-        using var textBrush = new SolidBrush(Color.White);
-        using var format = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
-        g.DrawString(label, font, textBrush, new RectangleF(0, 0, 32, 32), format);
-
-        return bitmap;
+        // Every icon needs a 1-bit mask as well; with a 32-bit colour bitmap
+        // the shell draws from its alpha channel and the mask goes unused, so
+        // an all-clear one will do. Rows are padded to 16 bits: 32 px → 4 bytes.
+        var mask = CreateBitmap(IconSize, IconSize, 1, 1, new byte[IconSize * 4]);
+        try
+        {
+            if (color == IntPtr.Zero || mask == IntPtr.Zero)
+            {
+                return IntPtr.Zero;
+            }
+            var info = new ICONINFO { fIcon = true, hbmMask = mask, hbmColor = color };
+            return CreateIconIndirect(ref info);
+        }
+        finally
+        {
+            // The icon keeps its own copies of both bitmaps.
+            if (color != IntPtr.Zero) DeleteObject(color);
+            if (mask != IntPtr.Zero) DeleteObject(mask);
+        }
     }
 }
