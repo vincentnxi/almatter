@@ -22,6 +22,7 @@ public static class ColorTokens
 
     public static IBrush TextPrimary { get; private set; } = Solid(ThemeDefinition.Light.TextPrimary);
     public static IBrush TextSecondary { get; private set; } = Solid(ThemeDefinition.Light.TextSecondary);
+    public static IBrush TextTertiary { get; private set; } = Solid(ThemeDefinition.Light.TextTertiary);
     public static IBrush CardBg { get; private set; } = Solid(ThemeDefinition.Light.CardBg);
     public static IBrush Divider { get; private set; } = Solid(ThemeDefinition.Light.Divider);
 
@@ -45,6 +46,7 @@ public static class ColorTokens
 
         TextPrimary = Solid(theme.TextPrimary);
         TextSecondary = Solid(theme.TextSecondary);
+        TextTertiary = Solid(theme.TextTertiary);
         CardBg = Solid(theme.CardBg);
         Divider = Solid(theme.Divider);
     }

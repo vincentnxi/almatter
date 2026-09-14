@@ -51,8 +51,16 @@ public sealed partial class DirectMessageItem : ObservableObject, IChannelListIt
     public IBrush AvatarBrush => ColorTokens.Solid(AvatarHex);
     public IBrush PresenceBrush => ColorTokens.Presence(Presence);
     public IBrush RowBackground => IsSelected ? ColorTokens.AccentSoft : Brushes.Transparent;
-    public IBrush NameBrush => IsSelected ? ColorTokens.AccentInk : ColorTokens.TextPrimary;
+
+    /// <summary>Same three levels as a channel row — see ChannelItem.NameBrush for why read rows step back rather than unread ones shouting louder.</summary>
+    public IBrush NameBrush => IsSelected
+        ? ColorTokens.AccentInk
+        : HasUnread ? ColorTokens.TextPrimary : ColorTokens.TextSecondary;
+
     public FontWeight NameWeight => IsSelected || HasUnread ? FontWeight.Bold : FontWeight.Normal;
+
+    /// <summary>Rarely seen on a 1:1, where the server counts every message as a mention — it's the group conversations this catches.</summary>
+    public bool ShowUnreadDot => HasUnread && !HasMentions;
 
     /// <summary>Called after the accent color changes so an already-built row repaints without needing to be reselected.</summary>
     public void RefreshColors()
@@ -70,7 +78,16 @@ public sealed partial class DirectMessageItem : ObservableObject, IChannelListIt
         OnPropertyChanged(nameof(NameWeight));
     }
 
-    partial void OnHasUnreadChanged(bool value) => OnPropertyChanged(nameof(NameWeight));
+    partial void OnHasUnreadChanged(bool value)
+    {
+        OnPropertyChanged(nameof(NameWeight));
+        OnPropertyChanged(nameof(NameBrush));
+        OnPropertyChanged(nameof(ShowUnreadDot));
+    }
 
-    partial void OnMentionCountChanged(int value) => OnPropertyChanged(nameof(HasMentions));
+    partial void OnMentionCountChanged(int value)
+    {
+        OnPropertyChanged(nameof(HasMentions));
+        OnPropertyChanged(nameof(ShowUnreadDot));
+    }
 }

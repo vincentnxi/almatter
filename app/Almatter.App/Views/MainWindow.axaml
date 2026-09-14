@@ -109,6 +109,10 @@
                                     CornerRadius="9" MinWidth="18" Height="18" Padding="5,0" Margin="8,0,0,0">
                                 <TextBlock Text="{Binding MentionCount}" Foreground="{DynamicResource OnAccentBrush}" FontWeight="Bold" FontSize="10.5" HorizontalAlignment="Center" VerticalAlignment="Center" />
                             </Border>
+                            <!-- Something unread, but nobody called your name. Same cell as the
+                                 badge above: only one of the two is ever visible. -->
+                            <Border Grid.Column="3" IsVisible="{Binding ShowUnreadDot}" Background="{DynamicResource AccentBrush}"
+                                    Width="8" Height="8" CornerRadius="4" Margin="8,0,5,0" VerticalAlignment="Center" />
                         </Grid>
                     </Border>
                     <Border Height="2" Margin="8,0" CornerRadius="1" Background="{DynamicResource AccentBrush}" IsVisible="{Binding ShowDropIndicatorBelow}" />
@@ -157,6 +161,10 @@
                                     CornerRadius="9" MinWidth="18" Height="18" Padding="5,0" Margin="8,0,0,0">
                                 <TextBlock Text="{Binding MentionCount}" Foreground="{DynamicResource OnAccentBrush}" FontWeight="Bold" FontSize="10.5" HorizontalAlignment="Center" VerticalAlignment="Center" />
                             </Border>
+                            <!-- Something unread, but nobody called your name. Same cell as the
+                                 badge above: only one of the two is ever visible. -->
+                            <Border Grid.Column="3" IsVisible="{Binding ShowUnreadDot}" Background="{DynamicResource AccentBrush}"
+                                    Width="8" Height="8" CornerRadius="4" Margin="8,0,5,0" VerticalAlignment="Center" />
                         </Grid>
                     </Border>
                     <Border Height="2" Margin="8,0" CornerRadius="1" Background="{DynamicResource AccentBrush}" IsVisible="{Binding ShowDropIndicatorBelow}" />
