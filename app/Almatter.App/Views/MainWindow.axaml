@@ -735,7 +735,10 @@
                                         </Button>
                                     </StackPanel>
                                 </Grid>
-                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,2,4,0" Spacing="4">
+                                <!-- Bottom-right rather than top-right: a long message is read
+                                     down to its end, which is where the actions then are —
+                                     no scrolling back up to its first line to react or reply. -->
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,4,2" Spacing="4">
                                     <Button Classes="row-button hover-reveal-btn" IsVisible="{Binding IsMine}"
                                             Width="26" Height="26" ToolTip.Tip="Modifier"
                                             Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).StartEditMessageCommand}"
