@@ -587,7 +587,9 @@ async fn handle(request_json: &str, db: &'static Mutex<Database>) -> Value {
                 // The server is reachable but rejected the message outright
                 // (permissions, validation, ...) — retrying later won't
                 // help, so this surfaces as a real error instead of queuing.
-                Err(e @ ApiError::Server { .. }) => Err(e.to_string()),
+                // Same for a success response the app couldn't read: the
+                // message went through, and replaying it would post it twice.
+                Err(e @ (ApiError::Server { .. } | ApiError::UnexpectedResponse { .. })) => Err(e.to_string()),
                 // A message with attachments can't be queued for later replay
                 // (see the SendMessage doc comment) — any failure is final.
                 Err(e) if !file_ids.is_empty() => Err(e.to_string()),

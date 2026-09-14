@@ -1764,6 +1764,9 @@ public partial class MainViewModel : ViewModelBase
     private void CloseSettings() => IsSettingsOpen = false;
 
     [RelayCommand]
+    private void DismissError() => ErrorMessage = null;
+
+    [RelayCommand]
     private void ToggleStatusPicker() => IsStatusPickerOpen = !IsStatusPickerOpen;
 
     [RelayCommand]

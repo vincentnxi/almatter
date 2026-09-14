@@ -1027,6 +1027,11 @@ pub fn log_path() -> PathBuf {
 /// cause a failure, so any error writing it is simply swallowed.
 pub fn log(source: &str, message: &str) {
     use std::io::Write;
+    // Unit tests share the real app's log path; their made-up failures
+    // ("mention detected in channel c1") would read as real ones there.
+    if cfg!(test) {
+        return;
+    }
     let now = chrono::Utc::now().to_rfc3339();
     if let Some(parent) = log_path().parent() {
         let _ = std::fs::create_dir_all(parent);

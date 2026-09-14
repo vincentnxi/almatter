@@ -21,6 +21,17 @@ fn shared_http_client() -> reqwest::Client {
 pub enum ApiError {
     #[error("request failed: {0}")]
     Request(#[from] reqwest::Error),
+    /// The server answered, but the connection dropped before the whole
+    /// response arrived. reqwest reports this with the same "error decoding
+    /// response body" wording as unreadable JSON, which made the two
+    /// impossible to tell apart on screen.
+    #[error("La connexion au serveur a été coupée pendant la réception de la réponse. Réessaie.")]
+    Interrupted(reqwest::Error),
+    /// The server answered in full, but not in a shape this app can read —
+    /// a field it expected is missing or of another type. The parser's own
+    /// message goes to core.log rather than on screen.
+    #[error("Le serveur a renvoyé une réponse que l'app ne sait pas lire ({path}).")]
+    UnexpectedResponse { path: String },
     #[error("{message}")]
     Server { status: u16, message: String },
     #[error("login response did not include a session token")]
@@ -114,7 +125,7 @@ impl MattermostClient {
             .map(|s| s.to_string())
             .ok_or(ApiError::MissingToken)?;
 
-        let user: AuthenticatedUser = resp.json().await?;
+        let user: AuthenticatedUser = Self::decode_json("/users/login", resp).await?;
         Ok((token, user))
     }
 
@@ -377,7 +388,7 @@ impl MattermostClient {
         struct UploadResponse {
             file_infos: Vec<FileInfo>,
         }
-        let parsed: UploadResponse = resp.json().await?;
+        let parsed: UploadResponse = Self::decode_json("/files", resp).await?;
         parsed
             .file_infos
             .into_iter()
@@ -471,7 +482,7 @@ impl MattermostClient {
             let body = resp.text().await.unwrap_or_default();
             return Err(ApiError::from_response(status, body));
         }
-        Ok(resp.bytes().await?.to_vec())
+        body_bytes(resp).await
     }
 
     /// Raw bytes for one message attachment — same shape as
@@ -487,7 +498,7 @@ impl MattermostClient {
             let body = resp.text().await.unwrap_or_default();
             return Err(ApiError::from_response(status, body));
         }
-        Ok(resp.bytes().await?.to_vec())
+        body_bytes(resp).await
     }
 
     /// A user's profile picture — Mattermost always returns *something*
@@ -504,7 +515,7 @@ impl MattermostClient {
             let body = resp.text().await.unwrap_or_default();
             return Err(ApiError::from_response(status, body));
         }
-        Ok(resp.bytes().await?.to_vec())
+        body_bytes(resp).await
     }
 
     /// Channels favorited via the standard Mattermost preferences mechanism
@@ -540,7 +551,7 @@ impl MattermostClient {
             req = req.bearer_auth(token);
         }
         let resp = req.send().await?;
-        Self::parse_json(resp).await
+        Self::parse_json(path, resp).await
     }
 
     async fn post_json<B: serde::Serialize + ?Sized, T: serde::de::DeserializeOwned>(
@@ -553,7 +564,7 @@ impl MattermostClient {
             req = req.bearer_auth(token);
         }
         let resp = req.send().await?;
-        Self::parse_json(resp).await
+        Self::parse_json(path, resp).await
     }
 
     async fn put_json<B: serde::Serialize + ?Sized, T: serde::de::DeserializeOwned>(
@@ -566,10 +577,11 @@ impl MattermostClient {
             req = req.bearer_auth(token);
         }
         let resp = req.send().await?;
-        Self::parse_json(resp).await
+        Self::parse_json(path, resp).await
     }
 
     async fn parse_json<T: serde::de::DeserializeOwned>(
+        path: &str,
         resp: reqwest::Response,
     ) -> Result<T, ApiError> {
         if !resp.status().is_success() {
@@ -577,8 +589,43 @@ impl MattermostClient {
             let body = resp.text().await.unwrap_or_default();
             return Err(ApiError::from_response(status, body));
         }
-        Ok(resp.json().await?)
+        Self::decode_json(path, resp).await
     }
+
+    /// A successful response's body as `T`. Both ways this can fail are
+    /// written to core.log with the endpoint: on screen there's only room
+    /// for a sentence, and without the log a failure seen late gives no
+    /// clue which action caused it.
+    async fn decode_json<T: serde::de::DeserializeOwned>(path: &str, resp: reqwest::Response) -> Result<T, ApiError> {
+        let bytes = body_bytes(resp).await.inspect_err(|e| {
+            if let ApiError::Interrupted(source) = e {
+                crate::db::log("api", &format!("{path}: connection lost while reading the response: {source:?}"));
+            }
+        })?;
+        serde_json::from_slice(&bytes).map_err(|e| {
+            let near = excerpt_around(&bytes, e.line(), e.column());
+            crate::db::log("api", &format!("{path}: unreadable response: {e} — near: {near}"));
+            // The query string is noise on screen; the log keeps it.
+            let path = path.split('?').next().unwrap_or(path).to_string();
+            ApiError::UnexpectedResponse { path }
+        })
+    }
+}
+
+/// A short stretch of `body` around the spot serde_json stopped at, so the
+/// log shows the offending field without dumping a whole page of messages.
+fn excerpt_around(body: &[u8], line: usize, column: usize) -> String {
+    const RADIUS: usize = 120;
+    let line_start: usize = body
+        .split(|&b| b == b'\n')
+        .take(line.saturating_sub(1))
+        .map(|l| l.len() + 1)
+        .sum();
+    let offset = (line_start + column).min(body.len());
+    let start = offset.saturating_sub(RADIUS);
+    let end = (offset + RADIUS).min(body.len());
+    // Cutting mid-character just shows a replacement mark at the edges.
+    String::from_utf8_lossy(&body[start..end]).into_owned()
 }
 
 /// Raw bytes from an arbitrary external URL — a link preview's `og:image`,
@@ -592,7 +639,13 @@ pub async fn fetch_external_bytes(url: &str) -> Result<Vec<u8>, ApiError> {
         let body = resp.text().await.unwrap_or_default();
         return Err(ApiError::from_response(status, body));
     }
-    Ok(resp.bytes().await?.to_vec())
+    body_bytes(resp).await
+}
+
+/// Reads a whole response body. A failure at this point can only be the
+/// connection giving out mid-download — the status line already arrived.
+async fn body_bytes(resp: reqwest::Response) -> Result<Vec<u8>, ApiError> {
+    resp.bytes().await.map(|bytes| bytes.to_vec()).map_err(ApiError::Interrupted)
 }
 
 #[cfg(test)]
@@ -672,6 +725,32 @@ mod tests {
 
         assert_eq!(teams.len(), 1);
         assert_eq!(teams[0].display_name, "Acme Corp");
+    }
+
+    #[tokio::test]
+    async fn an_unreadable_success_response_names_the_endpoint() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/api/v4/users/me/teams"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
+                { "id": "t1", "name": "acme", "display_name": null }
+            ])))
+            .mount(&server)
+            .await;
+
+        let client = MattermostClient::new(server.uri()).with_token("abc123");
+        let err = client.get_teams().await.expect_err("a null display_name should not parse");
+
+        assert!(matches!(&err, ApiError::UnexpectedResponse { path } if path == "/users/me/teams"), "got {err:?}");
+        assert!(!err.is_permanent_rejection());
+    }
+
+    #[test]
+    fn excerpt_around_points_at_the_parse_error() {
+        let body = br#"{"a": 1,
+"broken": null}"#;
+        let err = serde_json::from_slice::<std::collections::HashMap<String, i64>>(body).unwrap_err();
+        assert!(excerpt_around(body, err.line(), err.column()).contains("broken"));
     }
 
     #[tokio::test]
