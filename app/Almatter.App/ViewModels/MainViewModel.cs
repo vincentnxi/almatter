@@ -534,6 +534,17 @@ public partial class MainViewModel : ViewModelBase
     public event EventHandler? EmojiSearchFocusRequested;
 
     /// <summary>
+    /// Raised immediately before a message already in the conversation
+    /// changes in a way that can alter its height — reactions, pin state, an
+    /// edit. MainWindow notes what the reader is looking at and puts it back
+    /// after the change lays out: the list is virtualized, and a row growing
+    /// otherwise throws the view dozens of messages away (see
+    /// ReadingPositionKeeper). Must be raised synchronously right before the
+    /// change, with no await in between.
+    /// </summary>
+    public event EventHandler? MessageRowsChanging;
+
+    /// <summary>
     /// Every emoji there is, built once. The picker's visible lists are
     /// filtered out of these rather than rebuilt from scratch, so an entry
     /// keeps its identity across keystrokes — which for a custom emoji means
@@ -1349,6 +1360,7 @@ public partial class MainViewModel : ViewModelBase
     /// <summary>A reply shows both inline in the main list and in the thread panel, each its own separate MessageItem for the same post — this touches whichever of those exist, not just one.</summary>
     private void ApplyEditedTextEverywhere(string postId, string newText)
     {
+        MessageRowsChanging?.Invoke(this, EventArgs.Empty);
         if (Messages.FirstOrDefault(m => m.Id == postId) is { } inMain)
         {
             inMain.ApplyEditedText(newText);
@@ -2265,6 +2277,9 @@ public partial class MainViewModel : ViewModelBase
     /// <summary>Moves one message's pin marker wherever that message is currently on screen — the conversation, a thread reply, or the thread's root.</summary>
     private void ApplyPinnedState(string postId, bool isPinned)
     {
+        // A pinned message gets its header back when it was grouped, so this
+        // can change its height like a reaction does.
+        MessageRowsChanging?.Invoke(this, EventArgs.Empty);
         foreach (var message in Messages)
         {
             if (message.Id == postId)
@@ -2690,6 +2705,7 @@ public partial class MainViewModel : ViewModelBase
     /// <summary>Rebuilds one message's reactions from a freshly re-fetched post, wherever that message is currently shown.</summary>
     private void ApplyUpdatedReactions(string postId, PostDto updatedPost)
     {
+        MessageRowsChanging?.Invoke(this, EventArgs.Empty);
         var fresh = BuildReactions(updatedPost);
 
         void Apply(MessageItem? item)
@@ -3929,12 +3945,22 @@ public partial class MainViewModel : ViewModelBase
             // compared separately so a reaction never forces the text to be
             // reset (which would throw away the parsed-and-cached line split
             // for nothing), and neither forces a rebuild of the list.
+            var announced = false;
             for (var i = 0; i < keptCount; i++)
             {
                 if (_lastRenderedPostKeys[i] == keys[i])
                 {
                     continue;
                 }
+
+                // Someone else's reaction, edit or pin on a message already
+                // on screen — announced once per batch, before the first change.
+                if (!announced)
+                {
+                    MessageRowsChanging?.Invoke(this, EventArgs.Empty);
+                    announced = true;
+                }
+
                 if (EditPartOfKey(_lastRenderedPostKeys[i]) != EditPartOfKey(keys[i]))
                 {
                     Messages[i].ApplyEditedText(ordered[i].Message);
