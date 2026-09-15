@@ -39,6 +39,26 @@ Windows est isolé ci-dessous.
 | Badge sur l'icône (barre des tâches) | `Services/TaskbarBadge.cs` (interop COM `ITaskbarList3`, `CreateIconIndirect`) | Shell Windows uniquement. Le **dessin** de la pastille (`RenderPixels`) passe par Skia et est portable ; seule sa pose sur le bouton est propre à Windows | macOS : `NSDockTile.badgeLabel` (interop Cocoa). Linux : pas d'équivalent standard (quelques DE supportent l'API Unity Launcher, la plupart non) — no-op probable. |
 | Session persistée de façon sécurisée | `Services/SessionStore.cs` | `System.Security.Cryptography.ProtectedData` (DPAPI, Windows uniquement) — paquet NuGet explicite depuis le retrait de Windows Forms, qui l'apportait implicitement | macOS : Keychain (interop Security.framework). Linux : Secret Service / libsecret (D-Bus), avec repli sur un fichier à permissions restreintes si indisponible. |
 
+### Installation
+
+`installer/` (script Inno Setup `Almatter.iss` + `build-installer.ps1`) est entièrement
+propre à Windows : publication `win-x64` dépendante du runtime, installation par
+utilisateur, téléchargement et installation du runtime .NET 10 s'il manque (détecté dans
+`Program Files\dotnet\shared\Microsoft.NETCore.App\10.*`). Rien n'y est réutilisable
+tel quel. Pistes : macOS, un `.app` signé et notarié dans un `.dmg` (runtime embarqué,
+pas d'installeur de dépendances sur ce système) ; Linux, AppImage ou Flatpak, où le
+runtime .NET peut être embarqué ou pris dans le SDK Flatpak freedesktop/dotnet.
+Le script de publication devra aussi viser le bon RID (`osx-arm64`, `linux-x64`) et
+copier `libalmatter_ffi.dylib`/`.so` (voir le point 4 ci-dessous).
+`installer/test-in-sandbox.ps1` teste l'installation sur un Windows vierge via Windows
+Sandbox ; l'équivalent ailleurs serait une VM ou un conteneur propre.
+
+`core/.cargo/config.toml` lie le runtime Visual C++ en statique dans `almatter_ffi.dll`
+(section limitée à la cible `x86_64-pc-windows-msvc`, sans effet sur les autres OS). Sur
+Linux, l'équivalent à surveiller est la version de glibc de la machine de build : compiler
+sur une distribution trop récente rend le `.so` inutilisable sur les machines plus
+anciennes visées par le projet.
+
 ## Déjà cross-platform, à ne pas confondre
 
 - **Collage qui conserve les liens** (`Services/LinkAwarePaste.cs`) : passe par le

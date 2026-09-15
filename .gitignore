@@ -7,6 +7,11 @@
 [Oo]bj/
 *.user
 
+# Installer: published app and compiled setup, rebuilt by installer/build-installer.ps1
+/installer/publish/
+/installer/output/
+/installer/sandbox-results/
+
 # Design canvas: generated payload, rebuilt from the .dc.html sources + canvas.json
 design/mockups/winmatt-mockups.html
 design/theme-refresh/almatter-themes.html

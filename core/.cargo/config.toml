@@ -1,0 +1,7 @@
+# Link the Visual C++ runtime statically into almatter_ffi.dll. Without this
+# the DLL imports vcruntime140.dll, which a fresh Windows does not have (only
+# apps that install the VC++ redistributable bring it): on such a PC Almatter
+# showed its login window, then failed as soon as it loaded the core.
+# Confirmed in Windows Sandbox on 2026-09-15 (LoadLibrary error 126).
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]
