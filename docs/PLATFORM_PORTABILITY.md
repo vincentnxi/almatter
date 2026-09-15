@@ -47,6 +47,14 @@ Windows est isolé ci-dessous.
   Windows avec du HTML écrit comme par un navigateur (UTF-8, accents, tirets, émoji). **Non
   testé** sous Linux/macOS : l'extraction du fragment se replie sur le HTML entier quand les
   marqueurs `StartFragment` propres à Windows sont absents, ce qui devrait suffire, à vérifier.
+- **Collage d'images et de fichiers en pièces jointes** (`Services/ClipboardAttachments.cs`) :
+  presse-papiers d'Avalonia (`TryGetFilesAsync`, `TryGetBitmapAsync`), image réenregistrée en
+  PNG dans `Path.GetTempPath()/Almatter/pasted-images`. Aucun appel Windows. Vérifié sous
+  Windows uniquement. **À tester** sous Linux/macOS : que les gestionnaires de fichiers
+  (Nautilus, Dolphin, Finder) exposent bien la copie de fichiers comme fichiers et non
+  comme simple texte de chemins, et que les captures d'écran arrivent au format `Bitmap`
+  (sous X11/Wayland, `image/png`). La règle « image sans texte = image collée » (pour qu'un
+  copier depuis Word/Excel reste du texte) devrait valoir aussi pour LibreOffice.
 - **Décodage des images d'aperçu de lien** (`ViewModels/CardImageDecoder.cs`) : SkiaSharp,
   livré avec Avalonia sur les trois OS.
 - **Suivi du thème clair/sombre du système** (`Services/SystemTheme.cs`) : passe par
