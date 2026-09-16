@@ -461,12 +461,32 @@ impl MattermostClient {
         Ok(())
     }
 
-    /// The server's custom emoji list — sorted by name so it's browsable as
-    /// a picker. `per_page=200` is the server's own maximum; a personal
-    /// Mattermost instance's custom emoji count realistically fits in one
-    /// page, so this doesn't paginate further.
+    /// The server's custom emoji — sorted by name so it's browsable as a
+    /// picker. `per_page=200` is the server's own maximum, and a server can
+    /// easily hold more than that, so this keeps asking for the next page
+    /// until one comes back short. A name whose emoji never arrives here
+    /// can't be drawn at all — it stays on screen as the ":shortcode:"
+    /// someone typed — so stopping at the first page silently hid every
+    /// emoji past the 200th in alphabetical order.
+    ///
+    /// The page walk is capped so a server that keeps answering with full
+    /// pages can't spin this forever.
     pub async fn get_custom_emoji_list(&self) -> Result<Vec<CustomEmoji>, ApiError> {
-        self.get_json("/emoji?page=0&per_page=200&sort=name").await
+        const PER_PAGE: usize = 200;
+        const MAX_PAGES: usize = 50;
+
+        let mut all: Vec<CustomEmoji> = Vec::new();
+        for page in 0..MAX_PAGES {
+            let batch: Vec<CustomEmoji> = self
+                .get_json(&format!("/emoji?page={page}&per_page={PER_PAGE}&sort=name"))
+                .await?;
+            let short_page = batch.len() < PER_PAGE;
+            all.extend(batch);
+            if short_page {
+                break;
+            }
+        }
+        Ok(all)
     }
 
     /// Raw image bytes for one custom emoji — not JSON, so this bypasses
@@ -1093,6 +1113,40 @@ mod tests {
 
         assert_eq!(emoji.len(), 1);
         assert_eq!(emoji[0].name, "party-parrot");
+    }
+
+    /// A server can hold more custom emoji than one page returns. Anything
+    /// missing from this list can't be drawn in a message at all — it shows
+    /// as the raw ":name:" — so the walk has to keep going past a full page.
+    #[tokio::test]
+    async fn get_custom_emoji_list_walks_past_a_full_page() {
+        use wiremock::matchers::query_param;
+
+        let full_page: Vec<_> = (0..200)
+            .map(|i| serde_json::json!({ "id": format!("e{i}"), "name": format!("a{i}"), "creator_id": "u1" }))
+            .collect();
+
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/api/v4/emoji"))
+            .and(query_param("page", "0"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(full_page))
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/api/v4/emoji"))
+            .and(query_param("page", "1"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
+                { "id": "z1", "name": "zebra", "creator_id": "u1" }
+            ])))
+            .mount(&server)
+            .await;
+
+        let client = MattermostClient::new(server.uri()).with_token("abc123");
+        let emoji = client.get_custom_emoji_list().await.expect("emoji list should parse");
+
+        assert_eq!(emoji.len(), 201);
+        assert_eq!(emoji[200].name, "zebra");
     }
 
     #[tokio::test]
