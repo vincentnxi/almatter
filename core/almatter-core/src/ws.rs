@@ -445,8 +445,14 @@ async fn handle_event(text: &str, user_id: &str, client: &MattermostClient, db: 
     let Some(post_json) = data.post.as_deref() else {
         return;
     };
-    let Ok(post) = serde_json::from_str::<Post>(post_json) else {
-        return;
+    let post = match serde_json::from_str::<Post>(post_json) {
+        Ok(post) => post,
+        Err(e) => {
+            // Never silent: a post this can't read is a message that simply
+            // never shows up, with nothing anywhere to say one went missing.
+            crate::db::log("ws", &format!("dropped an unreadable live post: {e} — {}", truncate(post_json, 400)));
+            return;
+        }
     };
 
     let author_already_cached = {

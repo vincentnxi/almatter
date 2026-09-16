@@ -1,10 +1,32 @@
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::HashMap;
 
 // Field names and shapes below mirror the real Mattermost REST API responses
 // (https://api.mattermost.com) closely enough to deserialize directly with
 // serde — only the subset of fields Almatter currently uses is declared;
 // serde ignores any other field the server sends.
+
+/// `#[serde(default)]` alone covers a field the server leaves *out*; it does
+/// nothing for one the server sends as an explicit `null`, which fails the
+/// whole deserialization with "invalid type: null". Mattermost does exactly
+/// that all over a post's link-preview metadata (`"images":null` on any page
+/// whose Open Graph data has no image), and one such post used to poison
+/// everything around it: the channel's entire `/posts` response stopped
+/// parsing, so it could never be refreshed from the server again, and the
+/// same post arriving live over the WebSocket was dropped on the floor —
+/// which is what "messages stopped arriving in this conversation" looked
+/// like from the outside.
+///
+/// Paired with `#[serde(default)]` on every optional field that could
+/// plausibly come back null, so a null reads as "nothing here" — the same
+/// thing an absent field already meant.
+fn null_as_default<'de, D, T>(deserializer: D) -> Result<T, D::Error>
+where
+    D: Deserializer<'de>,
+    T: Deserialize<'de> + Default,
+{
+    Ok(Option::<T>::deserialize(deserializer)?.unwrap_or_default())
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Team {
@@ -119,7 +141,7 @@ pub struct ChannelMember {
     pub mention_count: i64,
     /// Absent on servers/responses that don't send it — treated as "not
     /// muted" rather than failing the whole member row.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_as_default")]
     pub notify_props: NotifyProps,
 }
 
@@ -211,7 +233,7 @@ pub struct Post {
     /// Empty string (not null/absent) for a top-level post — that's how
     /// Mattermost's API represents "no thread root", so this stays a plain
     /// `String` rather than `Option<String>`.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_as_default")]
     pub root_id: String,
     pub user_id: String,
     pub message: String,
@@ -219,18 +241,18 @@ pub struct Post {
     /// How many replies this post's thread has — 0 for a post that isn't a
     /// thread root (or has no replies yet). Mattermost includes this
     /// directly on the post object.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_as_default")]
     pub reply_count: i64,
     /// When this post was last edited — 0 if it never has been. Mattermost's
     /// own field name and meaning, used to show a subtle "(modifié)" tag.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_as_default")]
     pub edit_at: i64,
     /// Pinned to its channel. Mattermost's own field name and meaning — the
     /// server owns this, so it arrives on the post like reply_count does
     /// rather than being tracked separately.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_as_default")]
     pub is_pinned: bool,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_as_default")]
     pub metadata: PostMetadata,
 }
 
@@ -244,15 +266,15 @@ impl Post {
 /// `metadata` — no separate per-post request needed to get them.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct PostMetadata {
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_as_default")]
     pub reactions: Vec<Reaction>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_as_default")]
     pub files: Vec<FileInfo>,
     /// A link preview (or bare image embed) the server already generated
     /// for a URL in this post's text — same free ride as reactions/files,
     /// no separate fetch needed. Only populated when the server has
     /// link-preview generation turned on.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_as_default")]
     pub embeds: Vec<PostEmbed>,
 }
 
@@ -266,7 +288,7 @@ pub struct Reaction {
 pub struct FileInfo {
     pub id: String,
     pub name: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_as_default")]
     pub size: i64,
 }
 
@@ -279,7 +301,7 @@ pub struct FileInfo {
 pub struct PostEmbed {
     #[serde(rename = "type")]
     pub embed_type: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_as_default")]
     pub url: String,
     /// `null` for every embed type except "opengraph" — `Option` rather
     /// than a bare `OpenGraphData` specifically so those other (far more
@@ -293,21 +315,24 @@ pub struct PostEmbed {
 /// rarely sets all of them.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct OpenGraphData {
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_as_default")]
     pub title: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_as_default")]
     pub description: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_as_default")]
     pub site_name: String,
-    #[serde(default)]
+    /// Sent as `null`, not omitted, by every page the server found no image
+    /// on — see `null_as_default`. This one field is the whole reason that
+    /// helper exists.
+    #[serde(default, deserialize_with = "null_as_default")]
     pub images: Vec<OpenGraphImage>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct OpenGraphImage {
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_as_default")]
     pub url: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_as_default")]
     pub secure_url: String,
 }
 
@@ -339,8 +364,16 @@ pub struct CustomEmoji {
 /// a plain array.
 #[derive(Debug, Deserialize)]
 pub struct PostList {
+    #[serde(default, deserialize_with = "null_as_default")]
     pub order: Vec<String>,
-    pub posts: HashMap<String, Post>,
+    /// Deliberately held as raw JSON rather than `HashMap<String, Post>`:
+    /// deserializing the map in one go means a single message the models
+    /// here can't read takes the entire channel down with it — no refresh,
+    /// no history, no new messages, and nothing on screen to say why (see
+    /// `null_as_default`). Parsed post by post in `into_ordered_posts`
+    /// instead, so an unreadable one costs that one message.
+    #[serde(default, deserialize_with = "null_as_default")]
+    pub posts: HashMap<String, serde_json::Value>,
 }
 
 impl PostList {
@@ -350,9 +383,18 @@ impl PostList {
     /// whatever the server sent — the server's own field turned out not to
     /// be reliably populated on every deployment, so this is the figure
     /// actually trusted for display.
-    pub fn into_ordered_posts(mut self) -> Vec<Post> {
+    pub fn into_ordered_posts(self) -> Vec<Post> {
+        let mut posts: HashMap<String, Post> = HashMap::with_capacity(self.posts.len());
+        for (id, raw) in self.posts {
+            match serde_json::from_value::<Post>(raw) {
+                Ok(post) => {
+                    posts.insert(id, post);
+                }
+                Err(e) => crate::db::log("api", &format!("skipped an unreadable post {id}: {e}")),
+            }
+        }
         let mut reply_counts: HashMap<String, i64> = HashMap::new();
-        for post in self.posts.values() {
+        for post in posts.values() {
             if !post.root_id.is_empty() {
                 *reply_counts.entry(post.root_id.clone()).or_insert(0) += 1;
             }
@@ -360,7 +402,7 @@ impl PostList {
 
         self.order
             .into_iter()
-            .filter_map(|id| self.posts.remove(&id))
+            .filter_map(|id| posts.remove(&id))
             .map(|mut post| {
                 if let Some(&counted) = reply_counts.get(&post.id) {
                     post.reply_count = post.reply_count.max(counted);
@@ -368,5 +410,76 @@ impl PostList {
                 post
             })
             .collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The exact shape that froze two real conversations: Mattermost sends
+    /// `"images":null` (not an empty list, not an absent field) for a link
+    /// whose page has no Open Graph image.
+    #[test]
+    fn a_link_preview_without_images_still_parses() {
+        let post = serde_json::json!({
+            "id": "p1", "channel_id": "c1", "user_id": "u1",
+            "message": "https://example.com", "create_at": 1000,
+            "metadata": {
+                "embeds": [{
+                    "type": "opengraph",
+                    "url": "https://example.com",
+                    "data": {
+                        "title": "Un titre", "description": "", "site_name": "Eldritch Café",
+                        "locales_alternate": null, "images": null, "audios": null, "videos": null
+                    }
+                }]
+            }
+        });
+
+        let parsed: Post = serde_json::from_value(post).expect("a null image list must not fail the post");
+        assert_eq!(parsed.metadata.embeds.len(), 1);
+        assert!(parsed.metadata.embeds[0].data.as_ref().unwrap().images.is_empty());
+        assert_eq!(parsed.metadata.embeds[0].data.as_ref().unwrap().site_name, "Eldritch Café");
+    }
+
+    /// Nulls anywhere else in a post's metadata are the same story, and cost
+    /// the same thing if they fail — so none of them may.
+    #[test]
+    fn nulls_across_a_posts_metadata_read_as_empty() {
+        let post = serde_json::json!({
+            "id": "p1", "channel_id": "c1", "user_id": "u1", "message": "hi", "create_at": 1000,
+            "root_id": null, "reply_count": null, "edit_at": null, "is_pinned": null,
+            "metadata": { "reactions": null, "files": null, "embeds": null }
+        });
+
+        let parsed: Post = serde_json::from_value(post).expect("nulls must read as empty, not fail");
+        assert_eq!(parsed.root_id, "");
+        assert_eq!(parsed.reply_count, 0);
+        assert!(!parsed.is_pinned);
+        assert!(parsed.metadata.reactions.is_empty());
+        assert!(parsed.metadata.files.is_empty());
+        assert!(parsed.metadata.embeds.is_empty());
+    }
+
+    /// Even for a shape nothing here anticipated, one bad message must cost
+    /// one message — not the whole channel, which is what made the original
+    /// bug look like "this conversation stopped receiving anything".
+    #[test]
+    fn one_unreadable_post_does_not_take_the_rest_of_the_channel_with_it() {
+        let list: PostList = serde_json::from_value(serde_json::json!({
+            "order": ["p3", "p2", "p1"],
+            "posts": {
+                "p1": { "id": "p1", "channel_id": "c1", "user_id": "u1", "message": "first", "create_at": 1000 },
+                "p2": { "id": "p2", "channel_id": "c1", "user_id": "u1", "create_at": 2000 },
+                "p3": { "id": "p3", "channel_id": "c1", "user_id": "u1", "message": "third", "create_at": 3000 }
+            }
+        }))
+        .expect("the list itself must still parse");
+
+        let posts = list.into_ordered_posts();
+
+        assert_eq!(posts.len(), 2, "only the post missing a message should be dropped");
+        assert_eq!(posts.iter().map(|p| p.id.as_str()).collect::<Vec<_>>(), vec!["p3", "p1"]);
     }
 }
