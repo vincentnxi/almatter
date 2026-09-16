@@ -623,7 +623,14 @@
                                                                 <Ellipse Width="40" Height="40" Fill="{Binding AvatarImageBrush}" IsVisible="{Binding AvatarImageBrush, Converter={x:Static conv:ObjectConverters.IsNotNull}}" />
                                                             </Panel>
                                                         </Border>
-                                                        <TextBlock Text="{Binding AuthorName}" FontWeight="Bold" FontSize="14" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="150" />
+                                                        <StackPanel VerticalAlignment="Center" Spacing="2" MaxWidth="150">
+                                                            <TextBlock Text="{Binding AuthorName}" FontWeight="Bold" FontSize="14" TextWrapping="Wrap" />
+                                                            <!-- The dot on the avatar says which color; this says what it means. -->
+                                                            <StackPanel Orientation="Horizontal" Spacing="5" IsVisible="{Binding HasPresence}">
+                                                                <Ellipse Width="8" Height="8" Fill="{Binding PresenceBrush}" VerticalAlignment="Center" />
+                                                                <TextBlock Text="{Binding PresenceLabel}" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
+                                                            </StackPanel>
+                                                        </StackPanel>
                                                     </StackPanel>
                                                     <Button Classes="row-button" IsVisible="{Binding !IsMine}"
                                                             Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).OpenDirectMessageWithCommand}"
@@ -635,12 +642,24 @@
                                                 </StackPanel>
                                             </Flyout>
                                         </Button.Flyout>
-                                        <Border CornerRadius="18" Background="{Binding AvatarBrush}">
-                                            <Panel>
-                                                <TextBlock Text="{Binding AuthorInitials}" Foreground="White" FontWeight="Bold" FontSize="13" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                                <Ellipse Width="36" Height="36" Fill="{Binding AvatarImageBrush}" IsVisible="{Binding AvatarImageBrush, Converter={x:Static conv:ObjectConverters.IsNotNull}}" />
-                                            </Panel>
-                                        </Border>
+                                        <!-- The dot is drawn over the avatar inside the button's own
+                                             fixed 36x36 box, so adding it costs the row no height at
+                                             all — and with the message list virtualized, a height
+                                             change is what makes the conversation jump under the
+                                             reader. The ring around it is the conversation's own
+                                             background, so the dot reads as sitting on top of the
+                                             photo rather than being part of it. -->
+                                        <Panel>
+                                            <Border CornerRadius="18" Background="{Binding AvatarBrush}">
+                                                <Panel>
+                                                    <TextBlock Text="{Binding AuthorInitials}" Foreground="White" FontWeight="Bold" FontSize="13" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                    <Ellipse Width="36" Height="36" Fill="{Binding AvatarImageBrush}" IsVisible="{Binding AvatarImageBrush, Converter={x:Static conv:ObjectConverters.IsNotNull}}" />
+                                                </Panel>
+                                            </Border>
+                                            <Ellipse IsVisible="{Binding HasPresence}" Width="11" Height="11" Fill="{Binding PresenceBrush}"
+                                                     Stroke="{DynamicResource BgAppBrush}" StrokeThickness="2"
+                                                     HorizontalAlignment="Right" VerticalAlignment="Bottom" />
+                                        </Panel>
                                     </Button>
                                     <StackPanel Grid.Column="1" Margin="10,0,0,0">
                                         <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,0,0,14" IsVisible="{Binding ShowHeader}">
@@ -1017,7 +1036,13 @@
                                                                 <Ellipse Width="40" Height="40" Fill="{Binding AvatarImageBrush}" IsVisible="{Binding AvatarImageBrush, Converter={x:Static conv:ObjectConverters.IsNotNull}}" />
                                                             </Panel>
                                                         </Border>
-                                                        <TextBlock Text="{Binding AuthorName}" FontWeight="Bold" FontSize="14" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="150" />
+                                                        <StackPanel VerticalAlignment="Center" Spacing="2" MaxWidth="150">
+                                                            <TextBlock Text="{Binding AuthorName}" FontWeight="Bold" FontSize="14" TextWrapping="Wrap" />
+                                                            <StackPanel Orientation="Horizontal" Spacing="5" IsVisible="{Binding HasPresence}">
+                                                                <Ellipse Width="8" Height="8" Fill="{Binding PresenceBrush}" VerticalAlignment="Center" />
+                                                                <TextBlock Text="{Binding PresenceLabel}" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
+                                                            </StackPanel>
+                                                        </StackPanel>
                                                     </StackPanel>
                                                     <Button Classes="row-button" IsVisible="{Binding !IsMine}"
                                                             Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).OpenDirectMessageWithCommand}"
@@ -1029,12 +1054,17 @@
                                                 </StackPanel>
                                             </Flyout>
                                         </Button.Flyout>
-                                        <Border CornerRadius="15" Background="{Binding AvatarBrush}">
-                                            <Panel>
-                                                <TextBlock Text="{Binding AuthorInitials}" Foreground="White" FontWeight="Bold" FontSize="11" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                                <Ellipse Width="30" Height="30" Fill="{Binding AvatarImageBrush}" IsVisible="{Binding AvatarImageBrush, Converter={x:Static conv:ObjectConverters.IsNotNull}}" />
-                                            </Panel>
-                                        </Border>
+                                        <Panel>
+                                            <Border CornerRadius="15" Background="{Binding AvatarBrush}">
+                                                <Panel>
+                                                    <TextBlock Text="{Binding AuthorInitials}" Foreground="White" FontWeight="Bold" FontSize="11" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                    <Ellipse Width="30" Height="30" Fill="{Binding AvatarImageBrush}" IsVisible="{Binding AvatarImageBrush, Converter={x:Static conv:ObjectConverters.IsNotNull}}" />
+                                                </Panel>
+                                            </Border>
+                                            <Ellipse IsVisible="{Binding HasPresence}" Width="10" Height="10" Fill="{Binding PresenceBrush}"
+                                                     Stroke="{DynamicResource BgAppBrush}" StrokeThickness="2"
+                                                     HorizontalAlignment="Right" VerticalAlignment="Bottom" />
+                                        </Panel>
                                     </Button>
                                     <StackPanel Grid.Column="1" Margin="8,0,0,0" Spacing="1">
                                         <StackPanel Orientation="Horizontal" Spacing="6">
@@ -1105,7 +1135,13 @@
                                                                         <Ellipse Width="40" Height="40" Fill="{Binding AvatarImageBrush}" IsVisible="{Binding AvatarImageBrush, Converter={x:Static conv:ObjectConverters.IsNotNull}}" />
                                                                     </Panel>
                                                                 </Border>
-                                                                <TextBlock Text="{Binding AuthorName}" FontWeight="Bold" FontSize="14" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="150" />
+                                                                <StackPanel VerticalAlignment="Center" Spacing="2" MaxWidth="150">
+                                                                    <TextBlock Text="{Binding AuthorName}" FontWeight="Bold" FontSize="14" TextWrapping="Wrap" />
+                                                                    <StackPanel Orientation="Horizontal" Spacing="5" IsVisible="{Binding HasPresence}">
+                                                                        <Ellipse Width="8" Height="8" Fill="{Binding PresenceBrush}" VerticalAlignment="Center" />
+                                                                        <TextBlock Text="{Binding PresenceLabel}" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
+                                                                    </StackPanel>
+                                                                </StackPanel>
                                                             </StackPanel>
                                                             <Button Classes="row-button" IsVisible="{Binding !IsMine}"
                                                                     Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).OpenDirectMessageWithCommand}"
@@ -1117,12 +1153,17 @@
                                                         </StackPanel>
                                                     </Flyout>
                                                 </Button.Flyout>
-                                                <Border CornerRadius="15" Background="{Binding AvatarBrush}">
-                                                    <Panel>
-                                                        <TextBlock Text="{Binding AuthorInitials}" Foreground="White" FontWeight="Bold" FontSize="11" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                                        <Ellipse Width="30" Height="30" Fill="{Binding AvatarImageBrush}" IsVisible="{Binding AvatarImageBrush, Converter={x:Static conv:ObjectConverters.IsNotNull}}" />
-                                                    </Panel>
-                                                </Border>
+                                                <Panel>
+                                                    <Border CornerRadius="15" Background="{Binding AvatarBrush}">
+                                                        <Panel>
+                                                            <TextBlock Text="{Binding AuthorInitials}" Foreground="White" FontWeight="Bold" FontSize="11" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                            <Ellipse Width="30" Height="30" Fill="{Binding AvatarImageBrush}" IsVisible="{Binding AvatarImageBrush, Converter={x:Static conv:ObjectConverters.IsNotNull}}" />
+                                                        </Panel>
+                                                    </Border>
+                                                    <Ellipse IsVisible="{Binding HasPresence}" Width="10" Height="10" Fill="{Binding PresenceBrush}"
+                                                             Stroke="{DynamicResource BgAppBrush}" StrokeThickness="2"
+                                                             HorizontalAlignment="Right" VerticalAlignment="Bottom" />
+                                                </Panel>
                                             </Button>
                                             <StackPanel Grid.Column="1" Margin="8,0,0,0" Spacing="1">
                                                 <StackPanel Orientation="Horizontal" Spacing="6" IsVisible="{Binding ShowHeader}">

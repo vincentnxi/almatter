@@ -67,6 +67,10 @@ public sealed partial class DirectMessageItem : ObservableObject, IChannelListIt
     {
         OnPropertyChanged(nameof(RowBackground));
         OnPropertyChanged(nameof(NameBrush));
+        // The presence palette is per-theme too, and this brush is a real
+        // brush rather than a DynamicResource — without this, a row's dot
+        // kept the old theme's green until presence next changed.
+        OnPropertyChanged(nameof(PresenceBrush));
     }
 
     partial void OnPresenceChanged(PresenceStatus value) => OnPropertyChanged(nameof(PresenceBrush));

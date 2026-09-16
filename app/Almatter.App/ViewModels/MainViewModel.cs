@@ -303,13 +303,7 @@ public partial class MainViewModel : ViewModelBase
     [ObservableProperty]
     public partial PresenceStatus MyStatus { get; set; } = PresenceStatus.Online;
 
-    public string MyStatusLabel => MyStatus switch
-    {
-        PresenceStatus.Online => "Disponible",
-        PresenceStatus.Away => "Absent",
-        PresenceStatus.DoNotDisturb => "Ne pas déranger",
-        _ => "Hors ligne",
-    };
+    public string MyStatusLabel => PresenceText.Label(MyStatus);
 
     public IBrush MyPresenceBrush => ColorTokens.Presence(MyStatus);
 
@@ -317,6 +311,12 @@ public partial class MainViewModel : ViewModelBase
     {
         OnPropertyChanged(nameof(MyStatusLabel));
         OnPropertyChanged(nameof(MyPresenceBrush));
+
+        // Own messages carry the same dot as everyone else's, so picking a
+        // new status has to repaint them too — and the presence table is
+        // what every message row reads from, so it is the thing to update.
+        _presenceByUserId[_session.User.Id] = value;
+        ApplyPresenceToMessages();
     }
 
     /// <summary>The channel's pinned-messages panel.</summary>
@@ -380,6 +380,14 @@ public partial class MainViewModel : ViewModelBase
     /// every contact grey until the app was restarted.
     /// </summary>
     private readonly Dictionary<string, PresenceStatus> _presenceByUserId = [];
+
+    /// <summary>
+    /// Message authors already asked about once, so a channel full of
+    /// people the DM sidebar has never heard of costs one lookup rather
+    /// than one per repaint — and so someone the server returns nothing
+    /// for (a deactivated account, say) isn't asked about forever.
+    /// </summary>
+    private readonly HashSet<string> _presenceAskedForUserIds = [];
 
     /// <summary>Presence goes stale quickly, so it is re-fetched on this cadence rather than only at startup.</summary>
     private static readonly TimeSpan PresenceRefreshInterval = TimeSpan.FromSeconds(60);
@@ -717,18 +725,19 @@ public partial class MainViewModel : ViewModelBase
             var statuses = await _service.GetStatusesAsync(_session.BaseUrl, _session.Token, [_session.User.Id]);
             if (statuses.FirstOrDefault(s => s.UserId == _session.User.Id) is { } mine)
             {
-                MyStatus = mine.Status switch
-                {
-                    "online" => PresenceStatus.Online,
-                    "away" => PresenceStatus.Away,
-                    "dnd" => PresenceStatus.DoNotDisturb,
-                    _ => PresenceStatus.Offline,
-                };
+                MyStatus = ToPresence(mine.Status);
             }
         }
         catch
         {
         }
+
+        // Written straight into the table as well as through MyStatus: if the
+        // server agrees with the Online default, the property never changes
+        // and its handler never runs — and own messages would then be the
+        // only ones with no dot at all.
+        _presenceByUserId[_session.User.Id] = MyStatus;
+        ApplyPresenceToMessages();
 
         StartPollingLoop();
     }
@@ -3362,13 +3371,14 @@ public partial class MainViewModel : ViewModelBase
         ThemeResourcesChanged?.Invoke(this, EventArgs.Empty);
     }
 
-    /// <summary>The row's own tint is a DynamicResource on a style class, so only the reaction pills (which hold real brushes) need repainting.</summary>
+    /// <summary>The row's own tint is a DynamicResource on a style class, so only the reaction pills and the presence dot (which hold real brushes) need repainting.</summary>
     private static void RefreshMessageColors(MessageItem message)
     {
         foreach (var reaction in message.Reactions)
         {
             reaction.RefreshColors();
         }
+        message.RefreshPresence();
     }
 
     private void RefreshFontSizeSelection()
@@ -3463,6 +3473,7 @@ public partial class MainViewModel : ViewModelBase
                 EmojiImageResolver = ResolveTextEmojiAsync,
             };
             _ = ResolveMessageAvatarAsync(item, post.UserId);
+            ApplyPresence(item);
             return item;
         }
 
@@ -3529,6 +3540,10 @@ public partial class MainViewModel : ViewModelBase
         {
             ThreadRepliesAppended?.Invoke(this, EventArgs.Empty);
         }
+
+        // A thread can easily be answered by people who never appear in the
+        // channel's loaded window, so it asks for its own unknown authors.
+        _ = EnsurePresenceForLoadedAuthorsAsync();
     }
 
     private async Task<bool> TryLoadFromCacheAsync()
@@ -3886,11 +3901,20 @@ public partial class MainViewModel : ViewModelBase
     /// </summary>
     private async Task RefreshPresenceAsync()
     {
-        var userIds = DirectMessages.Concat(FavoriteDirectMessages)
-            .Where(dm => !dm.IsGroup && dm.OtherUserId.Length > 0)
-            .Select(dm => dm.OtherUserId)
-            .Distinct()
-            .ToList();
+        // The DM sidebar's contacts *and* everyone whose message is
+        // currently loaded: a channel's authors carry the same dot, and a
+        // dot that never refreshes is worse than no dot at all. Both sets
+        // are small — one conversation's window is a handful of distinct
+        // people — and they overlap heavily in a DM, which is exactly what
+        // Distinct() is for. Gathered on the UI thread because this runs
+        // from the polling loop, and these collections are rebuilt under it.
+        var userIds = await Dispatcher.UIThread.InvokeAsync(() =>
+            DirectMessages.Concat(FavoriteDirectMessages)
+                .Where(dm => !dm.IsGroup && dm.OtherUserId.Length > 0)
+                .Select(dm => dm.OtherUserId)
+                .Concat(LoadedMessageAuthorIds())
+                .Distinct()
+                .ToList());
         if (userIds.Count == 0)
         {
             return;
@@ -3922,7 +3946,104 @@ public partial class MainViewModel : ViewModelBase
                     dm.Presence = presence;
                 }
             }
+            ApplyPresenceToMessages();
         });
+    }
+
+    /// <summary>Everyone with a message currently loaded — the channel, the open thread and its root.</summary>
+    private IEnumerable<string> LoadedMessageAuthorIds()
+    {
+        var ids = Messages.Concat(ThreadReplies).Select(m => m.AuthorUserId);
+        if (ThreadRootMessage is not null)
+        {
+            ids = ids.Append(ThreadRootMessage.AuthorUserId);
+        }
+        return ids.Where(id => id.Length > 0);
+    }
+
+    /// <summary>
+    /// Stamps the presence table onto every loaded message. Cheap enough to
+    /// run wholesale: it only assigns, and a message whose presence hasn't
+    /// actually changed raises no notification (the property setter compares
+    /// first), so nothing repaints needlessly.
+    /// </summary>
+    private void ApplyPresenceToMessages()
+    {
+        foreach (var message in Messages)
+        {
+            ApplyPresence(message);
+        }
+        foreach (var reply in ThreadReplies)
+        {
+            ApplyPresence(reply);
+        }
+        if (ThreadRootMessage is not null)
+        {
+            ApplyPresence(ThreadRootMessage);
+        }
+    }
+
+    /// <summary>
+    /// Gives one message the author's last known presence, if there is one.
+    /// Leaves it null otherwise, which hides the dot — better than a grey
+    /// circle claiming someone is offline when nobody has actually asked.
+    /// </summary>
+    private void ApplyPresence(MessageItem message)
+    {
+        if (_presenceByUserId.TryGetValue(message.AuthorUserId, out var presence))
+        {
+            message.Presence = presence;
+        }
+    }
+
+    /// <summary>
+    /// Fills the gap for message authors the presence table has never heard
+    /// of — the common case in a channel, where most people posting aren't
+    /// in the DM sidebar. Fired off after every repaint, and a repaint
+    /// happens on every poll tick, so it has to cost nothing in the usual
+    /// case: it asks about each person exactly once and returns without
+    /// touching the network as soon as everyone loaded has been asked
+    /// about. A person it fails on isn't retried from here — the sixty-
+    /// second refresh already covers every loaded author, which makes it
+    /// the retry path, and a failing request is usually a connection that's
+    /// down anyway.
+    /// </summary>
+    private async Task EnsurePresenceForLoadedAuthorsAsync()
+    {
+        var unknown = LoadedMessageAuthorIds()
+            .Where(id => !_presenceByUserId.ContainsKey(id) && !_presenceAskedForUserIds.Contains(id))
+            .Distinct()
+            .ToList();
+        if (unknown.Count == 0)
+        {
+            return;
+        }
+
+        // Marked before the await, so a second repaint arriving while this
+        // one is still in flight doesn't ask for the same people again.
+        foreach (var id in unknown)
+        {
+            _presenceAskedForUserIds.Add(id);
+        }
+
+        List<UserStatusDto> statuses;
+        try
+        {
+            statuses = await _service.GetStatusesAsync(_session.BaseUrl, _session.Token, unknown);
+        }
+        catch
+        {
+            // Cosmetic, same as the timed refresh — the dots simply stay
+            // hidden for these authors until it comes round again.
+            return;
+        }
+
+        foreach (var status in statuses)
+        {
+            _presenceByUserId[status.UserId] = ToPresence(status.Status);
+        }
+
+        await Dispatcher.UIThread.InvokeAsync(ApplyPresenceToMessages);
     }
 
     private async Task PopulateDirectMessagesAsync(List<ChannelDto> allChannels, bool allowNetwork)
@@ -4315,9 +4436,15 @@ public partial class MainViewModel : ViewModelBase
                 EmojiImageResolver = ResolveTextEmojiAsync,
             };
             _ = ResolveMessageAvatarAsync(item, post.UserId);
+            ApplyPresence(item);
             Messages.Add(item);
             previous = item;
         }
+
+        // Anyone here the presence table has never seen — a channel's
+        // authors mostly aren't in the DM sidebar — is looked up in the
+        // background, so the dots fill in without holding up the repaint.
+        _ = EnsurePresenceForLoadedAuthorsAsync();
 
         // Only an append onto an existing list is "new traffic arriving".
         // A from-scratch repaint (channel switch, jump to a search result)
@@ -4424,6 +4551,8 @@ public partial class MainViewModel : ViewModelBase
         IsPending = true,
         IsContinuation = IsContinuationOf(previous, _session.User.Id, item.CreatedAt),
         DateSeparatorLabel = DateSeparatorFor(previous?.CreateAtMillis, item.CreatedAt),
+        // A message of one's own, queued or in flight, still shows one's own dot.
+        Presence = MyStatus,
     };
 
     private ObservableCollection<ReactionItem> BuildReactions(PostDto post)

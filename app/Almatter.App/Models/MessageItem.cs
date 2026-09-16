@@ -190,6 +190,40 @@ public sealed partial class MessageItem : ObservableObject
     /// <summary>The author's real profile picture, once fetched — null until then (or forever, on a fetch failure), so the colored-initials circle stays as the fallback rather than an empty gap.</summary>
     [ObservableProperty]
     public partial IBrush? AvatarImageBrush { get; set; }
+
+    /// <summary>
+    /// The author's presence, drawn as the small colored dot on the corner
+    /// of their avatar — the same indicator the DM sidebar carries, so a
+    /// person reads the same in a channel, in a thread and in a private
+    /// conversation. Deliberately nullable: null means "nobody has asked
+    /// the server about this person yet" and hides the dot entirely, rather
+    /// than painting a grey "offline" that would be a guess. Filled in and
+    /// kept fresh by MainViewModel, which owns the presence table.
+    ///
+    /// The dot is drawn inside the avatar's own fixed-size box, so it never
+    /// changes a row's height — which, with the message list virtualized,
+    /// is what would otherwise make the conversation jump under the reader.
+    /// </summary>
+    [ObservableProperty]
+    public partial PresenceStatus? Presence { get; set; }
+
+    public bool HasPresence => Presence is not null;
+
+    public IBrush PresenceBrush => ColorTokens.Presence(Presence ?? PresenceStatus.Offline);
+
+    /// <summary>The presence in words, for the profile card behind the avatar.</summary>
+    public string PresenceLabel => PresenceText.Label(Presence ?? PresenceStatus.Offline);
+
+    partial void OnPresenceChanged(PresenceStatus? value) => RefreshPresence();
+
+    /// <summary>Repaints the dot — after a presence change, and after a theme change, since the presence palette is per-theme.</summary>
+    public void RefreshPresence()
+    {
+        OnPropertyChanged(nameof(HasPresence));
+        OnPropertyChanged(nameof(PresenceBrush));
+        OnPropertyChanged(nameof(PresenceLabel));
+    }
+
     /// <summary>
     /// Drives the row's "tinted" style class rather than a brush: the row
     /// also has a pointer-over tint, and a class lets the accent tint win
