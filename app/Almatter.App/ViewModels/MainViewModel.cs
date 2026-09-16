@@ -2722,6 +2722,9 @@ public partial class MainViewModel : ViewModelBase
     /// <summary>How many entries the "most used" row holds — two rows of five in the picker's width.</summary>
     private const int FrequentEmojiCount = 10;
 
+    /// <summary>How many matches one emoji grid will draw for a search — see the note in Narrow.</summary>
+    private const int MaxEmojiResults = 250;
+
     /// <summary>
     /// What the "most used" row falls back to before anyone has picked
     /// anything, and what tops it up while the tally is still short. An empty
@@ -2748,9 +2751,9 @@ public partial class MainViewModel : ViewModelBase
     /// </summary>
     private void InitializeEmojiPicker()
     {
-        foreach (var (shortcode, glyph) in EmojiShortcodes.PickerEntries)
+        foreach (var (shortcode, glyph, common) in EmojiShortcodes.PickerEntries)
         {
-            _allStandardEmoji.Add(EmojiPickerItem.Standard(shortcode, glyph, Settings.SkinTone));
+            _allStandardEmoji.Add(EmojiPickerItem.Standard(shortcode, glyph, common, Settings.SkinTone));
         }
 
         foreach (var (tone, label) in SkinToneLabels)
@@ -2808,7 +2811,19 @@ public partial class MainViewModel : ViewModelBase
             var index = 0;
             foreach (var item in all)
             {
-                if (query.Length != 0 && !item.Matches(query))
+                // A one-letter query matches most of the standard set, and
+                // every match drawn is a real button built on the spot. Past
+                // a couple of screenfuls nobody is reading them anyway, so
+                // the rest wait for a more specific query.
+                if (index == MaxEmojiResults)
+                {
+                    break;
+                }
+
+                // Nothing typed: the grid shows the everyday set only. The
+                // rest of the standard set is reachable by searching.
+                var wanted = query.Length == 0 ? item.IsCommon : item.Matches(query);
+                if (!wanted)
                 {
                     continue;
                 }
@@ -3043,7 +3058,19 @@ public partial class MainViewModel : ViewModelBase
     /// </summary>
     private readonly SemaphoreSlim _imageFetchThrottle = new(3);
 
-    /// <summary>Shared by the picker's swatches and message reactions so the same custom emoji's image is only ever downloaded/decoded once per session.</summary>
+    /// <summary>
+    /// Shared by the picker's swatches and message reactions so the same
+    /// custom emoji's image is only ever downloaded/decoded once per session.
+    ///
+    /// A fifth of a typical server's custom emoji are animated GIFs, and this
+    /// draws the first frame of one and leaves it there. That is a deliberate
+    /// choice, not an oversight: animating them means a running clock per
+    /// emoji, with a conversation showing dozens at once, and every decoded
+    /// frame is native memory this would have to release by hand as they
+    /// scroll away. Both are exactly what this app exists to avoid. Anyone
+    /// picking this up again should start by pausing anything off screen and
+    /// capping how many run at once — or leave it be.
+    /// </summary>
     private async Task<Bitmap?> GetCustomEmojiBitmapAsync(string emojiId)
     {
         if (_customEmojiImageCache.TryGetValue(emojiId, out var cached))

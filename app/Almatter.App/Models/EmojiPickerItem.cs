@@ -16,6 +16,15 @@ public sealed partial class EmojiPickerItem : ObservableObject
     /// <summary>Set for a custom emoji — the server id used to fetch/cache its image.</summary>
     public string? EmojiId { get; init; }
 
+    /// <summary>
+    /// Whether this one is drawn in the grid before anything is searched for.
+    /// The standard set runs to nineteen hundred emoji and the grid has no
+    /// virtualisation, so only the everyday ones are shown up front; the rest
+    /// are found by typing. Every custom emoji is common in this sense — a
+    /// server's own set is small, and it's the reason people open the picker.
+    /// </summary>
+    public bool IsCommon { get; init; }
+
     /// <summary>The emoji_name sent to the reactions API — BaseName plus the chosen skin-tone suffix, when this emoji takes one.</summary>
     [ObservableProperty]
     public partial string Name { get; set; } = "";
@@ -29,15 +38,15 @@ public sealed partial class EmojiPickerItem : ObservableObject
 
     public bool IsCustom => BaseGlyph is null;
 
-    public static EmojiPickerItem Standard(string shortcode, string glyph, EmojiSkinTone tone)
+    public static EmojiPickerItem Standard(string shortcode, string glyph, bool common, EmojiSkinTone tone)
     {
-        var item = new EmojiPickerItem { BaseName = shortcode, BaseGlyph = glyph };
+        var item = new EmojiPickerItem { BaseName = shortcode, BaseGlyph = glyph, IsCommon = common };
         item.ApplyTone(tone);
         return item;
     }
 
     public static EmojiPickerItem Custom(string name, string emojiId) =>
-        new() { BaseName = name, EmojiId = emojiId, Name = name };
+        new() { BaseName = name, EmojiId = emojiId, Name = name, IsCommon = true };
 
     /// <summary>
     /// Re-skins this entry in place when the tone preference changes, so the

@@ -95,6 +95,7 @@ installer/             Inno Setup script, build and Windows Sandbox test scripts
 design/                Interface mockups the UI was designed from
 docs/                  Project notes (platform portability)
 licenses/              Licences of bundled third-party assets
+tools/                 Code generators (the standard emoji shortcode table)
 ```
 
 All networking, caching and synchronisation happen in the Rust core, which contains no
@@ -136,6 +137,16 @@ cd core
 cargo test
 ```
 
+### Update the emoji table
+
+The standard emoji shortcodes (`:tada:`, `:smirk_cat:`) live in a generated file,
+`app\Almatter.App\Models\EmojiShortcodesData.cs`, which is committed. Run this only
+to pick up emoji added to Unicode since:
+
+```powershell
+node tools\generate-emoji-shortcodes.js
+```
+
 ### Build the installer
 
 ```powershell
@@ -165,8 +176,8 @@ suggested approach for each OS.
 
 Almatter is released under the [MIT License](LICENSE).
 
-It bundles the Open Sans font under the SIL Open Font License 1.1 — see
-[licenses/](licenses/).
+It bundles the Open Sans font under the SIL Open Font License 1.1, and its emoji
+shortcode table is generated from emoji-data (MIT) — see [licenses/](licenses/).
 
 Almatter is an independent project, not affiliated with or endorsed by Mattermost, Inc.
 Mattermost is a trademark of Mattermost, Inc.
@@ -271,6 +282,7 @@ installer/             Script Inno Setup, scripts de fabrication et de test en W
 design/                Maquettes à partir desquelles l'interface a été conçue
 docs/                  Notes du projet (portabilité)
 licenses/              Licences des ressources tierces embarquées
+tools/                 Générateurs de code (table des raccourcis emoji standards)
 ```
 
 Le réseau, le cache et la synchronisation sont entièrement pris en charge par le cœur
@@ -316,6 +328,16 @@ cd core
 cargo test
 ```
 
+### Mettre à jour la table des emojis
+
+Les raccourcis des emojis standards (`:tada:`, `:smirk_cat:`) sont dans un fichier
+généré, `app\Almatter.App\Models\EmojiShortcodesData.cs`, qui est versionné. Ce script
+ne sert qu'à récupérer les emojis ajoutés à Unicode depuis :
+
+```powershell
+node tools\generate-emoji-shortcodes.js
+```
+
 ### Fabriquer l'installeur
 
 ```powershell
@@ -346,8 +368,8 @@ système.
 
 Almatter est distribué sous [licence MIT](LICENSE).
 
-Il embarque la police Open Sans, sous SIL Open Font License 1.1 — voir
-[licenses/](licenses/).
+Il embarque la police Open Sans, sous SIL Open Font License 1.1, et sa table de
+raccourcis emoji est générée à partir d'emoji-data (MIT) — voir [licenses/](licenses/).
 
 Almatter est un projet indépendant, sans lien avec Mattermost, Inc. ni approuvé par
 elle. Mattermost est une marque de Mattermost, Inc.
