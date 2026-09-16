@@ -1,6 +1,6 @@
 [package]
 name = "almatter-ffi"
-version = "0.5.0"
+version = "0.6.0"
 edition = "2021"
 
 # Compiles to almatter_ffi.dll — the .NET side's DllImport name and the
