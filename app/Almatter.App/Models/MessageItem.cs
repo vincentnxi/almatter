@@ -76,6 +76,23 @@ public sealed partial class MessageItem : ObservableObject
 
     /// <summary>Extra breathing room above a new sender's first message so it doesn't crowd the previous person's last line — a continuation (same sender, grouped) stays snug underneath it instead.</summary>
     public Thickness RowPadding => IsContinuation ? new Thickness(0, 4, 8, 4) : new Thickness(0, 10, 8, 4);
+
+    /// <summary>
+    /// The day this message was sent ("Aujourd'hui", "Hier", "mardi 3 juin"),
+    /// drawn as a separator line above it — null for a message falling on the
+    /// same local day as the one before it, so exactly one separator appears
+    /// per date change. Decided once, when the row is built (see
+    /// MainViewModel.DateSeparatorFor): whether a row carries a separator at
+    /// all is what sets its height, and with the list virtualized, a height
+    /// that changes under the reader visibly jumps the conversation. Only the
+    /// wording is refreshed later, when the app is left open past midnight and
+    /// yesterday's "Aujourd'hui" has to become "Hier".
+    /// </summary>
+    [ObservableProperty]
+    public partial string? DateSeparatorLabel { get; set; }
+
+    public bool HasDateSeparator => DateSeparatorLabel is not null;
+
     public ObservableCollection<ReactionItem> Reactions { get; init; } = [];
     public ObservableCollection<AttachmentItem> Attachments { get; init; } = [];
     public int ThreadReplyCount { get; init; }

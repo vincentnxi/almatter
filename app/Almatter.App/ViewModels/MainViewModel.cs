@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -57,22 +58,29 @@ public partial class MainViewModel : ViewModelBase
     private bool _pollingStarted;
     private CancellationTokenSource? _pollingCts;
     /// <summary>
-    /// True right after jumping to a message from search — the list is showing
-    /// a window around that (possibly old) message rather than the channel's
+    /// True right after jumping to a message that isn't among the channel's
+    /// recent ones — the list is showing a window around that old message rather than the channel's
     /// live tail, so the polling loop below must not silently swap it back to
     /// "the most recent messages" a couple of seconds later. Cleared on the
     /// next real channel switch.
     /// </summary>
-    private bool _viewingJumpedMessage;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowReturnToLiveButton))]
+    public partial bool IsViewingJumpedMessage { get; set; }
+
+    /// <summary>True while the conversation is scrolled away from its newest message.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowReturnToLiveButton))]
+    public partial bool IsAwayFromLiveTail { get; set; }
 
     /// <summary>
-    /// True while the conversation is scrolled away from its newest message.
-    /// Shows the "back to the latest message" button — which is also the
-    /// discoverable way out of the jumped-to-an-older-message state, where
-    /// live updates are suspended on purpose.
+    /// The "back to the latest message" button — also the discoverable way
+    /// out of the jumped-to-an-older-message state, where live updates are
+    /// suspended on purpose. Shown for that state even at the bottom of the
+    /// list: the bottom of a jumped-to window isn't the live conversation,
+    /// and hiding the button there left the channel silently frozen.
     /// </summary>
-    [ObservableProperty]
-    public partial bool IsAwayFromLiveTail { get; set; }
+    public bool ShowReturnToLiveButton => IsAwayFromLiveTail || IsViewingJumpedMessage;
 
     [ObservableProperty]
     public partial string TeamName { get; set; } = "";
@@ -785,6 +793,15 @@ public partial class MainViewModel : ViewModelBase
                     await RefreshPresenceAsync();
                 }
 
+                // Midnight passed with the app open: yesterday's separators
+                // still read "Aujourd'hui" and would keep doing so until the
+                // list happens to be rebuilt. Only the wording changes — never
+                // which messages carry a separator — so nothing moves.
+                if (DateTime.Today != _dateSeparatorDay)
+                {
+                    await Dispatcher.UIThread.InvokeAsync(RefreshDateSeparatorLabels);
+                }
+
                 try
                 {
                     await RefreshChannelBadgesFromCacheAsync();
@@ -818,7 +835,7 @@ public partial class MainViewModel : ViewModelBase
                 }
 
                 var channelId = _activeChannelId;
-                if (channelId is null || _viewingJumpedMessage)
+                if (channelId is null || IsViewingJumpedMessage)
                 {
                     continue;
                 }
@@ -2157,7 +2174,7 @@ public partial class MainViewModel : ViewModelBase
     /// resumes painting new messages (and marking the channel read) for the
     /// active conversation. Safe to call when not in that state.
     /// </summary>
-    private void ReturnToLiveConversation() => _viewingJumpedMessage = false;
+    private void ReturnToLiveConversation() => IsViewingJumpedMessage = false;
 
     /// <summary>Bound to the floating down-arrow: back to the newest message, and back to live updates with it.</summary>
     [RelayCommand]
@@ -2198,18 +2215,39 @@ public partial class MainViewModel : ViewModelBase
 
         try
         {
-            var posts = await _service.GetPostsAroundMessageAsync(_session.BaseUrl, _session.Token, channelId, postId);
-            var authorIds = posts.Select(p => p.UserId).Distinct();
-            var authors = (await _service.GetUsersAsync(_session.BaseUrl, _session.Token, authorIds))
-                .ToDictionary(u => u.Id);
-
-            if (channelId != _activeChannelId)
+            // A message among the channel's recent ones — what clicking a
+            // notification almost always lands on — is shown in the live
+            // conversation, exactly as opening the channel would show it.
+            // Painting a server window around it instead froze live updates
+            // with the view already at the bottom, so nothing hinted that
+            // new messages had stopped appearing.
+            var cached = await _service.GetCachedPostsAsync(channelId);
+            if (cached.Any(p => p.Id == postId))
             {
-                return;
+                var cachedAuthors = (await _service.GetCachedUsersAsync(cached.Select(p => p.UserId).Distinct()))
+                    .ToDictionary(u => u.Id);
+                if (channelId != _activeChannelId)
+                {
+                    return;
+                }
+                ReturnToLiveConversation();
+                await PopulateMessagesWithOutboxAsync(channelId, cached, cachedAuthors);
             }
+            else
+            {
+                var posts = await _service.GetPostsAroundMessageAsync(_session.BaseUrl, _session.Token, channelId, postId);
+                var authorIds = posts.Select(p => p.UserId).Distinct();
+                var authors = (await _service.GetUsersAsync(_session.BaseUrl, _session.Token, authorIds))
+                    .ToDictionary(u => u.Id);
 
-            await PopulateMessagesWithOutboxAsync(channelId, posts, authors);
-            _viewingJumpedMessage = true;
+                if (channelId != _activeChannelId)
+                {
+                    return;
+                }
+
+                await PopulateMessagesWithOutboxAsync(channelId, posts, authors);
+                IsViewingJumpedMessage = true;
+            }
 
             var target = Messages.FirstOrDefault(m => m.Id == postId);
             if (target is not null)
@@ -2298,6 +2336,71 @@ public partial class MainViewModel : ViewModelBase
         {
             ErrorMessage = ex.Message;
         }
+    }
+
+    /// <summary>
+    /// Fills a reaction pill's tooltip with who reacted, the first time the
+    /// pointer rests on it. Names come from the local cache, and only the
+    /// people it doesn't know yet are asked of the server — if that fails
+    /// (offline), they show as unknown and the next hover tries again.
+    /// </summary>
+    public async Task ResolveReactorNamesAsync(ReactionItem reaction)
+    {
+        if (reaction.ReactorsRequested)
+        {
+            return;
+        }
+        reaction.ReactorsRequested = true;
+
+        var myId = _session.User.Id;
+        var others = reaction.UserIds.Where(id => id != myId).ToList();
+        var users = new Dictionary<string, UserDto>();
+        try
+        {
+            if (others.Count > 0)
+            {
+                users = (await _service.GetCachedUsersAsync(others)).ToDictionary(u => u.Id);
+                var missing = others.Where(id => !users.ContainsKey(id)).ToList();
+                if (missing.Count > 0)
+                {
+                    foreach (var user in await _service.GetUsersAsync(_session.BaseUrl, _session.Token, missing))
+                    {
+                        users[user.Id] = user;
+                    }
+                }
+            }
+        }
+        catch
+        {
+            reaction.ReactorsRequested = false;
+        }
+
+        var names = new List<string>();
+        if (reaction.ReactedByMe)
+        {
+            names.Add("Vous");
+        }
+        names.AddRange(others.Select(id => users.TryGetValue(id, out var u) ? u.DisplayName : "Utilisateur inconnu"));
+        reaction.ReactorsText = FormatReactorsText(names, reaction.ReactedByMe, reaction.EmojiName);
+    }
+
+    /// <summary>"Vous et Alice avez réagi avec :+1:", "Alice, Bob et 3 autres ont réagi avec :tada:" — capped so a hugely popular reaction doesn't get a wall of names.</summary>
+    private static string FormatReactorsText(List<string> names, bool includesMe, string emojiName)
+    {
+        const int maxShown = 10;
+        var shown = names.Take(maxShown).ToList();
+        var hidden = names.Count - shown.Count;
+        if (hidden > 0)
+        {
+            shown.Add(hidden == 1 ? "1 autre" : $"{hidden} autres");
+        }
+
+        var list = shown.Count == 1
+            ? shown[0]
+            : $"{string.Join(", ", shown.Take(shown.Count - 1))} et {shown[^1]}";
+        // Any list including "Vous" takes "avez", whatever else is in it.
+        var verb = includesMe ? "avez" : names.Count == 1 ? "a" : "ont";
+        return $"{list} {verb} réagi avec :{emojiName}:";
     }
 
     /// <summary>
@@ -3331,7 +3434,12 @@ public partial class MainViewModel : ViewModelBase
             }
         }
 
-        MessageItem ToMessageItem(PostDto post, MessageItem? previous)
+        // `dayBefore` is kept separate from `previous` because the two answer
+        // different questions: `previous` drives grouping and deliberately
+        // excludes the root (a reply always gets its own header), while the
+        // date separator must still compare the first reply against the
+        // root's day, or an old thread answered today shows no date change.
+        MessageItem ToMessageItem(PostDto post, MessageItem? previous, long? dayBefore)
         {
             authors.TryGetValue(post.UserId, out var author);
             var item = new MessageItem
@@ -3348,6 +3456,7 @@ public partial class MainViewModel : ViewModelBase
                 IsEdited = post.EditAt > 0,
                 LinkPreview = BuildLinkPreview(post),
                 IsContinuation = IsContinuationOf(previous, post.UserId, post.CreateAt),
+                DateSeparatorLabel = DateSeparatorFor(dayBefore, post.CreateAt),
                 Reactions = BuildReactions(post),
                 Attachments = BuildAttachments(post),
                 IsPinned = post.IsPinned,
@@ -3359,7 +3468,7 @@ public partial class MainViewModel : ViewModelBase
 
         // The root never counts as a continuation of anything — it's always
         // shown with its own full header, visually separate from the reply list.
-        ThreadRootMessage = ToMessageItem(posts[0], previous: null);
+        ThreadRootMessage = ToMessageItem(posts[0], previous: null, dayBefore: null);
 
         // Same reconciliation as the main message list, for the same two
         // reasons: not rebuilding every reply when one arrives, and being
@@ -3411,7 +3520,7 @@ public partial class MainViewModel : ViewModelBase
         foreach (var reply in replies.Skip(keptCount))
         {
             appended = true;
-            var item = ToMessageItem(reply, previousReply);
+            var item = ToMessageItem(reply, previousReply, previousReply?.CreateAtMillis ?? ThreadRootMessage?.CreateAtMillis);
             ThreadReplies.Add(item);
             previousReply = item;
         }
@@ -4007,6 +4116,75 @@ public partial class MainViewModel : ViewModelBase
         && previous.AuthorUserId == authorUserId
         && createAtMillis - previous.CreateAtMillis < ContinuationWindowMillis;
 
+    /// <summary>
+    /// The date label to draw above a message, or null when it falls on the
+    /// same local day as the one before it. A list's first message always
+    /// gets one, so a conversation opens stating what day the reader is
+    /// looking at instead of showing bare "14:32" stamps.
+    /// </summary>
+    private static string? DateSeparatorFor(long? previousCreateAtMillis, long createAtMillis)
+    {
+        var day = LocalDayOf(createAtMillis);
+        if (previousCreateAtMillis is { } before && LocalDayOf(before) == day)
+        {
+            return null;
+        }
+        return FormatDateSeparator(day);
+    }
+
+    private static DateTime LocalDayOf(long createAtMillis) =>
+        DateTimeOffset.FromUnixTimeMilliseconds(createAtMillis).ToLocalTime().Date;
+
+    /// <summary>
+    /// The rest of the interface is French whatever the machine's locale is,
+    /// so the day name and month are spelled out in French too rather than
+    /// following CurrentCulture and landing a lone English line in the middle
+    /// of the conversation. The year is dropped for the current year, which
+    /// is where nearly all reading happens.
+    /// </summary>
+    private static string FormatDateSeparator(DateTime day)
+    {
+        var today = DateTime.Today;
+        if (day == today)
+        {
+            return "Aujourd'hui";
+        }
+        if (day == today.AddDays(-1))
+        {
+            return "Hier";
+        }
+
+        var label = day.ToString(day.Year == today.Year ? "dddd d MMMM" : "dddd d MMMM yyyy", FrenchCulture);
+        return char.ToUpper(label[0], FrenchCulture) + label[1..];
+    }
+
+    private static readonly CultureInfo FrenchCulture = CultureInfo.GetCultureInfo("fr-FR");
+
+    /// <summary>The day the separators on screen were worded for — compared on every poll tick so a session left open overnight re-words them (see StartPollingLoop).</summary>
+    private DateTime _dateSeparatorDay = DateTime.Today;
+
+    private void RefreshDateSeparatorLabels()
+    {
+        _dateSeparatorDay = DateTime.Today;
+
+        static void Relabel(MessageItem message)
+        {
+            if (message.HasDateSeparator)
+            {
+                message.DateSeparatorLabel = FormatDateSeparator(LocalDayOf(message.CreateAtMillis));
+            }
+        }
+
+        foreach (var message in Messages.Concat(ThreadReplies))
+        {
+            Relabel(message);
+        }
+        if (ThreadRootMessage is { } root)
+        {
+            Relabel(root);
+        }
+    }
+
     private void PopulateMessages(List<PostDto> posts, Dictionary<string, UserDto> authors)
     {
         // Thread replies are shown inline too (not just in the thread panel)
@@ -4094,9 +4272,18 @@ public partial class MainViewModel : ViewModelBase
             appended = true;
             authors.TryGetValue(post.UserId, out var author);
 
+            // A burst of replies to the same message only quotes it once: a
+            // reply that follows the same author's previous reply in that
+            // thread by under two minutes reads as a plain continuation. It
+            // still belongs to the thread (ThreadRootId below), so "Répondre"
+            // keeps opening it.
+            var continuesSameThread = !string.IsNullOrEmpty(post.RootId)
+                && previous?.ThreadRootId == post.RootId
+                && IsContinuationOf(previous, post.UserId, post.CreateAt);
+
             string? quotedAuthorName = null;
             string? quotedText = null;
-            if (!string.IsNullOrEmpty(post.RootId) && postsById.TryGetValue(post.RootId, out var rootPost))
+            if (!string.IsNullOrEmpty(post.RootId) && !continuesSameThread && postsById.TryGetValue(post.RootId, out var rootPost))
             {
                 authors.TryGetValue(rootPost.UserId, out var rootAuthor);
                 quotedAuthorName = rootAuthor?.DisplayName ?? "Utilisateur inconnu";
@@ -4121,6 +4308,7 @@ public partial class MainViewModel : ViewModelBase
                 QuotedText = quotedText,
                 LinkPreview = BuildLinkPreview(post),
                 IsContinuation = IsContinuationOf(previous, post.UserId, post.CreateAt),
+                DateSeparatorLabel = DateSeparatorFor(previous?.CreateAtMillis, post.CreateAt),
                 Reactions = BuildReactions(post),
                 Attachments = BuildAttachments(post),
                 IsPinned = post.IsPinned,
@@ -4235,6 +4423,7 @@ public partial class MainViewModel : ViewModelBase
         IsMine = true,
         IsPending = true,
         IsContinuation = IsContinuationOf(previous, _session.User.Id, item.CreatedAt),
+        DateSeparatorLabel = DateSeparatorFor(previous?.CreateAtMillis, item.CreatedAt),
     };
 
     private ObservableCollection<ReactionItem> BuildReactions(PostDto post)
@@ -4248,6 +4437,7 @@ public partial class MainViewModel : ViewModelBase
                 Emoji = EmojiShortcodes.ToGlyph(g.Key),
                 Count = g.Count(),
                 ReactedByMe = g.Any(r => r.UserId == _session.User.Id),
+                UserIds = g.Select(r => r.UserId).Distinct().ToList(),
             })
             .ToList();
         foreach (var reaction in items)

@@ -172,6 +172,25 @@
                 </StackPanel>
             </Button>
         </DataTemplate>
+
+        <!-- The date change marker drawn above the first message of each day:
+             a rule across the conversation with the day named in the middle.
+             Shared by the channel list, the thread root and the thread replies
+             so a date reads identically wherever it appears. Bound to the
+             MessageItem itself, and only ever shown when that message starts a
+             new day (see MessageItem.DateSeparatorLabel). -->
+        <DataTemplate x:Key="DateSeparatorTemplate" DataType="models:MessageItem">
+            <Grid ColumnDefinitions="*,Auto,*" Margin="0,10,0,14">
+                <Border Grid.Column="0" Height="1" VerticalAlignment="Center" Background="{DynamicResource DividerStrongBrush}" />
+                <Border Grid.Column="1" Margin="10,0" Padding="12,4" CornerRadius="12"
+                        Background="{DynamicResource CardBgBrush}"
+                        BorderBrush="{DynamicResource DividerStrongBrush}" BorderThickness="1">
+                    <TextBlock Text="{Binding DateSeparatorLabel}" FontSize="11.5" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextSecondaryBrush}" />
+                </Border>
+                <Border Grid.Column="2" Height="1" VerticalAlignment="Center" Background="{DynamicResource DividerStrongBrush}" />
+            </Grid>
+        </DataTemplate>
     </Window.Resources>
 
     <!-- How each block of a message's Markdown is drawn. Declared once here
@@ -584,6 +603,12 @@
                     </ItemsControl.ItemsPanel>
                     <ItemsControl.ItemTemplate>
                         <DataTemplate DataType="models:MessageItem">
+                          <StackPanel>
+                            <!-- Sits outside the row Border on purpose: inside it, the
+                                 day marker would light up with the row's hover tint and
+                                 read as part of that message rather than as a divider. -->
+                            <ContentControl IsVisible="{Binding HasDateSeparator}" Content="{Binding}"
+                                            ContentTemplate="{StaticResource DateSeparatorTemplate}" />
                             <Border Classes="message-row" Classes.tinted="{Binding IsTinted}" Opacity="{Binding BodyOpacity}" CornerRadius="{DynamicResource RowRadiusValue}" Padding="{Binding RowPadding}">
                                 <Panel>
                                 <Grid ColumnDefinitions="36,*">
@@ -709,6 +734,8 @@
                                             <ItemsControl.ItemTemplate>
                                                 <DataTemplate DataType="models:ReactionItem">
                                                     <Button Classes="row-button"
+                                                            ToolTip.Tip="{Binding ReactorsText}"
+                                                            PointerEntered="OnReactionPointerEntered"
                                                             Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).ToggleReactionCommand}"
                                                             CommandParameter="{Binding}">
                                                         <Border BorderBrush="{Binding BorderBrush}" BorderThickness="1" CornerRadius="14" Padding="9,3">
@@ -795,6 +822,7 @@
                                 </StackPanel>
                                 </Panel>
                             </Border>
+                          </StackPanel>
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
@@ -804,7 +832,7 @@
                  away from it. Clicking it returns to the newest message AND
                  resumes live updates, which is the one gesture that reliably
                  leaves the "looking at an older message" state. -->
-            <Button Grid.Row="1" Classes="row-button" IsVisible="{Binding IsAwayFromLiveTail}"
+            <Button Grid.Row="1" Classes="row-button" IsVisible="{Binding ShowReturnToLiveButton}"
                     HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,28,14"
                     Width="34" Height="34" ToolTip.Tip="Revenir au dernier message"
                     Command="{Binding ReturnToLiveTailCommand}">
@@ -971,6 +999,12 @@
                         <StackPanel>
 
                             <StackPanel IsVisible="{Binding ThreadRootMessage, Converter={x:Static conv:ObjectConverters.IsNotNull}}">
+                                <!-- The root always carries its own date: its header shows
+                                     only a time, so without this an old thread opened today
+                                     gives no clue what day it started on. -->
+                                <ContentControl DataContext="{Binding ThreadRootMessage}" x:DataType="models:MessageItem"
+                                                IsVisible="{Binding HasDateSeparator}" Content="{Binding}"
+                                                ContentTemplate="{StaticResource DateSeparatorTemplate}" />
                                 <Grid ColumnDefinitions="30,*" DataContext="{Binding ThreadRootMessage}" x:DataType="models:MessageItem">
                                     <Button Grid.Column="0" Classes="row-button" Width="30" Height="30" VerticalAlignment="Top">
                                         <Button.Flyout>
@@ -1055,6 +1089,10 @@
                                 </ItemsControl.ItemsPanel>
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate DataType="models:MessageItem">
+                                      <StackPanel>
+                                        <!-- A thread answered days later gets the same day marker as the channel. -->
+                                        <ContentControl IsVisible="{Binding HasDateSeparator}" Content="{Binding}"
+                                                        ContentTemplate="{StaticResource DateSeparatorTemplate}" />
                                         <Grid ColumnDefinitions="30,*" Opacity="{Binding BodyOpacity}">
                                             <Button Grid.Column="0" Classes="row-button" Width="30" Height="30" VerticalAlignment="Top" IsVisible="{Binding ShowHeader}">
                                                 <Button.Flyout>
@@ -1124,6 +1162,7 @@
                                                 </Border>
                                             </StackPanel>
                                         </Grid>
+                                      </StackPanel>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>

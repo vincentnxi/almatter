@@ -363,6 +363,15 @@ public partial class MainWindow : Window
         _reorderTargetItem = null;
     }
 
+    /// <summary>Starts looking up who reacted as soon as the pointer reaches a reaction pill, so the names are usually ready by the time its tooltip appears.</summary>
+    private async void OnReactionPointerEntered(object? sender, PointerEventArgs e)
+    {
+        if (sender is Control { DataContext: ReactionItem reaction } && DataContext is MainViewModel vm)
+        {
+            await vm.ResolveReactorNamesAsync(reaction);
+        }
+    }
+
     /// <summary>
     /// A short move while the button is down promotes the gesture from "an
     /// ordinary click on this row" into a drag — DoDragDropAsync takes over
