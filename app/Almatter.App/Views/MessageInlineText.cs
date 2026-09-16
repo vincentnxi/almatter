@@ -263,18 +263,19 @@ public sealed class MessageInlineText : SelectableTextBlock
             return null;
         }
 
-        var hit = TextLayout.HitTestPoint(new Point(point.X - Padding.Left, point.Y - Padding.Top));
-        if (!hit.IsInside)
-        {
-            return null;
-        }
-
-        var index = hit.CharacterHit.FirstCharacterIndex;
+        // Checked against the boxes each link is drawn in, not with
+        // HitTestPoint: its IsInside is false on every line after the first,
+        // which left anything a paragraph had wrapped onto a later line —
+        // including the end of a long URL — unclickable.
+        var local = new Point(point.X - Padding.Left, point.Y - Padding.Top);
         foreach (var link in _links)
         {
-            if (index >= link.Start && index < link.End)
+            foreach (var box in TextLayout.HitTestTextRange(link.Start, link.End - link.Start))
             {
-                return link.Url;
+                if (box.Contains(local))
+                {
+                    return link.Url;
+                }
             }
         }
         return null;
