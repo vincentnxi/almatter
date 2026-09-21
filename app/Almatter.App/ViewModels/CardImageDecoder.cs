@@ -51,4 +51,44 @@ internal static class CardImageDecoder
         using var stream = File.OpenRead(path);
         return Bitmap.DecodeToWidth(stream, Math.Max(1, (int)Math.Ceiling(sourceWidth * scale)), BitmapInterpolationMode.HighQuality);
     }
+
+    /// <summary>
+    /// Decodes a small square icon — an avatar or a custom emoji — at the
+    /// size it is actually drawn at, not the size it was uploaded at.
+    ///
+    /// The server hands both of these back at 128 x 128 whatever they were
+    /// uploaded as, and every one of them was being decoded at that size and
+    /// kept forever: 64 KB of native memory each, for pictures drawn in a
+    /// 40-pixel circle or a 23-pixel reaction pill. A server with a few
+    /// thousand custom emoji would have grown that cache without limit.
+    ///
+    /// The floor of 1.5 on the scale factor is headroom: the window can be
+    /// dragged from a 100 % screen to a 150 % one without anything being
+    /// re-decoded, and an icon decoded for the smaller screen would look
+    /// soft there. Above 150 % the real scaling is used.
+    /// </summary>
+    public static Bitmap DecodeToFit(string path, double logicalSize, double scaling)
+    {
+        var want = (int)Math.Ceiling(logicalSize * Math.Max(scaling, 1.5));
+
+        int sourceWidth;
+        using (var codec = SKCodec.Create(path))
+        {
+            if (codec is null)
+            {
+                return new Bitmap(path);
+            }
+            sourceWidth = codec.Info.Width;
+        }
+
+        // Already smaller than the box — blowing it up would cost memory and
+        // gain nothing the renderer can't do at draw time.
+        if (sourceWidth <= want)
+        {
+            return new Bitmap(path);
+        }
+
+        using var stream = File.OpenRead(path);
+        return Bitmap.DecodeToWidth(stream, want, BitmapInterpolationMode.HighQuality);
+    }
 }

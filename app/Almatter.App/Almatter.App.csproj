@@ -12,6 +12,33 @@
     <Nullable>enable</Nullable>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets\almatter-logo.ico</ApplicationIcon>
+
+    <!-- Memory, which is the whole point of this app existing.
+
+         Server GC would give each of the machine's cores its own heap with
+         its own generous allocation budget — right for a web server with
+         nothing else on the machine, exactly wrong for a chat window meant
+         to sit in the tray all day next to everything else the user runs.
+         It is already the default for a desktop app; pinned here so it stays
+         that way.
+
+         Concurrent (background) GC buys shorter pauses by keeping a
+         dedicated collector thread and a bigger committed heap. Measured
+         here the heap is small enough — around 48 MB live — that a blocking
+         collection is a few milliseconds, so it trades a thread and tens of
+         megabytes of headroom for a pause nobody can see.
+
+         RetainVM would keep memory reserved from Windows after the collector
+         is finished with it, to hand out again later without asking. Faster
+         if the app keeps re-growing; here it just means Task Manager never
+         shows the memory coming back down.
+
+         System.GC.ConserveMemory (0-9, no MSBuild property of its own, hence
+         runtimeconfig.template.json next to this file) tells the collector to
+         work harder at compacting rather than committing more. -->
+    <ServerGarbageCollection>false</ServerGarbageCollection>
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
+    <RetainVMGarbageCollection>false</RetainVMGarbageCollection>
   </PropertyGroup>
 
   <ItemGroup>

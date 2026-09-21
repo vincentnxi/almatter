@@ -6,7 +6,7 @@ edition = "2021"
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-rusqlite = { version = "0.31", features = ["bundled-full"] }
+rusqlite = { version = "0.31", default-features = false, features = ["bundled"] }
 reqwest = { version = "0.12", features = ["json", "multipart"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time", "sync"] }
 tokio-tungstenite = { version = "0.23", features = ["native-tls"] }

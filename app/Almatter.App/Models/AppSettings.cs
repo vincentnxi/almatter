@@ -131,4 +131,31 @@ public sealed partial class AppSettings : ObservableObject
 
     [ObservableProperty]
     public partial bool ShowThreadFormattingToolbar { get; set; }
+
+    /// <summary>
+    /// Draw the window on the graphics card instead of the processor.
+    ///
+    /// Off by default, which is the opposite of what most toolkits do, and
+    /// deliberate. Avalonia's GPU path on Windows goes through ANGLE, which
+    /// translates to Direct3D, which loads the graphics driver into this
+    /// process: on the machine this was measured on that is two NVIDIA
+    /// libraries worth about 190 MB of mapped code and 55 extra threads, for
+    /// a window that draws text and small pictures. Measured side by side,
+    /// same conversation open, a minute after launch: 194 MB of private
+    /// memory and 86 threads on the GPU path against 112 MB and 31 threads
+    /// on this one, the window appearing in 0.9 s instead of 2.0 s, and —
+    /// the part that decides it — the same processor use while repainting
+    /// continuously. Forcing repaints by resizing the window for fifteen
+    /// seconds pushed the GPU path to 525 MB of private memory; the
+    /// processor path stayed at 92 MB.
+    ///
+    /// It is a setting rather than a hard choice because none of that is
+    /// guaranteed to hold elsewhere: a laptop with Intel graphics has a far
+    /// lighter driver, and a very high-resolution screen gives the graphics
+    /// card more of an advantage. Turn it on there if it helps. Read once at
+    /// startup, in Program.Main, before any window exists — so changing it
+    /// takes effect at the next launch.
+    /// </summary>
+    [ObservableProperty]
+    public partial bool UseGpuRendering { get; set; }
 }

@@ -1,3 +1,19 @@
 [workspace]
 resolver = "2"
 members = ["almatter-core", "almatter-ffi"]
+
+# almatter_ffi.dll ships next to the executable and is mapped into the
+# process for its whole life, so its size is not just download size — it is
+# memory. Cargo's stock release profile optimizes each crate on its own and
+# leaves every symbol name in; these four settings are the standard way to
+# tell it this is a shipping binary rather than a fast rebuild.
+#
+# Note what is deliberately NOT here: `panic = "abort"`. It would shrink the
+# binary further by dropping the unwinding tables, and it would also stop
+# almatter-ffi's `catch_unwind` from ever running — which is the one thing
+# standing between a panic deep in the core and the window silently
+# disappearing with no message. Not worth a few hundred kilobytes.
+[profile.release]
+lto = "fat"         # inline and drop dead code across crate boundaries, not just within one
+codegen-units = 1   # one unit, so that cross-crate work actually has everything in front of it
+strip = "symbols"   # debug symbols are of no use in a release DLL

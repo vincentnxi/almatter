@@ -1039,6 +1039,12 @@ pub fn log_path() -> PathBuf {
     app_data_dir().join("core.log")
 }
 
+/// How large `core.log` may get before the old half is rotated away. Nothing
+/// ever shortened this file, so it grew for as long as the app was installed.
+/// One previous generation is kept, so a failure is still readable after the
+/// rotation that happens to follow it.
+const MAX_LOG_BYTES: u64 = 256 * 1024;
+
 /// Best-effort append of one timestamped line — logging must never itself
 /// cause a failure, so any error writing it is simply swallowed.
 pub fn log(source: &str, message: &str) {
@@ -1049,10 +1055,14 @@ pub fn log(source: &str, message: &str) {
         return;
     }
     let now = chrono::Utc::now().to_rfc3339();
-    if let Some(parent) = log_path().parent() {
+    let path = log_path();
+    if let Some(parent) = path.parent() {
         let _ = std::fs::create_dir_all(parent);
     }
-    if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open(log_path()) {
+    if std::fs::metadata(&path).is_ok_and(|m| m.len() > MAX_LOG_BYTES) {
+        let _ = std::fs::rename(&path, path.with_extension("log.1"));
+    }
+    if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open(&path) {
         let _ = writeln!(file, "[{now}] {source}: {message}");
     }
 }

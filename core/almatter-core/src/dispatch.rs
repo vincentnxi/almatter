@@ -1029,10 +1029,11 @@ async fn refetch_post_into_cache(
 async fn ensure_emoji_image_cached(client: &MattermostClient, emoji_id: &str) -> Result<String, String> {
     let dir = crate::db::emoji_image_dir();
     let path = dir.join(emoji_id);
-    let already_cached = check_cached(dir, path.clone()).await?;
+    let already_cached = check_cached(dir.clone(), path.clone()).await?;
     if !already_cached {
         let bytes = client.get_emoji_image(emoji_id).await.map_err(|e| e.to_string())?;
         write_atomically(path.clone(), bytes).await?;
+        prune_cache_dir_occasionally(dir, EMOJI_CACHE_BUDGET).await;
     }
     Ok(path.to_string_lossy().to_string())
 }
@@ -1041,10 +1042,11 @@ async fn ensure_emoji_image_cached(client: &MattermostClient, emoji_id: &str) ->
 async fn ensure_avatar_cached(client: &MattermostClient, user_id: &str) -> Result<String, String> {
     let dir = crate::db::avatar_image_dir();
     let path = dir.join(user_id);
-    let already_cached = check_cached(dir, path.clone()).await?;
+    let already_cached = check_cached(dir.clone(), path.clone()).await?;
     if !already_cached {
         let bytes = client.get_user_avatar(user_id).await.map_err(|e| e.to_string())?;
         write_atomically(path.clone(), bytes).await?;
+        prune_cache_dir_occasionally(dir, AVATAR_CACHE_BUDGET).await;
     }
     Ok(path.to_string_lossy().to_string())
 }
@@ -1057,12 +1059,83 @@ async fn ensure_avatar_cached(client: &MattermostClient, user_id: &str) -> Resul
 async fn ensure_link_preview_image_cached(url: &str) -> Result<String, String> {
     let dir = crate::db::link_preview_image_dir();
     let path = dir.join(hash_url(url));
-    let already_cached = check_cached(dir, path.clone()).await?;
+    let already_cached = check_cached(dir.clone(), path.clone()).await?;
     if !already_cached {
         let bytes = fetch_external_bytes(url).await.map_err(|e| e.to_string())?;
         write_atomically(path.clone(), bytes).await?;
+        prune_cache_dir_occasionally(dir, LINK_PREVIEW_CACHE_BUDGET).await;
     }
     Ok(path.to_string_lossy().to_string())
+}
+
+/// How much disk each derived-image cache may hold. Nothing ever deleted
+/// from these: after a few months of ordinary use the link-preview folder
+/// alone was 32 MB of pictures from articles nobody is going to scroll back
+/// to. Every file in them is re-fetchable on demand, so the only cost of
+/// throwing the oldest away is fetching one again if it does come back.
+///
+/// Attachments (`files`) are deliberately NOT swept. They are the one cache
+/// whose files the user is handed directly — the app passes the path to
+/// whatever program opens that file type — and deleting one out from under
+/// an open document is a real failure, not a slow re-download.
+const LINK_PREVIEW_CACHE_BUDGET: u64 = 24 * 1024 * 1024;
+const EMOJI_CACHE_BUDGET: u64 = 16 * 1024 * 1024;
+const AVATAR_CACHE_BUDGET: u64 = 8 * 1024 * 1024;
+
+/// Sweeps only every so often rather than after each write: the sweep lists
+/// and stats the whole folder, which is far more work than the single write
+/// that triggered it, and a cache a few files over its budget is not a
+/// problem worth that.
+const SWEEP_EVERY_N_WRITES: u64 = 25;
+
+/// Deletes the oldest files in `dir` until what's left fits `budget_bytes`.
+///
+/// Oldest by modification time, which for these folders is when the file was
+/// fetched — none of them are ever rewritten in place. Least-recently-*used*
+/// would be the better rule, but it needs access times, and Windows does not
+/// update those by default. Anything that can't be read or removed is passed
+/// over: this is housekeeping, and it must never turn into a failed fetch.
+fn prune_cache_dir(dir: &std::path::Path, budget_bytes: u64) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    let mut files: Vec<(std::time::SystemTime, u64, std::path::PathBuf)> = entries
+        .flatten()
+        .filter_map(|entry| {
+            let meta = entry.metadata().ok()?;
+            if !meta.is_file() {
+                return None;
+            }
+            Some((meta.modified().ok()?, meta.len(), entry.path()))
+        })
+        .collect();
+
+    let mut total: u64 = files.iter().map(|(_, size, _)| size).sum();
+    if total <= budget_bytes {
+        return;
+    }
+
+    files.sort_by_key(|(modified, _, _)| *modified);
+    for (_, size, path) in files {
+        if total <= budget_bytes {
+            break;
+        }
+        if std::fs::remove_file(&path).is_ok() {
+            total = total.saturating_sub(size);
+        }
+    }
+}
+
+/// Runs `prune_cache_dir` on Tokio's blocking pool, one time in
+/// `SWEEP_EVERY_N_WRITES`. Called after a cache write, never before one: a
+/// fetch must not wait on housekeeping.
+async fn prune_cache_dir_occasionally(dir: std::path::PathBuf, budget_bytes: u64) {
+    static COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let n = COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    if n % SWEEP_EVERY_N_WRITES != 0 {
+        return;
+    }
+    let _ = tokio::task::spawn_blocking(move || prune_cache_dir(&dir, budget_bytes)).await;
 }
 
 fn hash_url(url: &str) -> String {

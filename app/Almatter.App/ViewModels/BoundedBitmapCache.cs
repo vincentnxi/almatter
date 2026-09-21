@@ -9,9 +9,11 @@ namespace Almatter.App.ViewModels;
 ///
 /// Why a byte budget: a decoded image costs width × height × 4 bytes of native
 /// memory whatever its file size, and that memory is invisible to .NET's
-/// garbage collector. The link-preview cache this replaces had no limit at
-/// all, and was measured holding 142 images at 418 MB after an afternoon of
-/// channel switching — most of the app's footprint.
+/// garbage collector. The link-preview cache this first replaced had no limit
+/// at all, and was measured holding 142 images at 418 MB after an afternoon of
+/// channel switching — most of the app's footprint. The custom-emoji and
+/// avatar caches were the same shape and are capped here too: a server with a
+/// large emoji set kept every one of them for the whole session.
 ///
 /// Evicting only drops the cache's reference; the image is deliberately NOT
 /// disposed. It may still be on screen in a message that's showing, and

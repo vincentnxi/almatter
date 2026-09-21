@@ -103,6 +103,16 @@ All networking, caching and synchronisation happen in the Rust core, which conta
 exchanges JSON with it through a single FFI entry point. The C# side keeps OS-specific
 code to a few isolated integration points.
 
+The window is drawn by the processor, not the graphics card. That is unusual, and
+deliberate: Avalonia's GPU path on Windows goes through ANGLE and Direct3D, which loads
+the graphics driver into the process — measured on an NVIDIA machine, about 190 MB of
+extra mapped code and 55 extra threads, for no measurable saving in the processor time
+spent painting. On the same machine and the same conversation, drawing on the processor
+uses 65 MB where the graphics card path uses 80 MB, and the window opens in 0.9 s rather
+than 2.0 s. None of that is guaranteed elsewhere — a laptop with Intel graphics has a far
+lighter driver — so it is a setting: add `"UseGpuRendering": true` to
+`%LOCALAPPDATA%\Almatter\settings.json` and restart.
+
 ## Building from source
 
 ### Prerequisites
@@ -290,6 +300,16 @@ Rust, qui ne contient ni code `unsafe` (`#![forbid(unsafe_code)]`) ni code propr
 système d'exploitation. L'interface échange du JSON avec lui par un point d'entrée FFI
 unique. Côté C#, le code propre à Windows est cantonné à quelques points d'intégration
 isolés.
+
+La fenêtre est dessinée par le processeur, pas par la carte graphique. C'est inhabituel,
+et délibéré : sous Windows, le chemin GPU d'Avalonia passe par ANGLE puis Direct3D, ce
+qui charge le pilote graphique dans le processus — mesuré sur une machine NVIDIA, environ
+190 Mo de code mappé et 55 threads de plus, sans aucun gain mesurable sur le temps
+processeur passé à peindre. Sur la même machine et la même conversation, le rendu par le
+processeur occupe 65 Mo là où le chemin graphique en occupe 80, et la fenêtre s'ouvre en
+0,9 s au lieu de 2,0 s. Rien de tout cela n'est garanti ailleurs — un portable à carte
+Intel a un pilote bien plus léger — d'où un réglage : ajouter `"UseGpuRendering": true`
+dans `%LOCALAPPDATA%\Almatter\settings.json`, puis relancer.
 
 ## Compiler depuis les sources
 

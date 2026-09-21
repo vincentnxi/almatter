@@ -135,6 +135,21 @@ public partial class MainViewModel : ViewModelBase
     private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(400);
 
     /// <summary>
+    /// The same loop, while the window is minimised or behind another app.
+    ///
+    /// Everything the fast cadence buys — a message appearing, a typing
+    /// indicator, the scroll staying put — is invisible when nobody is
+    /// looking at the window, and the loop was still doing five or six
+    /// round trips into the Rust core every 400 ms regardless: two and a
+    /// half wake-ups a second, all day, on a machine sitting in the tray.
+    /// The one thing that does still matter is a mention notification, and
+    /// two seconds late is not a notification anyone notices being late.
+    /// The WebSocket keeps filling the cache either way, so nothing is
+    /// missed — it is only read back less often.
+    /// </summary>
+    private static readonly TimeSpan BackgroundPollInterval = TimeSpan.FromSeconds(2);
+
+    /// <summary>
     /// Retrying queued messages is a NETWORK call, unlike everything else in
     /// the loop, so it keeps its own slower cadence — otherwise speeding the
     /// loop up would have it hammering an unreachable server every 400 ms.
@@ -369,8 +384,24 @@ public partial class MainViewModel : ViewModelBase
     private string? _emojiPickerTargetPostId;
     private Task? _customEmojiLoadTask;
     private readonly Dictionary<string, string> _customEmojiIdByName = [];
-    private readonly Dictionary<string, Bitmap> _customEmojiImageCache = [];
-    private readonly Dictionary<string, Bitmap> _avatarImageCache = [];
+    /// <summary>
+    /// Custom emoji pictures and profile photos, decoded once and shared by
+    /// every place that shows them. Both are capped now rather than growing
+    /// forever: the server hands every one of them back at 128 × 128, which
+    /// is 64 KB of native memory apiece, and a server with a few thousand
+    /// custom emoji would have kept every single one for the whole session.
+    /// At the size they are actually decoded at now (see
+    /// CardImageDecoder.DecodeToFit) these budgets hold roughly a thousand
+    /// emoji and several hundred faces — far more than a session shows.
+    /// </summary>
+    private readonly BoundedBitmapCache _customEmojiImageCache = new(6L * 1024 * 1024);
+    private readonly BoundedBitmapCache _avatarImageCache = new(4L * 1024 * 1024);
+
+    /// <summary>The circle an avatar is drawn in at its largest — the 40 px one above a message's first line.</summary>
+    private const double AvatarDisplaySize = 40;
+
+    /// <summary>The largest a custom emoji is drawn — the 23 px image in a reaction pill.</summary>
+    private const double CustomEmojiDisplaySize = 23;
 
     /// <summary>
     /// Last known presence per user. The DM list is rebuilt from the cache
@@ -803,7 +834,7 @@ public partial class MainViewModel : ViewModelBase
             {
                 try
                 {
-                    await Task.Delay(PollInterval, cancellationToken);
+                    await Task.Delay(WindowIsInForeground ? PollInterval : BackgroundPollInterval, cancellationToken);
                 }
                 catch (OperationCanceledException)
                 {
@@ -3125,7 +3156,7 @@ public partial class MainViewModel : ViewModelBase
     /// </summary>
     private async Task<Bitmap?> GetCustomEmojiBitmapAsync(string emojiId)
     {
-        if (_customEmojiImageCache.TryGetValue(emojiId, out var cached))
+        if (_customEmojiImageCache.TryGet(emojiId, out var cached))
         {
             return cached;
         }
@@ -3133,15 +3164,16 @@ public partial class MainViewModel : ViewModelBase
         try
         {
             // Another waiter may have fetched this same emoji while we were queued.
-            if (_customEmojiImageCache.TryGetValue(emojiId, out cached))
+            if (_customEmojiImageCache.TryGet(emojiId, out cached))
             {
                 return cached;
             }
             var path = await _service.GetEmojiImagePathAsync(_session.BaseUrl, _session.Token, emojiId);
+            var scaling = DisplayScaling;
             Bitmap bitmap;
             try
             {
-                bitmap = await Task.Run(() => new Bitmap(path));
+                bitmap = await Task.Run(() => CardImageDecoder.DecodeToFit(path, CustomEmojiDisplaySize, scaling));
             }
             catch (Exception ex)
             {
@@ -3154,9 +3186,9 @@ public partial class MainViewModel : ViewModelBase
                 CrashLogger.Write($"custom emoji: decode failed for {emojiId} at {path}, retrying once", ex);
                 TryDeleteFile(path);
                 path = await _service.GetEmojiImagePathAsync(_session.BaseUrl, _session.Token, emojiId);
-                bitmap = await Task.Run(() => new Bitmap(path));
+                bitmap = await Task.Run(() => CardImageDecoder.DecodeToFit(path, CustomEmojiDisplaySize, scaling));
             }
-            _customEmojiImageCache[emojiId] = bitmap;
+            _customEmojiImageCache.Add(emojiId, bitmap);
             return bitmap;
         }
         catch (Exception ex)
@@ -3174,22 +3206,23 @@ public partial class MainViewModel : ViewModelBase
     /// <summary>Same shape as GetCustomEmojiBitmapAsync, for a user's profile picture — shared cache/throttle, keyed by user id instead of emoji id.</summary>
     private async Task<Bitmap?> GetAvatarBitmapAsync(string userId)
     {
-        if (_avatarImageCache.TryGetValue(userId, out var cached))
+        if (_avatarImageCache.TryGet(userId, out var cached))
         {
             return cached;
         }
         await _imageFetchThrottle.WaitAsync();
         try
         {
-            if (_avatarImageCache.TryGetValue(userId, out cached))
+            if (_avatarImageCache.TryGet(userId, out cached))
             {
                 return cached;
             }
             var path = await _service.GetUserAvatarPathAsync(_session.BaseUrl, _session.Token, userId);
+            var scaling = DisplayScaling;
             Bitmap bitmap;
             try
             {
-                bitmap = await Task.Run(() => new Bitmap(path));
+                bitmap = await Task.Run(() => CardImageDecoder.DecodeToFit(path, AvatarDisplaySize, scaling));
             }
             catch (Exception ex)
             {
@@ -3199,9 +3232,9 @@ public partial class MainViewModel : ViewModelBase
                 CrashLogger.Write($"avatar: decode failed for {userId} at {path}, retrying once", ex);
                 TryDeleteFile(path);
                 path = await _service.GetUserAvatarPathAsync(_session.BaseUrl, _session.Token, userId);
-                bitmap = await Task.Run(() => new Bitmap(path));
+                bitmap = await Task.Run(() => CardImageDecoder.DecodeToFit(path, AvatarDisplaySize, scaling));
             }
-            _avatarImageCache[userId] = bitmap;
+            _avatarImageCache.Add(userId, bitmap);
             return bitmap;
         }
         catch (Exception ex)

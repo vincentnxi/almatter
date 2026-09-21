@@ -24,9 +24,28 @@ use std::sync::{Mutex, OnceLock};
 use tokio::runtime::Runtime;
 use almatter_core::db::Database;
 
+/// The worker threads Tokio runs futures on.
+///
+/// `Runtime::new()` starts one per processor, which on a twelve-core desktop
+/// was twelve threads — each with its own stack and scheduler state — for a
+/// workload that is a WebSocket, a handful of HTTP requests at a time and
+/// some SQLite reads. None of it is CPU-bound; it is all waiting on a socket
+/// or a file. Three is enough to keep those overlapping, and the rest were
+/// pure overhead. The blocking pool is capped for the same reason: its
+/// default ceiling is 512 threads, which nothing here is ever going to need.
+const WORKER_THREADS: usize = 3;
+const MAX_BLOCKING_THREADS: usize = 8;
+
 fn runtime() -> &'static Runtime {
     static RUNTIME: OnceLock<Runtime> = OnceLock::new();
-    RUNTIME.get_or_init(|| Runtime::new().expect("failed to start the Tokio runtime"))
+    RUNTIME.get_or_init(|| {
+        tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(WORKER_THREADS)
+            .max_blocking_threads(MAX_BLOCKING_THREADS)
+            .enable_all()
+            .build()
+            .expect("failed to start the Tokio runtime")
+    })
 }
 
 /// The one long-lived cache database for the running app, opened lazily on
