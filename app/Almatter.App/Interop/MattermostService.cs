@@ -577,6 +577,13 @@ public sealed class MattermostService
         await CallAsync<JsonObject>(request);
     }
 
+    /// <summary>Tells the server whether this user is at the keyboard — without it the server marks them away after five minutes, however much they use the app.</summary>
+    public async Task SendActiveStatusAsync(bool isActive)
+    {
+        var request = new JsonObject { ["command"] = "send_active_status", ["is_active"] = isActive };
+        await CallAsync<JsonObject>(request);
+    }
+
     /// <summary>A group DM's participant list — resolves and caches it, since (unlike a 1:1 DM) a GM channel's name isn't parseable into user ids.</summary>
     public async Task<List<string>> GetChannelMembersAsync(string baseUrl, string token, string channelId)
     {

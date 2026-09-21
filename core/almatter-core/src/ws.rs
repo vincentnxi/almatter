@@ -149,6 +149,28 @@ pub fn send_typing(channel_id: &str, parent_id: &str) {
     }
 }
 
+fn active_status_message(is_active: bool) -> String {
+    json!({
+        "seq": 3,
+        "action": "user_update_active_status",
+        "data": { "user_is_active": is_active, "manual": false }
+    })
+    .to_string()
+}
+
+/// Tells the server whether this user is at the keyboard. The server only
+/// counts *these* as activity — a socket that stays open, answers pings and
+/// fetches data still reads as idle, and after five minutes it flips the
+/// user to "away" on its own, while the app's own picker still says
+/// available. Mattermost's desktop client sends the same message. `manual`
+/// is false, so a status the user picked by hand (away, do not disturb)
+/// always wins over it. Best-effort, like `send_typing`.
+pub fn send_active_status(is_active: bool) {
+    if let Some(tx) = WS_SENDER.lock().expect("ws sender mutex poisoned").as_ref() {
+        let _ = tx.send(active_status_message(is_active));
+    }
+}
+
 /// Starts the background connection once per process (repeat calls, e.g. a
 /// second login in the same run, are no-ops). Keeps the local cache warm in
 /// real time: every `posted` event is written straight to SQLite, so the
@@ -481,14 +503,15 @@ async fn handle_event(text: &str, user_id: &str, client: &MattermostClient, db: 
         .and_then(|raw| serde_json::from_str::<Vec<String>>(raw).ok())
         .is_some_and(|ids| ids.iter().any(|id| id == user_id));
 
-    // Widens the channel's own unread gap live — someone else's message
-    // shouldn't need a full channel-list refetch (or a restart) before the
-    // sidebar's bold/badge state notices it. The post's own author never
-    // needs this: their own message doesn't bump anything for their own
-    // outbound side of the conversation view.
-    if post.user_id != user_id {
+    // Updates the channel live — someone else's message shouldn't need a
+    // full channel-list refetch (or a restart) before the sidebar's
+    // bold/badge state and DM ordering notice it. The user's own message
+    // (from here or another device) moves the conversation up too, just
+    // without making it unread.
+    {
         let cache = db.lock().expect("cache db mutex poisoned");
-        if let Err(e) = cache.bump_channel_activity(&post.channel_id, mentioned) {
+        let own_post = post.user_id == user_id;
+        if let Err(e) = cache.bump_channel_activity(&post.channel_id, post.create_at, own_post, mentioned && !own_post) {
             crate::db::log("ws", &format!("failed to bump channel activity: {e}"));
         }
     }
@@ -836,6 +859,15 @@ mod tests {
         assert_eq!(value["action"], "user_typing");
         assert_eq!(value["data"]["channel_id"], "c1");
         assert_eq!(value["data"]["parent_id"], "root1");
+    }
+
+    #[test]
+    fn active_status_message_never_overrides_a_hand_picked_status() {
+        let msg = active_status_message(true);
+        let value: serde_json::Value = serde_json::from_str(&msg).unwrap();
+        assert_eq!(value["action"], "user_update_active_status");
+        assert_eq!(value["data"]["user_is_active"], true);
+        assert_eq!(value["data"]["manual"], false);
     }
 
     #[test]

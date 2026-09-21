@@ -58,6 +58,20 @@ public partial class MainWindow : Window
         };
         Closed += (_, _) => _notifier?.Dispose();
 
+        // A message in the selected channel counts as "already read" only
+        // while the window is really in front of the user. Activated and
+        // Deactivated cover focus; the WindowState watch covers minimising,
+        // which on some setups doesn't come with a focus change of its own.
+        Activated += (_, _) => RefreshForegroundState();
+        Deactivated += (_, _) => RefreshForegroundState();
+        PropertyChanged += (_, e) =>
+        {
+            if (e.Property == WindowStateProperty)
+            {
+                RefreshForegroundState();
+            }
+        };
+
         // Remembers the window size across restarts — read once on the way
         // in, written back on the way out. Closing (not Closed) fires while
         // Width/Height are still the real, current values.
@@ -162,6 +176,11 @@ public partial class MainWindow : Window
 
             vm.MentionReceived += (_, notification) =>
                 Dispatcher.UIThread.Post(() => ShowMentionNotification(notification));
+
+            // The events above only fire on a *change*; a window restored
+            // behind another app, or started minimised, would otherwise begin
+            // life wrongly counted as being in front of the user.
+            RefreshForegroundState();
 
             vm.UnreadBadgeStateChanged += (_, _) => Dispatcher.UIThread.Post(() => UpdateTaskbarBadge(vm));
             UpdateTaskbarBadge(vm);
@@ -782,6 +801,15 @@ public partial class MainWindow : Window
         textBox.CaretIndex = start + text.Length;
         textBox.SelectionStart = textBox.CaretIndex;
         textBox.SelectionEnd = textBox.CaretIndex;
+    }
+
+    /// <summary>Tells the ViewModel whether the user can actually see the window right now — see MainViewModel.WindowIsInForeground.</summary>
+    private void RefreshForegroundState()
+    {
+        if (DataContext is MainViewModel vm)
+        {
+            vm.WindowIsInForeground = IsActive && WindowState != WindowState.Minimized;
+        }
     }
 
     private void ShowMentionNotification(MentionNotification notification)

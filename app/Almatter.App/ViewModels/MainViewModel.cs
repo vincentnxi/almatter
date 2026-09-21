@@ -393,6 +393,29 @@ public partial class MainViewModel : ViewModelBase
     private static readonly TimeSpan PresenceRefreshInterval = TimeSpan.FromSeconds(60);
 
     private DateTime _lastPresenceRefreshAt = DateTime.MinValue;
+
+    /// <summary>
+    /// How often the server is told the user is still at the computer. It
+    /// marks someone away after five minutes without hearing so (its default
+    /// timeout), so once a minute keeps well clear of that.
+    /// </summary>
+    private static readonly TimeSpan ActivityReportInterval = TimeSpan.FromSeconds(60);
+
+    /// <summary>
+    /// No keyboard or mouse input for this long and the reports stop, letting
+    /// the server put the user away by itself a few minutes later — the same
+    /// idle threshold the official client uses.
+    /// </summary>
+    private static readonly TimeSpan IdleThreshold = TimeSpan.FromMinutes(5);
+
+    private DateTime _lastActivityReportAt = DateTime.MinValue;
+
+    /// <summary>
+    /// When the user last picked a status by hand. A presence refresh already
+    /// in flight at that moment carries the old value and must not put it back
+    /// in the picker.
+    /// </summary>
+    private DateTime _lastStatusPickedAt = DateTime.MinValue;
     /// <summary>
     /// The size of the box a link preview's image is shown in (MainWindow.axaml
     /// — the card is at most 420 wide, its image strip 160 high). Images are
@@ -415,6 +438,22 @@ public partial class MainViewModel : ViewModelBase
     /// on a high-density display.
     /// </summary>
     public double DisplayScaling { get; set; } = 1.0;
+
+    /// <summary>
+    /// Whether the window is genuinely in front of the user — focused and not
+    /// minimised. Selecting a channel is not the same as watching it: the app
+    /// keeps the last channel selected across a restart and for as long as it
+    /// sits minimised or behind another app, and a message arriving there
+    /// needs a notification exactly like any other. Written from the UI
+    /// thread, read by the polling loop, so the backing field is volatile.
+    /// </summary>
+    public bool WindowIsInForeground
+    {
+        get => _windowIsInForeground;
+        set => _windowIsInForeground = value;
+    }
+
+    private volatile bool _windowIsInForeground = true;
 
     private string? _openThreadRootId;
 
@@ -796,6 +835,12 @@ public partial class MainViewModel : ViewModelBase
                     }
                 }
 
+                if (DateTime.UtcNow - _lastActivityReportAt >= ActivityReportInterval)
+                {
+                    _lastActivityReportAt = DateTime.UtcNow;
+                    await ReportActivityAsync();
+                }
+
                 if (DateTime.UtcNow - _lastPresenceRefreshAt >= PresenceRefreshInterval)
                 {
                     _lastPresenceRefreshAt = DateTime.UtcNow;
@@ -825,14 +870,20 @@ public partial class MainViewModel : ViewModelBase
                     var mentions = await _service.GetAndClearMentionEventsAsync();
                     if (mentions.Count > 0)
                     {
-                        CrashLogger.Write("mentions", $"drained {mentions.Count} mention(s): {string.Join(", ", mentions.Select(m => $"{m.PostId}@{m.ChannelId}"))}, activeChannel={_activeChannelId}");
+                        CrashLogger.Write("mentions", $"drained {mentions.Count} mention(s): {string.Join(", ", mentions.Select(m => $"{m.PostId}@{m.ChannelId}"))}, activeChannel={_activeChannelId}, inForeground={WindowIsInForeground}");
                     }
                     foreach (var mention in mentions)
                     {
-                        // Already looking at that channel — no need to interrupt.
+                        // Already reading that channel — no need to interrupt.
+                        // "Reading" means the channel is selected *and* the
+                        // window is in front of the user: the selection alone
+                        // survives minimising, losing focus and even a restart,
+                        // and silently swallowed every message arriving in the
+                        // channel the app happened to be left on.
                         // Muted — the whole point is no notification for it.
+                        var isAlreadyReading = mention.ChannelId == _activeChannelId && WindowIsInForeground;
                         var isMuted = _loadedChannels.FirstOrDefault(c => c.Id == mention.ChannelId)?.IsMuted ?? false;
-                        if (mention.ChannelId != _activeChannelId && !isMuted)
+                        if (!isAlreadyReading && !isMuted)
                         {
                             await RaiseMentionNotificationAsync(mention);
                         }
@@ -1810,6 +1861,7 @@ public partial class MainViewModel : ViewModelBase
     private async Task SetStatusAsync(string status)
     {
         IsStatusPickerOpen = false;
+        _lastStatusPickedAt = DateTime.UtcNow;
         MyStatus = status switch
         {
             "online" => PresenceStatus.Online,
@@ -3742,7 +3794,8 @@ public partial class MainViewModel : ViewModelBase
             return previous is null
                 || previous.TotalMsgCount != c.TotalMsgCount
                 || previous.MsgCount != c.MsgCount
-                || previous.MentionCount != c.MentionCount;
+                || previous.MentionCount != c.MentionCount
+                || previous.LastPostAt != c.LastPostAt;
         });
         if (!changed)
         {
@@ -3935,18 +3988,20 @@ public partial class MainViewModel : ViewModelBase
         // people — and they overlap heavily in a DM, which is exactly what
         // Distinct() is for. Gathered on the UI thread because this runs
         // from the polling loop, and these collections are rebuilt under it.
+        // This user is always included: the server changes their status on
+        // its own too (away after a while idle, back online), and the picker
+        // at the bottom of the sidebar has to follow or it contradicts the
+        // dot on their own messages.
         var userIds = await Dispatcher.UIThread.InvokeAsync(() =>
             DirectMessages.Concat(FavoriteDirectMessages)
                 .Where(dm => !dm.IsGroup && dm.OtherUserId.Length > 0)
                 .Select(dm => dm.OtherUserId)
                 .Concat(LoadedMessageAuthorIds())
+                .Append(_session.User.Id)
                 .Distinct()
                 .ToList());
-        if (userIds.Count == 0)
-        {
-            return;
-        }
 
+        var askedAt = DateTime.UtcNow;
         List<UserStatusDto> statuses;
         try
         {
@@ -3959,13 +4014,26 @@ public partial class MainViewModel : ViewModelBase
             return;
         }
 
-        foreach (var status in statuses)
-        {
-            _presenceByUserId[status.UserId] = ToPresence(status.Status);
-        }
-
         await Dispatcher.UIThread.InvokeAsync(() =>
         {
+            foreach (var status in statuses)
+            {
+                if (status.UserId == _session.User.Id)
+                {
+                    // A pick made while this request was out is newer than
+                    // its answer — keep the pick.
+                    if (_lastStatusPickedAt < askedAt)
+                    {
+                        MyStatus = ToPresence(status.Status);
+                    }
+                    // Written directly as well: MyStatus's change handler
+                    // doesn't run when the value is unchanged.
+                    _presenceByUserId[status.UserId] = MyStatus;
+                    continue;
+                }
+                _presenceByUserId[status.UserId] = ToPresence(status.Status);
+            }
+
             foreach (var dm in DirectMessages.Concat(FavoriteDirectMessages))
             {
                 if (!dm.IsGroup && _presenceByUserId.TryGetValue(dm.OtherUserId, out var presence))
@@ -3975,6 +4043,29 @@ public partial class MainViewModel : ViewModelBase
             }
             ApplyPresenceToMessages();
         });
+    }
+
+    /// <summary>
+    /// Tells the server the user is still here, as long as they've touched
+    /// the keyboard or mouse recently. Keeping the socket open isn't enough
+    /// for the server — without this it marked the user away after five
+    /// minutes while the picker still said available. A hand-picked away or
+    /// do-not-disturb is never overridden (see ws.rs).
+    /// </summary>
+    private async Task ReportActivityAsync()
+    {
+        if (SystemIdle.IdleTime() is { } idle && idle >= IdleThreshold)
+        {
+            return;
+        }
+        try
+        {
+            await _service.SendActiveStatusAsync(true);
+        }
+        catch
+        {
+            // Best-effort — the next minute's report tries again.
+        }
     }
 
     /// <summary>Everyone with a message currently loaded — the channel, the open thread and its root.</summary>

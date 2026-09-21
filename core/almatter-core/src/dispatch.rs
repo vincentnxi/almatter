@@ -296,6 +296,12 @@ enum Request {
         #[serde(default)]
         parent_id: String,
     },
+    /// Tells the server whether this user is at the keyboard, so it doesn't
+    /// mark them away while they are plainly using the computer. Pushed
+    /// onto the open WebSocket, like SendTyping.
+    SendActiveStatus {
+        is_active: bool,
+    },
     /// A group DM's participant list — resolves and caches it, since unlike
     /// a 1:1 DM, a GM channel's `name` isn't parseable into user ids.
     GetChannelMembers {
@@ -735,6 +741,10 @@ async fn handle(request_json: &str, db: &'static Mutex<Database>) -> Value {
             .map_err(|e| e.to_string()),
         Request::SendTyping { channel_id, parent_id } => {
             crate::ws::send_typing(&channel_id, &parent_id);
+            Ok(json!({}))
+        }
+        Request::SendActiveStatus { is_active } => {
+            crate::ws::send_active_status(is_active);
             Ok(json!({}))
         }
         Request::GetTypingUsers { channel_id } => {
@@ -1482,6 +1492,13 @@ mod tests {
     async fn send_typing_is_ok_even_with_no_active_websocket() {
         let db = test_db();
         let response = dispatch(r#"{"command":"send_typing","channel_id":"c1"}"#, db).await;
+        assert!(response.contains(r#""ok":true"#));
+    }
+
+    #[tokio::test]
+    async fn send_active_status_is_ok_even_with_no_active_websocket() {
+        let db = test_db();
+        let response = dispatch(r#"{"command":"send_active_status","is_active":true}"#, db).await;
         assert!(response.contains(r#""ok":true"#));
     }
 

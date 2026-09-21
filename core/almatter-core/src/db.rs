@@ -516,14 +516,30 @@ impl Database {
     /// Called by the WebSocket handler for every live `posted` event —
     /// widens the unread gap (total_msg_count vs msg_count) that drives the
     /// sidebar's bold/badge state, the same way a real fetch of the
-    /// channel-members endpoint would once it next runs. A no-op if the
-    /// channel isn't cached yet (nothing to widen the gap on).
-    pub fn bump_channel_activity(&self, channel_id: &str, mentioned: bool) -> rusqlite::Result<()> {
+    /// channel-members endpoint would once it next runs. The user's own
+    /// message counts as already read, so the gap stays put for it. Either
+    /// way last_post_at moves forward, which is what orders the DM list by
+    /// recent activity. A no-op if the channel isn't cached yet (nothing to
+    /// widen the gap on).
+    pub fn bump_channel_activity(
+        &self,
+        channel_id: &str,
+        post_at: i64,
+        own_post: bool,
+        mentioned: bool,
+    ) -> rusqlite::Result<()> {
         self.conn.execute(
             "UPDATE channels SET total_msg_count = total_msg_count + 1,
-                mention_count = mention_count + ?2
+                msg_count = msg_count + ?3,
+                mention_count = mention_count + ?2,
+                last_post_at = MAX(last_post_at, ?4)
              WHERE id = ?1",
-            params![channel_id, if mentioned { 1 } else { 0 }],
+            params![
+                channel_id,
+                if mentioned { 1 } else { 0 },
+                if own_post { 1 } else { 0 },
+                post_at
+            ],
         )?;
         Ok(())
     }
@@ -1826,19 +1842,31 @@ mod tests {
         })
         .unwrap();
 
-        db.bump_channel_activity("c1", false).unwrap();
+        db.bump_channel_activity("c1", 6000, false, false).unwrap();
         let cached = db.cached_channels_for_team("t1").unwrap();
         assert_eq!(cached[0].total_msg_count, 11);
         assert_eq!(cached[0].msg_count, 10);
         assert_eq!(cached[0].mention_count, 0);
+        assert_eq!(cached[0].last_post_at, 6000);
 
-        db.bump_channel_activity("c1", true).unwrap();
+        db.bump_channel_activity("c1", 7000, false, true).unwrap();
         let cached = db.cached_channels_for_team("t1").unwrap();
         assert_eq!(cached[0].total_msg_count, 12);
         assert_eq!(cached[0].mention_count, 1);
+        assert_eq!(cached[0].last_post_at, 7000);
+
+        // The user's own message moves the channel up without making it unread.
+        db.bump_channel_activity("c1", 8000, true, false).unwrap();
+        let cached = db.cached_channels_for_team("t1").unwrap();
+        assert_eq!(cached[0].total_msg_count - cached[0].msg_count, 2);
+        assert_eq!(cached[0].last_post_at, 8000);
+
+        // A late-arriving older post never moves the channel back in time.
+        db.bump_channel_activity("c1", 1000, false, false).unwrap();
+        assert_eq!(db.cached_channels_for_team("t1").unwrap()[0].last_post_at, 8000);
 
         // A channel not yet cached is simply a no-op, not an error.
-        db.bump_channel_activity("unknown-channel", true).unwrap();
+        db.bump_channel_activity("unknown-channel", 1000, false, true).unwrap();
     }
 
     #[test]
