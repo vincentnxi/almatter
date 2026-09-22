@@ -40,8 +40,9 @@ fraction of that, and to stay usable on older machines.
 - **Search** messages, browse and join channels, start direct messages.
 - **Offline outbox** — messages written while disconnected are queued and sent when the
   connection comes back.
-- **Windows integration** — mention notifications from the notification area, an unread
-  badge on the taskbar icon, a title bar that follows the theme.
+- **Windows integration** — notifications from the notification area (a message, or a
+  reaction someone put on one of yours), an unread badge on the taskbar icon, a title bar
+  that follows the theme.
 - **Appearance** — light and dark themes (or follow Windows), a reduced-contrast mode,
   adjustable message font size, and a choice between the official client's Open Sans
   and the system UI font.
@@ -230,9 +231,9 @@ rester utilisable sur des machines anciennes.
 - **Recherche** dans les messages, parcours et ajout de canaux, messages directs.
 - **File d'envoi hors ligne** — les messages écrits sans connexion sont mis en attente
   et envoyés au retour de celle-ci.
-- **Intégration à Windows** — notifications de mention depuis la zone de notification,
-  pastille de non-lus sur l'icône de la barre des tâches, barre de titre assortie au
-  thème.
+- **Intégration à Windows** — notifications depuis la zone de notification (un message,
+  ou une réaction que quelqu'un a mise sur l'un des vôtres), pastille de non-lus sur
+  l'icône de la barre des tâches, barre de titre assortie au thème.
 - **Apparence** — thèmes clair et sombre (ou celui de Windows), mode contraste réduit,
   taille du texte des messages réglable, et choix entre Open Sans (la police du client
   officiel) et la police système.

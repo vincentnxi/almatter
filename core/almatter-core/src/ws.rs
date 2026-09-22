@@ -410,14 +410,26 @@ async fn handle_event(text: &str, user_id: &str, client: &MattermostClient, db: 
             if let Some(reaction) = envelope.data.as_ref().and_then(|d| d.reaction.as_deref())
                 .and_then(|json| serde_json::from_str::<ReactionEvent>(json).ok())
             {
-                let cache = db.lock().expect("cache db mutex poisoned");
-                let result = if added {
-                    cache.add_cached_reaction(&reaction.post_id, &reaction.emoji_name, &reaction.user_id)
+                {
+                    let cache = db.lock().expect("cache db mutex poisoned");
+                    let result = if added {
+                        cache.add_cached_reaction(&reaction.post_id, &reaction.emoji_name, &reaction.user_id)
+                    } else {
+                        cache.remove_cached_reaction(&reaction.post_id, &reaction.emoji_name, &reaction.user_id)
+                    };
+                    if let Err(e) = result {
+                        crate::db::log("ws", &format!("failed to apply a reaction: {e}"));
+                    }
+                }
+                if added {
+                    queue_reaction_notification(&reaction, user_id, client, db).await;
                 } else {
-                    cache.remove_cached_reaction(&reaction.post_id, &reaction.emoji_name, &reaction.user_id)
-                };
-                if let Err(e) = result {
-                    crate::db::log("ws", &format!("failed to apply a reaction: {e}"));
+                    let cache = db.lock().expect("cache db mutex poisoned");
+                    if let Err(e) =
+                        cache.cancel_reaction_event(&reaction.post_id, &reaction.user_id, &reaction.emoji_name)
+                    {
+                        crate::db::log("ws", &format!("failed to drop a reaction notification: {e}"));
+                    }
                 }
             }
             return;
@@ -529,6 +541,72 @@ async fn handle_event(text: &str, user_id: &str, client: &MattermostClient, db: 
             Ok(()) => {}
             Err(e) => crate::db::log("ws", &format!("failed to queue notification: {e}")),
         }
+    }
+}
+
+/// Queues a notification when someone else reacts to one of *this* user's
+/// messages, which Mattermost has no event of its own for: the reaction
+/// payload names the post but never its author, so the message has to be
+/// looked up. The cache answers for anything recent; a reaction on an older
+/// message (or one written from another device, in a channel this app has
+/// never opened) falls back to a single fetch. Reactions are rare enough
+/// for that to stay cheap, and a reaction to your own message is skipped
+/// before either lookup.
+async fn queue_reaction_notification(
+    reaction: &ReactionEvent,
+    user_id: &str,
+    client: &MattermostClient,
+    db: &'static Mutex<Database>,
+) {
+    if reaction.user_id == user_id {
+        return;
+    }
+
+    let cached = {
+        let cache = db.lock().expect("cache db mutex poisoned");
+        cache.cached_post(&reaction.post_id).ok().flatten()
+    };
+    let post = match cached {
+        Some(post) => post,
+        None => match client.get_post(&reaction.post_id).await {
+            Ok(post) => post,
+            Err(e) => {
+                crate::db::log("ws", &format!("could not look up the message a reaction landed on: {e}"));
+                return;
+            }
+        },
+    };
+    if post.user_id != user_id {
+        return;
+    }
+
+    // The notification names whoever reacted, and the UI resolves that name
+    // from the cache — so someone never seen here before has to be fetched,
+    // exactly as a live post's unknown author is.
+    let reactor_cached = {
+        let cache = db.lock().expect("cache db mutex poisoned");
+        cache.cached_user(&reaction.user_id).ok().flatten().is_some()
+    };
+    if !reactor_cached {
+        if let Ok(users) = client.get_users_by_ids(std::slice::from_ref(&reaction.user_id)).await {
+            let cache = db.lock().expect("cache db mutex poisoned");
+            for user in &users {
+                let _ = cache.upsert_user(user);
+            }
+        }
+    }
+
+    let cache = db.lock().expect("cache db mutex poisoned");
+    let queued = cache.enqueue_reaction_event(
+        &reaction.post_id,
+        &post.channel_id,
+        &reaction.user_id,
+        &reaction.emoji_name,
+        &post.message,
+        chrono::Utc::now().timestamp_millis(),
+    );
+    if let Err(e) = queued {
+        crate::db::log("ws", &format!("failed to queue a reaction notification: {e}"));
     }
 }
 
@@ -699,6 +777,114 @@ mod tests {
         let cache = db.lock().unwrap();
         let posts = cache.cached_posts_for_channel("c1").unwrap();
         assert!(posts[0].metadata.reactions.is_empty());
+    }
+
+    /// Someone reacting to one of this user's own messages is the only
+    /// reaction worth a notification — Mattermost sends no event saying so,
+    /// so the post's author is looked up to decide.
+    #[tokio::test]
+    async fn a_reaction_on_your_own_message_queues_a_notification() {
+        let db: &'static Mutex<Database> =
+            Box::leak(Box::new(Mutex::new(Database::open_in_memory().unwrap())));
+        let client = MattermostClient::new("http://127.0.0.1:1");
+
+        let post = json!({
+            "id": "p1", "channel_id": "c1", "user_id": "me", "message": "ship it", "create_at": 1000
+        });
+        handle_event(
+            &json!({ "event": "posted", "data": { "post": post.to_string() } }).to_string(),
+            "me",
+            &client,
+            db,
+        )
+        .await;
+
+        let reaction = json!({ "post_id": "p1", "user_id": "u2", "emoji_name": "tada" });
+        handle_event(
+            &json!({ "event": "reaction_added", "data": { "reaction": reaction.to_string() } }).to_string(),
+            "me",
+            &client,
+            db,
+        )
+        .await;
+
+        let queued = db.lock().unwrap().drain_reaction_events().unwrap();
+        assert_eq!(queued.len(), 1);
+        assert_eq!(queued[0].post_id, "p1");
+        assert_eq!(queued[0].channel_id, "c1");
+        assert_eq!(queued[0].user_id, "u2");
+        assert_eq!(queued[0].emoji_name, "tada");
+        assert_eq!(queued[0].message, "ship it", "the notification quotes the message reacted to");
+    }
+
+    /// Someone else's message, and this user's own reaction, are both silent:
+    /// the first isn't about them, the second is them.
+    #[tokio::test]
+    async fn only_reactions_from_others_on_your_own_messages_notify() {
+        let db: &'static Mutex<Database> =
+            Box::leak(Box::new(Mutex::new(Database::open_in_memory().unwrap())));
+        let client = MattermostClient::new("http://127.0.0.1:1");
+
+        for post in [
+            json!({ "id": "mine", "channel_id": "c1", "user_id": "me", "message": "mine", "create_at": 1000 }),
+            json!({ "id": "theirs", "channel_id": "c1", "user_id": "u1", "message": "theirs", "create_at": 2000 }),
+        ] {
+            handle_event(
+                &json!({ "event": "posted", "data": { "post": post.to_string() } }).to_string(),
+                "me",
+                &client,
+                db,
+            )
+            .await;
+        }
+
+        for reaction in [
+            json!({ "post_id": "theirs", "user_id": "u2", "emoji_name": "tada" }),
+            json!({ "post_id": "mine", "user_id": "me", "emoji_name": "tada" }),
+        ] {
+            handle_event(
+                &json!({ "event": "reaction_added", "data": { "reaction": reaction.to_string() } }).to_string(),
+                "me",
+                &client,
+                db,
+            )
+            .await;
+        }
+
+        assert!(db.lock().unwrap().drain_reaction_events().unwrap().is_empty());
+    }
+
+    /// A reaction taken back before the UI's next poll must take its pending
+    /// notification with it, rather than announcing something no longer there.
+    #[tokio::test]
+    async fn taking_a_reaction_back_drops_its_queued_notification() {
+        let db: &'static Mutex<Database> =
+            Box::leak(Box::new(Mutex::new(Database::open_in_memory().unwrap())));
+        let client = MattermostClient::new("http://127.0.0.1:1");
+
+        let post = json!({
+            "id": "p1", "channel_id": "c1", "user_id": "me", "message": "ship it", "create_at": 1000
+        });
+        handle_event(
+            &json!({ "event": "posted", "data": { "post": post.to_string() } }).to_string(),
+            "me",
+            &client,
+            db,
+        )
+        .await;
+
+        let reaction = json!({ "post_id": "p1", "user_id": "u2", "emoji_name": "tada" });
+        for event in ["reaction_added", "reaction_removed"] {
+            handle_event(
+                &json!({ "event": event, "data": { "reaction": reaction.to_string() } }).to_string(),
+                "me",
+                &client,
+                db,
+            )
+            .await;
+        }
+
+        assert!(db.lock().unwrap().drain_reaction_events().unwrap().is_empty());
     }
 
     #[tokio::test]

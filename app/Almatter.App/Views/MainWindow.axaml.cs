@@ -175,8 +175,8 @@ public partial class MainWindow : Window
             var readingPosition = new ReadingPositionKeeper(MessagesScroller, MessagesItemsControl, StickToBottomSlack);
             vm.MessageRowsChanging += (_, _) => readingPosition.Capture();
 
-            vm.MentionReceived += (_, notification) =>
-                Dispatcher.UIThread.Post(() => ShowMentionNotification(notification));
+            vm.NotificationReceived += (_, notification) =>
+                Dispatcher.UIThread.Post(() => ShowDesktopNotification(notification));
 
             // The events above only fire on a *change*; a window restored
             // behind another app, or started minimised, would otherwise begin
@@ -881,7 +881,7 @@ public partial class MainWindow : Window
         });
     }
 
-    private void ShowMentionNotification(MentionNotification notification)
+    private void ShowDesktopNotification(DesktopNotification notification)
     {
         if (_notifier is null)
         {

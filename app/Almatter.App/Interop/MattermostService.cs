@@ -181,11 +181,16 @@ public sealed class MattermostService
         await CallAsync<JsonObject>(new JsonObject { ["command"] = "stop_web_socket" });
     }
 
-    /// <summary>Every mention the WebSocket has seen since the last call — a drain, not a peek. Polled to raise desktop notifications.</summary>
-    public async Task<List<MentionEventDto>> GetAndClearMentionEventsAsync()
+    /// <summary>
+    /// Everything the WebSocket has seen worth notifying about since the
+    /// last call — messages, and reactions to this user's own messages — as
+    /// a drain, not a peek. Both come back together because the poll loop
+    /// wants them on the same tick.
+    /// </summary>
+    public async Task<(List<MentionEventDto> Mentions, List<ReactionEventDto> Reactions)> GetAndClearNotificationEventsAsync()
     {
         var data = await CallAsync<MentionEventsData>(new JsonObject { ["command"] = "get_and_clear_mention_events" });
-        return data.Events;
+        return (data.Events, data.Reactions);
     }
 
     public async Task<List<UserDto>> GetCachedUsersAsync(IEnumerable<string> userIds)

@@ -300,7 +300,19 @@ public sealed class MentionEventDto
     [JsonPropertyName("is_mention")] public bool IsMention { get; set; }
 }
 
+/// <summary>Someone reacted to one of this user's own messages. <see cref="Message"/> is that message's text, not the reaction.</summary>
+public sealed class ReactionEventDto
+{
+    [JsonPropertyName("post_id")] public string PostId { get; set; } = "";
+    [JsonPropertyName("channel_id")] public string ChannelId { get; set; } = "";
+    [JsonPropertyName("user_id")] public string UserId { get; set; } = "";
+    [JsonPropertyName("emoji_name")] public string EmojiName { get; set; } = "";
+    [JsonPropertyName("message")] public string Message { get; set; } = "";
+    [JsonPropertyName("created_at")] public long CreatedAt { get; set; }
+}
+
 internal sealed class MentionEventsData
 {
     [JsonPropertyName("events")] public List<MentionEventDto> Events { get; set; } = [];
+    [JsonPropertyName("reactions")] public List<ReactionEventDto> Reactions { get; set; } = [];
 }

@@ -5,7 +5,8 @@ use std::sync::atomic::{AtomicI64, Ordering};
 use rusqlite::{params, Connection, OptionalExtension};
 
 use crate::models::{
-    AuthenticatedUser, Channel, ChannelType, CustomEmoji, FileInfo, MentionEvent, Post, PostMetadata, Reaction, Team,
+    AuthenticatedUser, Channel, ChannelType, CustomEmoji, FileInfo, MentionEvent, Post, PostMetadata, Reaction,
+    ReactionNotice, Team,
 };
 
 /// Local SQLite cache: the source of truth the UI reads from, kept warm by
@@ -208,6 +209,21 @@ impl Database {
                 message    TEXT NOT NULL,
                 created_at INTEGER NOT NULL,
                 is_mention INTEGER NOT NULL DEFAULT 0
+            );
+
+            -- Same queue, for someone reacting to one of this user's own
+            -- messages. Kept apart from mention_events rather than folded
+            -- into it: that table is keyed by post alone, and several people
+            -- can react to the same message (or one person with several
+            -- emoji) without any of those notifications swallowing another.
+            CREATE TABLE IF NOT EXISTS reaction_events (
+                post_id    TEXT NOT NULL,
+                channel_id TEXT NOT NULL,
+                user_id    TEXT NOT NULL,
+                emoji_name TEXT NOT NULL,
+                message    TEXT NOT NULL,
+                created_at INTEGER NOT NULL,
+                PRIMARY KEY (post_id, user_id, emoji_name)
             );
 
             -- The last time each user was seen typing in each channel, per
@@ -609,6 +625,58 @@ impl Database {
         Ok(events)
     }
 
+    /// Queues "someone reacted to your message". `INSERT OR IGNORE` for the
+    /// same reason as mentions: the socket can redeliver an event.
+    pub fn enqueue_reaction_event(
+        &self,
+        post_id: &str,
+        channel_id: &str,
+        user_id: &str,
+        emoji_name: &str,
+        message: &str,
+        created_at: i64,
+    ) -> rusqlite::Result<()> {
+        self.conn.execute(
+            "INSERT OR IGNORE INTO reaction_events (post_id, channel_id, user_id, emoji_name, message, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![post_id, channel_id, user_id, emoji_name, message, created_at],
+        )?;
+        Ok(())
+    }
+
+    /// Drops a queued reaction notification because the reaction itself was
+    /// taken back. A misclick undone within the second or two before the
+    /// UI's next poll shouldn't still light up the notification area.
+    pub fn cancel_reaction_event(&self, post_id: &str, user_id: &str, emoji_name: &str) -> rusqlite::Result<()> {
+        self.conn.execute(
+            "DELETE FROM reaction_events WHERE post_id = ?1 AND user_id = ?2 AND emoji_name = ?3",
+            params![post_id, user_id, emoji_name],
+        )?;
+        Ok(())
+    }
+
+    /// The reaction counterpart of `drain_mention_events` — also a drain,
+    /// one notification per queued reaction and no more.
+    pub fn drain_reaction_events(&self) -> rusqlite::Result<Vec<ReactionNotice>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT post_id, channel_id, user_id, emoji_name, message, created_at
+             FROM reaction_events ORDER BY created_at ASC",
+        )?;
+        let rows = stmt.query_map([], |row| {
+            Ok(ReactionNotice {
+                post_id: row.get(0)?,
+                channel_id: row.get(1)?,
+                user_id: row.get(2)?,
+                emoji_name: row.get(3)?,
+                message: row.get(4)?,
+                created_at: row.get(5)?,
+            })
+        })?;
+        let events = rows.collect::<rusqlite::Result<Vec<_>>>()?;
+        self.conn.execute("DELETE FROM reaction_events", [])?;
+        Ok(events)
+    }
+
     /// Notes that `user_id` was just seen typing in `channel_id` — a repeat
     /// call for the same pair just bumps the timestamp rather than piling up.
     pub fn record_typing(&self, channel_id: &str, user_id: &str, now_millis: i64) -> rusqlite::Result<()> {
@@ -845,6 +913,21 @@ impl Database {
         )?;
         let rows = stmt.query_map(params![channel_id], Self::post_from_row)?;
         self.attach_metadata(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+    }
+
+    /// One message by id, straight from the cache. Reactions and files are
+    /// deliberately not attached: the only caller wants the author and the
+    /// text, to decide whether a reaction landed on this user's own message.
+    pub fn cached_post(&self, post_id: &str) -> rusqlite::Result<Option<Post>> {
+        self.conn
+            .query_row(
+                "SELECT p.id, p.channel_id, p.root_id, p.user_id, p.message, p.create_at,
+                        (SELECT COUNT(*) FROM posts r WHERE r.root_id = p.id) AS reply_count, p.edit_at, p.embeds_json, p.is_pinned
+                 FROM posts p WHERE p.id = ?1",
+                params![post_id],
+                Self::post_from_row,
+            )
+            .optional()
     }
 
     /// The root post plus all its replies, oldest first — what the thread
@@ -1354,6 +1437,38 @@ mod tests {
         assert!(results.is_empty() || results[0].id == "p1");
 
         assert!(db.search_posts("   ", 50).unwrap().is_empty());
+    }
+
+    /// Unlike a mention, several reaction notifications can be pending for
+    /// the same message — one per person, per emoji — and none may swallow
+    /// another. Only an exact repeat (a redelivered event) is ignored.
+    #[test]
+    fn reaction_events_queue_one_per_person_and_emoji() {
+        let db = Database::open_in_memory().unwrap();
+        db.enqueue_reaction_event("p1", "c1", "u1", "+1", "ship it", 1000).unwrap();
+        db.enqueue_reaction_event("p1", "c1", "u2", "+1", "ship it", 1100).unwrap();
+        db.enqueue_reaction_event("p1", "c1", "u1", "tada", "ship it", 1200).unwrap();
+        db.enqueue_reaction_event("p1", "c1", "u1", "+1", "ship it", 1300).unwrap();
+
+        let events = db.drain_reaction_events().unwrap();
+        assert_eq!(events.len(), 3);
+        assert_eq!(events[0].user_id, "u1");
+        assert_eq!(events[0].emoji_name, "+1");
+        assert_eq!(events[0].message, "ship it");
+        assert!(db.drain_reaction_events().unwrap().is_empty(), "a drain empties the queue");
+    }
+
+    #[test]
+    fn cancelling_a_reaction_event_leaves_the_others_queued() {
+        let db = Database::open_in_memory().unwrap();
+        db.enqueue_reaction_event("p1", "c1", "u1", "+1", "ship it", 1000).unwrap();
+        db.enqueue_reaction_event("p1", "c1", "u2", "+1", "ship it", 1100).unwrap();
+
+        db.cancel_reaction_event("p1", "u1", "+1").unwrap();
+
+        let events = db.drain_reaction_events().unwrap();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].user_id, "u2");
     }
 
     #[test]

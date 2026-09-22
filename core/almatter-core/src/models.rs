@@ -196,6 +196,20 @@ pub struct MentionEvent {
     pub is_mention: bool,
 }
 
+/// Someone reacted to one of *this* user's messages — queued in
+/// `reaction_events` for the same poll loop. `message` is the reacted-to
+/// text (this user's own), carried along so the notification can quote what
+/// was reacted to without a second lookup.
+#[derive(Debug, Clone, Serialize)]
+pub struct ReactionNotice {
+    pub post_id: String,
+    pub channel_id: String,
+    pub user_id: String,
+    pub emoji_name: String,
+    pub message: String,
+    pub created_at: i64,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuthenticatedUser {
     pub id: String,

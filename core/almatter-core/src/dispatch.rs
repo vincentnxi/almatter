@@ -733,12 +733,16 @@ async fn handle(request_json: &str, db: &'static Mutex<Database>) -> Value {
                 json!({ "posts": posts })
             })
             .map_err(|e| e.to_string()),
-        Request::GetAndClearMentionEvents => db
-            .lock()
-            .expect("cache db mutex poisoned")
-            .drain_mention_events()
-            .map(|events| json!({ "events": events }))
-            .map_err(|e| e.to_string()),
+        // Both queues in one answer: the UI drains them on the same tick, and
+        // a second round trip per poll would buy nothing.
+        Request::GetAndClearMentionEvents => {
+            let cache = db.lock().expect("cache db mutex poisoned");
+            cache
+                .drain_mention_events()
+                .and_then(|events| Ok((events, cache.drain_reaction_events()?)))
+                .map(|(events, reactions)| json!({ "events": events, "reactions": reactions }))
+                .map_err(|e| e.to_string())
+        }
         Request::SendTyping { channel_id, parent_id } => {
             crate::ws::send_typing(&channel_id, &parent_id);
             Ok(json!({}))

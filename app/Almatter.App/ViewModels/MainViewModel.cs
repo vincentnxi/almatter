@@ -537,7 +537,7 @@ public partial class MainViewModel : ViewModelBase
     /// actual OS-level notification, since the ViewModel has no way to do
     /// that itself.
     /// </summary>
-    public event EventHandler<MentionNotification>? MentionReceived;
+    public event EventHandler<DesktopNotification>? NotificationReceived;
 
     /// <summary>Raised right after ComposeText is loaded with a message to edit, so MainWindow's code-behind can focus the composer and put the caret at the end.</summary>
     public event EventHandler? EditComposerRequested;
@@ -898,7 +898,7 @@ public partial class MainViewModel : ViewModelBase
 
                 try
                 {
-                    var mentions = await _service.GetAndClearMentionEventsAsync();
+                    var (mentions, reactions) = await _service.GetAndClearNotificationEventsAsync();
                     if (mentions.Count > 0)
                     {
                         CrashLogger.Write("mentions", $"drained {mentions.Count} mention(s): {string.Join(", ", mentions.Select(m => $"{m.PostId}@{m.ChannelId}"))}, activeChannel={_activeChannelId}, inForeground={WindowIsInForeground}");
@@ -917,6 +917,20 @@ public partial class MainViewModel : ViewModelBase
                         if (!isAlreadyReading && !isMuted)
                         {
                             await RaiseMentionNotificationAsync(mention);
+                        }
+                    }
+
+                    // Same two exemptions, for the same reasons: a reaction
+                    // landing in the channel already on screen shows up under
+                    // the message on its own, and a muted channel stays quiet
+                    // whatever happens in it.
+                    foreach (var reaction in reactions)
+                    {
+                        var isAlreadyReading = reaction.ChannelId == _activeChannelId && WindowIsInForeground;
+                        var isMuted = _loadedChannels.FirstOrDefault(c => c.Id == reaction.ChannelId)?.IsMuted ?? false;
+                        if (!isAlreadyReading && !isMuted)
+                        {
+                            await RaiseReactionNotificationAsync(reaction);
                         }
                     }
                 }
@@ -1075,29 +1089,15 @@ public partial class MainViewModel : ViewModelBase
         _pollingStarted = false;
     }
 
-    /// <summary>Resolves an author/channel name for a queued mention and raises MentionReceived for MainWindow to actually show.</summary>
+    /// <summary>Resolves an author/channel name for a queued mention and raises NotificationReceived for MainWindow to actually show.</summary>
     private async Task RaiseMentionNotificationAsync(MentionEventDto mention)
     {
-        string authorName;
-        try
-        {
-            var users = await _service.GetCachedUsersAsync([mention.AuthorId]);
-            authorName = users.FirstOrDefault()?.DisplayName ?? "Quelqu'un";
-        }
-        catch
-        {
-            authorName = "Quelqu'un";
-        }
-
-        // A DM's "channel label" is the other participant's name — the same
-        // person as the author, so appending it would just repeat itself.
-        var channel = _loadedChannels.FirstOrDefault(c => c.Id == mention.ChannelId);
-        var channelLabel = channel is null || channel.Type == "D" ? null : ChannelDisplayName(channel);
-        var title = channelLabel is null ? authorName : $"{authorName} · {channelLabel}";
+        var authorName = await NotificationDisplayNameAsync(mention.AuthorId);
+        var title = NotificationTitle(authorName, mention.ChannelId);
         var plain = MessageTextParser.ToPlainText(mention.Message);
         var text = plain.Length > 140 ? plain[..140] + "…" : plain;
 
-        var notification = new MentionNotification
+        var notification = new DesktopNotification
         {
             Title = title,
             Text = text,
@@ -1105,8 +1105,67 @@ public partial class MainViewModel : ViewModelBase
             PostId = mention.PostId,
         };
 
-        CrashLogger.Write("mentions", $"raising MentionReceived: title='{title}', hasSubscribers={MentionReceived is not null}");
-        await Dispatcher.UIThread.InvokeAsync(() => MentionReceived?.Invoke(this, notification));
+        CrashLogger.Write("mentions", $"raising NotificationReceived: title='{title}', hasSubscribers={NotificationReceived is not null}");
+        await Dispatcher.UIThread.InvokeAsync(() => NotificationReceived?.Invoke(this, notification));
+    }
+
+    /// <summary>
+    /// The same, for a reaction someone put on one of this user's own
+    /// messages. The body quotes the message: a reaction carries no text of
+    /// its own, so without the quote the notification wouldn't say which of
+    /// your messages was meant.
+    /// </summary>
+    private async Task RaiseReactionNotificationAsync(ReactionEventDto reaction)
+    {
+        var reactorName = await NotificationDisplayNameAsync(reaction.UserId);
+        var title = NotificationTitle(reactorName, reaction.ChannelId);
+
+        // A server custom emoji stays as its ":shortcode:" here — the
+        // notification area shows text only, so its image was never an option.
+        var glyph = EmojiShortcodes.ToGlyph(reaction.EmojiName);
+        var plain = MessageTextParser.ToPlainText(reaction.Message);
+        var excerpt = plain.Length > 100 ? plain[..100] + "…" : plain;
+
+        // Nothing to quote when the message was only a file or an image.
+        var text = excerpt.Length == 0
+            ? $"a réagi {glyph} à votre message"
+            : $"a réagi {glyph} à « {excerpt} »";
+
+        var notification = new DesktopNotification
+        {
+            Title = title,
+            Text = text,
+            ChannelId = reaction.ChannelId,
+            PostId = reaction.PostId,
+        };
+
+        CrashLogger.Write("mentions", $"raising a reaction notification: title='{title}', emoji={reaction.EmojiName}");
+        await Dispatcher.UIThread.InvokeAsync(() => NotificationReceived?.Invoke(this, notification));
+    }
+
+    /// <summary>Who a notification is about, by name — falling back to a neutral word rather than showing a raw user id.</summary>
+    private async Task<string> NotificationDisplayNameAsync(string userId)
+    {
+        try
+        {
+            var users = await _service.GetCachedUsersAsync([userId]);
+            return users.FirstOrDefault()?.DisplayName ?? "Quelqu'un";
+        }
+        catch
+        {
+            return "Quelqu'un";
+        }
+    }
+
+    /// <summary>
+    /// "Name · Channel", or just the name in a DM: a DM's channel label *is*
+    /// the other participant's name, so appending it would repeat itself.
+    /// </summary>
+    private string NotificationTitle(string personName, string channelId)
+    {
+        var channel = _loadedChannels.FirstOrDefault(c => c.Id == channelId);
+        var channelLabel = channel is null || channel.Type == "D" ? null : ChannelDisplayName(channel);
+        return channelLabel is null ? personName : $"{personName} · {channelLabel}";
     }
 
     /// <summary>
