@@ -15,6 +15,16 @@
 //! below turns any such panic into an ordinary `{"ok":false,...}` response
 //! instead, in the one place it can — `AssertUnwindSafe` is a promise, not
 //! an `unsafe` operation, so this doesn't touch the unsafe budget.
+//!
+//! The two functions taking a pointer are `unsafe fn`, which is what they
+//! are: whether the address .NET hands over is valid is a promise only the
+//! caller can keep. That word is also what clippy's `not_unsafe_ptr_arg_deref`
+//! asks for, and without it a `cargo clippy` run stopped here — with an
+//! error, not a warning — and never reached the rest of the workspace.
+//! Marking them changes nothing for .NET: an `unsafe fn` exports the same
+//! symbol under the same ABI, and the word means something only to a Rust
+//! caller, of which these have none.
+#![deny(unsafe_op_in_unsafe_fn)]
 
 use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
@@ -92,8 +102,14 @@ pub extern "C" fn almatter_core_version() -> *mut c_char {
 
 /// Frees a string previously returned by this crate. Must be called by the
 /// .NET side for every `*mut c_char` it receives, exactly once.
+///
+/// # Safety
+///
+/// `ptr` must be null, or a pointer this crate returned and that has not
+/// been freed yet. Freeing anything else, or the same pointer twice, is
+/// undefined behavior.
 #[no_mangle]
-pub extern "C" fn almatter_core_free_string(ptr: *mut c_char) {
+pub unsafe extern "C" fn almatter_core_free_string(ptr: *mut c_char) {
     if ptr.is_null() {
         return;
     }
@@ -108,8 +124,14 @@ pub extern "C" fn almatter_core_free_string(ptr: *mut c_char) {
 /// Every Mattermost API call from .NET goes through here as a JSON request
 /// in, a JSON response out. See `almatter_core::dispatch` for the request
 /// shapes.
+///
+/// # Safety
+///
+/// `request_json` must be null, or a valid null-terminated C string that
+/// stays alive and unwritten for the whole call. The pointer is only read,
+/// and never kept past the call returning.
 #[no_mangle]
-pub extern "C" fn almatter_core_call(request_json: *const c_char) -> *mut c_char {
+pub unsafe extern "C" fn almatter_core_call(request_json: *const c_char) -> *mut c_char {
     if request_json.is_null() {
         return to_c_string(error_json("null request"));
     }
