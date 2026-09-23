@@ -1,4 +1,5 @@
 use std::sync::OnceLock;
+use std::time::Duration;
 
 use thiserror::Error;
 
@@ -9,13 +10,54 @@ use crate::models::{AuthenticatedUser, Channel, ChannelMember, ChannelParticipan
 /// around a connection pool) and expensive to construct fresh — building a
 /// new one each time meant every request paid a brand-new TCP+TLS handshake
 /// instead of reusing a keep-alive connection to the server. One shared,
-/// lazily-built client fixes that: still one `reqwest::Client::new()` ever,
+/// lazily-built client fixes that: still one `reqwest::Client` built ever,
 /// just cloned (cheaply) into each `MattermostClient`.
 static HTTP_CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
 
+/// Uploads get a client of their own: see `upload_http_client`.
+static UPLOAD_HTTP_CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
+
+/// How long a server gets to accept the connection at all. Past this it is
+/// down or unreachable, and the caller should hear so rather than wait.
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// How long the server may go silent — before its answer starts, or between
+/// two pieces of a download. reqwest's default is to wait forever, and one
+/// request stuck like that held up the whole background loop behind it:
+/// no badges, no notifications, no queued message sent, with nothing on
+/// screen to say so. Silence resets with every piece received, so a large
+/// file that keeps arriving is never cut off, however long it takes.
+const READ_TIMEOUT: Duration = Duration::from_secs(30);
+
 fn shared_http_client() -> reqwest::Client {
-    HTTP_CLIENT.get_or_init(reqwest::Client::new).clone()
+    HTTP_CLIENT
+        .get_or_init(|| {
+            reqwest::Client::builder()
+                .connect_timeout(CONNECT_TIMEOUT)
+                .read_timeout(READ_TIMEOUT)
+                .build()
+                .unwrap_or_else(|_| reqwest::Client::new())
+        })
+        .clone()
 }
+
+/// reqwest starts the read timeout when the request starts, not once it has
+/// finished sending — so a large attachment still going up a slow line
+/// would be cut off at 30 seconds by the shared client. Uploads keep the
+/// connect timeout and nothing else.
+fn upload_http_client() -> reqwest::Client {
+    UPLOAD_HTTP_CLIENT
+        .get_or_init(|| {
+            reqwest::Client::builder()
+                .connect_timeout(CONNECT_TIMEOUT)
+                .build()
+                .unwrap_or_else(|_| reqwest::Client::new())
+        })
+        .clone()
+}
+
+/// The post prop carrying the id this app gave a message before sending it.
+const LOCAL_ID_PROP: &str = "almatter_local_id";
 
 #[derive(Debug, Error)]
 pub enum ApiError {
@@ -321,22 +363,51 @@ impl MattermostClient {
     /// Sends a new message — a top-level post if `root_id` is `None`, a
     /// thread reply otherwise. The returned `Post` is what dispatch.rs
     /// upserts into the cache, same as any other server response.
+    ///
+    /// `local_id` rides along in the post's props, which the server keeps
+    /// with the message. A send that failed without an answer may still
+    /// have landed; `find_sent_post` looks for this tag before the outbox
+    /// sends the same message a second time.
     pub async fn create_post(
         &self,
         channel_id: &str,
         message: &str,
         root_id: Option<&str>,
         file_ids: &[String],
+        local_id: &str,
     ) -> Result<Post, ApiError> {
         let mut body = serde_json::json!({
             "channel_id": channel_id,
             "message": message,
             "root_id": root_id.unwrap_or(""),
+            "props": { LOCAL_ID_PROP: local_id },
         });
         if !file_ids.is_empty() {
             body["file_ids"] = serde_json::json!(file_ids);
         }
         self.post_json("/posts", &body).await
+    }
+
+    /// The post `create_post` tagged with `local_id`, if it reached the
+    /// server after all — searched among the channel's posts changed since
+    /// `since` (milliseconds). Comes back as raw JSON: a post found but not
+    /// readable here still proves the message was sent, and must not be
+    /// sent again.
+    pub async fn find_sent_post(
+        &self,
+        channel_id: &str,
+        since: i64,
+        local_id: &str,
+    ) -> Result<Option<serde_json::Value>, ApiError> {
+        let list: PostList = self
+            .get_json(&format!("/channels/{channel_id}/posts?since={since}"))
+            .await?;
+        Ok(list.posts.into_values().find(|raw| {
+            raw.get("props")
+                .and_then(|props| props.get(LOCAL_ID_PROP))
+                .and_then(|value| value.as_str())
+                == Some(local_id)
+        }))
     }
 
     /// Edits an already-sent message's text — only the author (or someone
@@ -373,7 +444,7 @@ impl MattermostClient {
             .text("channel_id", channel_id.to_string())
             .part("files", part);
 
-        let mut req = self.http.post(self.url("/files")).multipart(form);
+        let mut req = upload_http_client().post(self.url("/files")).multipart(form);
         if let Some(token) = &self.token {
             req = req.bearer_auth(token);
         }
@@ -1246,7 +1317,7 @@ mod tests {
 
         let client = MattermostClient::new(server.uri()).with_token("abc123");
         let post = client
-            .create_post("c1", "hi", None, &[])
+            .create_post("c1", "hi", None, &[], "local-1")
             .await
             .expect("creating a post should succeed");
 
@@ -1260,7 +1331,8 @@ mod tests {
         Mock::given(method("POST"))
             .and(path("/api/v4/posts"))
             .and(wiremock::matchers::body_json(serde_json::json!({
-                "channel_id": "c1", "message": "hi", "root_id": "", "file_ids": ["f1", "f2"]
+                "channel_id": "c1", "message": "hi", "root_id": "", "file_ids": ["f1", "f2"],
+                "props": { "almatter_local_id": "local-1" }
             })))
             .respond_with(ResponseTemplate::new(201).set_body_json(serde_json::json!({
                 "id": "p1", "channel_id": "c1", "user_id": "u1", "message": "hi", "create_at": 1000
@@ -1270,7 +1342,7 @@ mod tests {
 
         let client = MattermostClient::new(server.uri()).with_token("abc123");
         client
-            .create_post("c1", "hi", None, &["f1".to_string(), "f2".to_string()])
+            .create_post("c1", "hi", None, &["f1".to_string(), "f2".to_string()], "local-1")
             .await
             .expect("creating a post with attachments should succeed");
     }

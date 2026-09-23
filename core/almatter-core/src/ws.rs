@@ -105,6 +105,9 @@ const RECONNECT_MAX: Duration = Duration::from_secs(60);
 /// shows up in the log.
 const HEARTBEAT: Duration = Duration::from_secs(30);
 
+/// How long opening the connection may take, handshake included.
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
+
 /// The live connection's outbound half — `None` until `run` has connected
 /// (or after it's dropped), so `send_typing` before login/while offline is
 /// just a harmless no-op rather than something callers need to guard against.
@@ -242,7 +245,17 @@ async fn run(
 ) -> Result<Ended, WsError> {
     let url = websocket_url(&base_url);
     crate::db::log("ws", &format!("connecting to {url}"));
-    let (stream, _response) = match tokio_tungstenite::connect_async(&url).await {
+    // Without a limit, an attempt into a network that swallows packets
+    // could hang for as long as the operating system cares to wait, and the
+    // retry loop with it.
+    let connecting = tokio::time::timeout(CONNECT_TIMEOUT, tokio_tungstenite::connect_async(&url)).await;
+    let connecting = connecting.unwrap_or_else(|_| {
+        Err(tokio_tungstenite::tungstenite::Error::Io(std::io::Error::new(
+            std::io::ErrorKind::TimedOut,
+            "no answer from the server",
+        )))
+    });
+    let (stream, _response) = match connecting {
         Ok(connected) => connected,
         Err(e) => {
             crate::db::log("ws", &format!("connect failed: {e}"));

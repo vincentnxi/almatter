@@ -203,8 +203,9 @@ enum Request {
         channel_id: String,
     },
     /// Sends a message — a reply if `root_id` is set. `local_id` is the
-    /// caller's own id for this attempt (used to identify the queued entry
-    /// if it has to go in the outbox, not sent to the server). A message
+    /// caller's own id for this attempt: it names the queued entry if the
+    /// message has to go in the outbox, and is tagged onto the post itself
+    /// so the outbox can tell whether a failed send landed anyway. A message
     /// with `file_ids` (already-uploaded attachments, see `UploadFile`
     /// below) never goes into the offline outbox on failure — there's no
     /// way to replay the attachment later, so it's a hard error instead.
@@ -360,6 +361,12 @@ enum Request {
 /// the history. Left unbounded, every cached read, poll tick and channel
 /// switch grew a little more expensive forever.
 const CHANNEL_HISTORY_LIMIT: i64 = 1_000;
+
+/// How far before a queued message's timestamp the outbox looks for it on
+/// the server. The timestamp is taken after the failed attempt, which may
+/// itself have waited out a timeout, and the server's clock is not this
+/// machine's: ten minutes covers both with room to spare.
+const OUTBOX_LOOKBACK_MS: i64 = 10 * 60 * 1000;
 
 pub async fn dispatch(request_json: &str, db: &'static Mutex<Database>) -> String {
     let response = handle(request_json, db).await;
@@ -585,7 +592,7 @@ async fn handle(request_json: &str, db: &'static Mutex<Database>) -> Value {
         }
         Request::SendMessage { base_url, token, channel_id, root_id, local_id, message, file_ids } => {
             let client = MattermostClient::new(base_url).with_token(token);
-            match client.create_post(&channel_id, &message, root_id.as_deref(), &file_ids).await {
+            match client.create_post(&channel_id, &message, root_id.as_deref(), &file_ids, &local_id).await {
                 Ok(post) => {
                     cache_write(db, |cache| cache.upsert_post(&post));
                     Ok(json!({ "queued": false, "post": post }))
@@ -673,7 +680,29 @@ async fn handle(request_json: &str, db: &'static Mutex<Database>) -> Value {
                     let client = MattermostClient::new(base_url).with_token(token);
                     let mut flushed = 0;
                     for item in pending {
-                        match client.create_post(&item.channel_id, &item.message, item.root_id.as_deref(), &[]).await {
+                        // A send that timed out, or lost the connection
+                        // before its answer arrived, may well have reached
+                        // the server — sending it again posted it twice. So
+                        // look for it first.
+                        let since = item.created_at - OUTBOX_LOOKBACK_MS;
+                        match client.find_sent_post(&item.channel_id, since, &item.local_id).await {
+                            Ok(Some(raw)) => {
+                                if let Ok(post) = serde_json::from_value::<crate::models::Post>(raw) {
+                                    cache_write(db, |cache| cache.upsert_post(&post));
+                                }
+                                cache_write(db, |cache| SyncEngine::new(cache).remove_outbox_message(&item.local_id));
+                                flushed += 1;
+                                continue;
+                            }
+                            Ok(None) => {}
+                            // The channel itself is gone or off-limits: the
+                            // send below gets the same answer and drops it.
+                            Err(e) if e.is_permanent_rejection() => {}
+                            // Still offline — whether it landed can't be
+                            // known yet, so it must not be sent blind.
+                            Err(_) => break,
+                        }
+                        match client.create_post(&item.channel_id, &item.message, item.root_id.as_deref(), &[], &item.local_id).await {
                             Ok(post) => {
                                 cache_write(db, |cache| cache.upsert_post(&post));
                                 cache_write(db, |cache| SyncEngine::new(cache).remove_outbox_message(&item.local_id));
@@ -1372,6 +1401,134 @@ mod tests {
 
         let outbox = dispatch(r#"{"command":"get_cached_outbox"}"#, db).await;
         assert!(outbox.contains("local-1"), "a transient failure must not drop the queued message: {outbox}");
+    }
+
+    /// A send whose answer never arrived may have reached the server all
+    /// the same. When the tagged post is already there, the outbox adopts it
+    /// instead of posting the message a second time.
+    #[tokio::test]
+    async fn flush_outbox_adopts_a_message_that_already_reached_the_server() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let db = test_db();
+        dispatch(
+            r#"{"command":"send_message","base_url":"http://127.0.0.1:1","token":"x",
+                "channel_id":"c1","root_id":null,"local_id":"local-1","message":"hello"}"#,
+            db,
+        )
+        .await;
+
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/api/v4/channels/c1/posts"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "order": ["p1"],
+                "posts": { "p1": {
+                    "id": "p1", "channel_id": "c1", "user_id": "u1", "message": "hello", "create_at": 1000,
+                    "props": { "almatter_local_id": "local-1" }
+                } }
+            })))
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/api/v4/posts"))
+            .respond_with(ResponseTemplate::new(201))
+            .expect(0)
+            .mount(&server)
+            .await;
+
+        let response = dispatch(
+            &format!(r#"{{"command":"flush_outbox","base_url":"{}","token":"x"}}"#, server.uri()),
+            db,
+        )
+        .await;
+        assert!(response.contains(r#""flushed":1"#), "{response}");
+
+        let outbox = dispatch(r#"{"command":"get_cached_outbox"}"#, db).await;
+        assert!(!outbox.contains("local-1"), "an adopted message should leave the outbox: {outbox}");
+        let cached = dispatch(r#"{"command":"get_cached_posts","channel_id":"c1"}"#, db).await;
+        assert!(cached.contains(r#""id":"p1""#), "the adopted post should be cached: {cached}");
+    }
+
+    /// Only someone else's identical text, or none at all: not proof that
+    /// this message landed, so it is sent.
+    #[tokio::test]
+    async fn flush_outbox_sends_a_message_the_server_does_not_have() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let db = test_db();
+        dispatch(
+            r#"{"command":"send_message","base_url":"http://127.0.0.1:1","token":"x",
+                "channel_id":"c1","root_id":null,"local_id":"local-1","message":"hello"}"#,
+            db,
+        )
+        .await;
+
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/api/v4/channels/c1/posts"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "order": ["p0"],
+                "posts": { "p0": {
+                    "id": "p0", "channel_id": "c1", "user_id": "u2", "message": "hello", "create_at": 900
+                } }
+            })))
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/api/v4/posts"))
+            .respond_with(ResponseTemplate::new(201).set_body_json(serde_json::json!({
+                "id": "p1", "channel_id": "c1", "user_id": "u1", "message": "hello", "create_at": 1000
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let response = dispatch(
+            &format!(r#"{{"command":"flush_outbox","base_url":"{}","token":"x"}}"#, server.uri()),
+            db,
+        )
+        .await;
+        assert!(response.contains(r#""flushed":1"#), "{response}");
+    }
+
+    /// If whether it landed can't be checked, it must not be sent blind.
+    #[tokio::test]
+    async fn flush_outbox_waits_when_it_cannot_check_what_the_server_has() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let db = test_db();
+        dispatch(
+            r#"{"command":"send_message","base_url":"http://127.0.0.1:1","token":"x",
+                "channel_id":"c1","root_id":null,"local_id":"local-1","message":"hello"}"#,
+            db,
+        )
+        .await;
+
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/api/v4/channels/c1/posts"))
+            .respond_with(ResponseTemplate::new(503))
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/api/v4/posts"))
+            .respond_with(ResponseTemplate::new(201))
+            .expect(0)
+            .mount(&server)
+            .await;
+
+        dispatch(
+            &format!(r#"{{"command":"flush_outbox","base_url":"{}","token":"x"}}"#, server.uri()),
+            db,
+        )
+        .await;
+
+        let outbox = dispatch(r#"{"command":"get_cached_outbox"}"#, db).await;
+        assert!(outbox.contains("local-1"), "an unchecked message must stay queued: {outbox}");
     }
 
     /// Unlike a plain text message, one with attachments has nothing to
