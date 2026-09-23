@@ -832,6 +832,11 @@ public partial class MainWindow : Window
     /// <summary>And how rarely that is worth doing at all, however often the window comes and goes.</summary>
     private static readonly TimeSpan MemoryTrimInterval = TimeSpan.FromMinutes(5);
 
+    /// <summary>Below this much allocated since the previous collection, there is too little garbage to be worth one.</summary>
+    private const long MemoryTrimMinimumAllocated = 16 * 1024 * 1024;
+
+    private long _allocatedAtLastMemoryTrim;
+
     /// <summary>
     /// Hands the garbage collector's spare room back to Windows once the
     /// window has been out of sight for a while.
@@ -852,10 +857,20 @@ public partial class MainWindow : Window
     /// each time, the pause landing exactly as the user returns. Waiting
     /// twenty seconds means only a window genuinely left alone is collected,
     /// and the cancellation above means coming back calls it off.
+    ///
+    /// It then repeats for as long as the window stays out of sight. Messages
+    /// keep arriving in the tray, and the garbage with them: after a quarter
+    /// of an hour mostly out of sight, with one collection on the way out,
+    /// the app was measured at 142 MB, and at 94 MB straight after a full
+    /// collection — 32 MB of it live objects. A window
+    /// hidden within the interval of the previous collection waits out the
+    /// rest of it rather than being skipped — skipping left a whole afternoon
+    /// in the tray uncollected. A round that finds too little allocated since
+    /// the last one to be worth a pause does nothing.
     /// </summary>
     private void ScheduleMemoryTrim()
     {
-        if (_pendingMemoryTrim is not null || DateTime.UtcNow - _lastMemoryTrimAt < MemoryTrimInterval)
+        if (_pendingMemoryTrim is not null)
         {
             return;
         }
@@ -866,18 +881,27 @@ public partial class MainWindow : Window
         {
             try
             {
-                await Task.Delay(MemoryTrimDelay, cts.Token);
+                while (true)
+                {
+                    var untilDue = MemoryTrimInterval - (DateTime.UtcNow - _lastMemoryTrimAt);
+                    await Task.Delay(untilDue > MemoryTrimDelay ? untilDue : MemoryTrimDelay, cts.Token);
+
+                    _lastMemoryTrimAt = DateTime.UtcNow;
+                    var allocated = GC.GetTotalAllocatedBytes();
+                    if (allocated - _allocatedAtLastMemoryTrim < MemoryTrimMinimumAllocated)
+                    {
+                        continue;
+                    }
+                    _allocatedAtLastMemoryTrim = allocated;
+
+                    System.Runtime.GCSettings.LargeObjectHeapCompactionMode =
+                        System.Runtime.GCLargeObjectHeapCompactionMode.CompactOnce;
+                    GC.Collect(GC.MaxGeneration, GCCollectionMode.Aggressive, blocking: true, compacting: true);
+                }
             }
             catch (OperationCanceledException)
             {
-                return;
             }
-
-            _lastMemoryTrimAt = DateTime.UtcNow;
-            _pendingMemoryTrim = null;
-            System.Runtime.GCSettings.LargeObjectHeapCompactionMode =
-                System.Runtime.GCLargeObjectHeapCompactionMode.CompactOnce;
-            GC.Collect(GC.MaxGeneration, GCCollectionMode.Aggressive, blocking: true, compacting: true);
         });
     }
 
