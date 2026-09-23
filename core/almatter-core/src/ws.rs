@@ -529,19 +529,68 @@ async fn handle_event(text: &str, user_id: &str, client: &MattermostClient, db: 
     }
 
     // Every message from someone else queues a notification event now, not
-    // just mentions/DMs — the UI decides how loud to be about it (a mention
-    // or DM still gets its own distinct wording) but even a plain channel
+    // just mentions/DMs — the UI decides how loud to be about it (a message
+    // aimed at the user stands out from the rest) but even a plain channel
     // message the user isn't currently looking at should raise *something*.
     if post.user_id != user_id {
-        if mentioned {
-            crate::db::log("ws", &format!("mention detected in channel {}", post.channel_id));
+        let personal = mentioned || addresses_user(&post, user_id, client, db).await;
+        if personal {
+            crate::db::log("ws", &format!("personal message detected in channel {}", post.channel_id));
         }
         let cache = db.lock().expect("cache db mutex poisoned");
-        match cache.enqueue_mention_event(&post.id, &post.channel_id, &post.user_id, &post.message, post.create_at, mentioned) {
+        match cache.enqueue_mention_event(&post.id, &post.channel_id, &post.user_id, &post.message, post.create_at, personal) {
             Ok(()) => {}
             Err(e) => crate::db::log("ws", &format!("failed to queue notification: {e}")),
         }
     }
+}
+
+/// Whether a message is aimed at this user without naming them: a reply in
+/// a thread they started, or a link to one of their messages — which is how
+/// Mattermost quotes a message, showing it in a box under the link. Neither
+/// shows up in the server's `mentions` list, so the message the reply or the
+/// link points to has to be looked up, the same way a reaction's is: the
+/// cache first, one fetch when it doesn't know the message.
+async fn addresses_user(post: &Post, user_id: &str, client: &MattermostClient, db: &'static Mutex<Database>) -> bool {
+    if post.is_thread_reply() && author_of(&post.root_id, client, db).await.as_deref() == Some(user_id) {
+        return true;
+    }
+    for linked_id in linked_post_ids(&post.message) {
+        if author_of(&linked_id, client, db).await.as_deref() == Some(user_id) {
+            return true;
+        }
+    }
+    false
+}
+
+async fn author_of(post_id: &str, client: &MattermostClient, db: &'static Mutex<Database>) -> Option<String> {
+    let cached = {
+        let cache = db.lock().expect("cache db mutex poisoned");
+        cache.cached_post(post_id).ok().flatten()
+    };
+    match cached {
+        Some(post) => Some(post.user_id),
+        None => client.get_post(post_id).await.ok().map(|post| post.user_id),
+    }
+}
+
+/// The message ids in a message's links to other messages —
+/// `https://server/team/pl/<id>`, the form Mattermost's "Copy link" gives.
+/// Capped at three: each unknown one costs a fetch, and a message quoting
+/// more than that is a list of links, not a reply to anyone.
+fn linked_post_ids(message: &str) -> Vec<String> {
+    message
+        .match_indices("/pl/")
+        .filter_map(|(at, marker)| {
+            let id: String = message[at + marker.len()..]
+                .chars()
+                .take_while(|c| c.is_ascii_alphanumeric())
+                .collect();
+            // Mattermost ids are always 26 characters.
+            (id.len() == 26).then_some(id)
+        })
+        .take(3)
+        .collect()
 }
 
 /// Queues a notification when someone else reacts to one of *this* user's
@@ -942,6 +991,54 @@ mod tests {
         assert_eq!(events[0].post_id, "p1");
         assert_eq!(events[0].message, "hey @me");
         assert!(events[0].is_mention);
+    }
+
+    /// A reply in your thread and a link to your message name nobody, so
+    /// the server's `mentions` list misses them; they still count as aimed
+    /// at you. The same on someone else's message stays a plain one.
+    #[tokio::test]
+    async fn replies_to_your_thread_and_links_to_your_message_count_as_personal() {
+        let db: &'static Mutex<Database> =
+            Box::leak(Box::new(Mutex::new(Database::open_in_memory().unwrap())));
+        let client = MattermostClient::new("http://127.0.0.1:1");
+
+        let mine = "mmmmmmmmmmmmmmmmmmmmmmmmmm";
+        let theirs = "tttttttttttttttttttttttttt";
+        for (id, author) in [(mine, "me"), (theirs, "u2")] {
+            let root: Post = serde_json::from_value(json!({
+                "id": id, "channel_id": "c1", "user_id": author, "message": "root", "create_at": 500
+            }))
+            .unwrap();
+            db.lock().unwrap().upsert_post(&root).unwrap();
+        }
+
+        let posted = |id: &str, root_id: &str, message: &str| {
+            let post = json!({
+                "id": id, "channel_id": "c1", "root_id": root_id, "user_id": "u1", "message": message, "create_at": 1000
+            });
+            json!({ "event": "posted", "data": { "post": post.to_string() } }).to_string()
+        };
+        let personal_flag = || db.lock().unwrap().drain_mention_events().unwrap()[0].is_mention;
+
+        handle_event(&posted("p1", mine, "agreed"), "me", &client, db).await;
+        assert!(personal_flag(), "a reply in a thread you started");
+
+        handle_event(&posted("p2", theirs, "agreed"), "me", &client, db).await;
+        assert!(!personal_flag(), "a reply in someone else's thread");
+
+        handle_event(&posted("p3", "", &format!("see https://chat.example/team/pl/{mine} again")), "me", &client, db).await;
+        assert!(personal_flag(), "a link to one of your messages");
+
+        handle_event(&posted("p4", "", &format!("see https://chat.example/team/pl/{theirs}")), "me", &client, db).await;
+        assert!(!personal_flag(), "a link to someone else's message");
+    }
+
+    #[test]
+    fn linked_post_ids_reads_only_full_message_links() {
+        let id = "abcdefghijklmnopqrstuvwxyz";
+        assert_eq!(linked_post_ids(&format!("https://x/t/pl/{id}")), vec![id.to_string()]);
+        assert!(linked_post_ids("https://x/t/pl/short").is_empty());
+        assert!(linked_post_ids("no links here").is_empty());
     }
 
     #[tokio::test]

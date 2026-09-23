@@ -19,7 +19,15 @@ internal interface IDesktopNotifier : IDisposable
     /// <summary>The most recent notification was clicked. Raised on the UI thread.</summary>
     event EventHandler? Clicked;
 
-    void Show(string title, string text);
+    /// <summary>
+    /// A <paramref name="personal"/> notification — aimed at this user, not
+    /// just a message in one of their channels — has to stand out from the
+    /// rest. No notification system lets an app colour its text, so it gets
+    /// a 🔔 in front of its title (emoji are drawn in colour). Whether it
+    /// makes a sound is the caller's call: by default only personal ones do,
+    /// unless the user asked for a sound on every message.
+    /// </summary>
+    void Show(string title, string text, bool personal, bool sound);
 }
 
 internal static class DesktopNotifier
@@ -43,7 +51,7 @@ internal static class DesktopNotifier
     private sealed class NoDesktopNotifier : IDesktopNotifier
     {
         public event EventHandler? Clicked { add { } remove { } }
-        public void Show(string title, string text) { }
+        public void Show(string title, string text, bool personal, bool sound) { }
         public void Dispose() { }
     }
 }
@@ -75,6 +83,7 @@ internal sealed class WindowsTrayNotifier : IDesktopNotifier
     private const int NIF_TIP = 0x04;
     private const int NIF_INFO = 0x10;
     private const int NIIF_INFO = 0x01;
+    private const int NIIF_NOSOUND = 0x10;
     private const int NIN_BALLOONUSERCLICK = 0x0400 + 5;   // WM_USER + 5
 
     private readonly Window _window;
@@ -130,7 +139,7 @@ internal sealed class WindowsTrayNotifier : IDesktopNotifier
         }
     }
 
-    public void Show(string title, string text)
+    public void Show(string title, string text, bool personal, bool sound)
     {
         if (_disposed)
         {
@@ -139,9 +148,9 @@ internal sealed class WindowsTrayNotifier : IDesktopNotifier
 
         var data = NewData();
         data.uFlags = NIF_INFO;
-        data.szInfoTitle = Truncate(title, 63);
+        data.szInfoTitle = Truncate(personal ? "🔔 " + title : title, 63);
         data.szInfo = Truncate(text, 255);
-        data.dwInfoFlags = NIIF_INFO;
+        data.dwInfoFlags = sound ? NIIF_INFO : NIIF_INFO | NIIF_NOSOUND;
         data.uTimeoutOrVersion = 6000;
         if (!Shell_NotifyIconW(NIM_MODIFY, ref data))
         {

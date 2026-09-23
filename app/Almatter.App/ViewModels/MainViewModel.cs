@@ -1097,12 +1097,21 @@ public partial class MainViewModel : ViewModelBase
         var plain = MessageTextParser.ToPlainText(mention.Message);
         var text = plain.Length > 140 ? plain[..140] + "…" : plain;
 
+        // Every private conversation counts, group ones included. The core
+        // flags mentions, replies in the user's threads and links to their
+        // messages; the channel type settles the rest without asking it.
+        var channelType = _loadedChannels.FirstOrDefault(c => c.Id == mention.ChannelId)?.Type;
+        var isPrivate = channelType is "D" or "G";
+        var isPersonal = mention.IsMention || isPrivate;
+
         var notification = new DesktopNotification
         {
             Title = title,
             Text = text,
             ChannelId = mention.ChannelId,
             PostId = mention.PostId,
+            IsPersonal = isPersonal,
+            PlaysSound = isPersonal || Settings.SoundForAllMessages,
         };
 
         CrashLogger.Write("mentions", $"raising NotificationReceived: title='{title}', hasSubscribers={NotificationReceived is not null}");
@@ -1137,6 +1146,8 @@ public partial class MainViewModel : ViewModelBase
             Text = text,
             ChannelId = reaction.ChannelId,
             PostId = reaction.PostId,
+            IsPersonal = true,
+            PlaysSound = true,
         };
 
         CrashLogger.Write("mentions", $"raising a reaction notification: title='{title}', emoji={reaction.EmojiName}");
@@ -3430,6 +3441,9 @@ public partial class MainViewModel : ViewModelBase
 
     [RelayCommand]
     private void ToggleReducedContrast() => Settings.ReducedContrast = !Settings.ReducedContrast;
+
+    [RelayCommand]
+    private void ToggleSoundForAllMessages() => Settings.SoundForAllMessages = !Settings.SoundForAllMessages;
 
     /// <summary>Fire-and-forget from a message's construction — resolves the author's real avatar in the background and applies it once ready, without holding up painting the message itself.</summary>
     private async Task ResolveMessageAvatarAsync(MessageItem item, string userId)

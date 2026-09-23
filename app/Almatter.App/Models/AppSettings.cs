@@ -76,6 +76,19 @@ public sealed partial class AppSettings : ObservableObject
 
     partial void OnShowLinkPreviewsChanged(bool value) => OnPropertyChanged(nameof(LinkPreviewsCheckBrush));
 
+    /// <summary>
+    /// Every notification makes a sound, not only the ones aimed at this
+    /// user (see DesktopNotification.IsPersonal). Those keep their 🔔 either
+    /// way, so they still stand out. Off by default: in a busy team a sound
+    /// for every channel message soon stops meaning anything.
+    /// </summary>
+    [ObservableProperty]
+    public partial bool SoundForAllMessages { get; set; }
+
+    public IBrush SoundForAllMessagesCheckBrush => SoundForAllMessages ? ColorTokens.Accent : Brushes.Transparent;
+
+    partial void OnSoundForAllMessagesChanged(bool value) => OnPropertyChanged(nameof(SoundForAllMessagesCheckBrush));
+
     /// <summary>Sidebar width in px, set by dragging its right edge. Clamped on load to the bounds the grid declares.</summary>
     [ObservableProperty]
     public partial double SidebarWidth { get; set; } = 280;

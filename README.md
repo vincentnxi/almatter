@@ -41,8 +41,10 @@ fraction of that, and to stay usable on older machines.
 - **Offline outbox** — messages written while disconnected are queued and sent when the
   connection comes back.
 - **Windows integration** — notifications from the notification area (a message, or a
-  reaction someone put on one of yours), an unread badge on the taskbar icon, a title bar
-  that follows the theme.
+  reaction someone put on one of yours) — the ones meant for you (mentions, private
+  messages, replies in your threads, links to your messages, reactions) marked 🔔 and the
+  only ones that make a sound, unless you ask for a sound on every message — an unread badge on the taskbar icon, a title bar that
+  follows the theme.
 - **Appearance** — light and dark themes (or follow Windows), a reduced-contrast mode,
   adjustable message font size, and a choice between the official client's Open Sans
   and the system UI font.
@@ -232,8 +234,10 @@ rester utilisable sur des machines anciennes.
 - **File d'envoi hors ligne** — les messages écrits sans connexion sont mis en attente
   et envoyés au retour de celle-ci.
 - **Intégration à Windows** — notifications depuis la zone de notification (un message,
-  ou une réaction que quelqu'un a mise sur l'un des vôtres), pastille de non-lus sur
-  l'icône de la barre des tâches, barre de titre assortie au thème.
+  ou une réaction que quelqu'un a mise sur l'un des vôtres) — celles qui vous sont
+  destinées (mentions, messages privés, réponses dans vos fils, liens vers vos messages,
+  réactions) marquées 🔔 et seules à faire du bruit, sauf si vous demandez un son pour tous les messages —, pastille de non-lus sur l'icône de
+  la barre des tâches, barre de titre assortie au thème.
 - **Apparence** — thèmes clair et sombre (ou celui de Windows), mode contraste réduit,
   taille du texte des messages réglable, et choix entre Open Sans (la police du client
   officiel) et la police système.

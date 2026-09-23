@@ -184,8 +184,10 @@ pub struct ChannelParticipant {
 /// A message the WebSocket saw for the current user (any channel they're
 /// in — not just an @mention or DM) — queued in `mention_events` for the UI's
 /// poll loop to drain and turn into a desktop notification. `is_mention`
-/// distinguishes a real @mention/DM (worth calling out specifically) from a
-/// plain message in some other channel.
+/// distinguishes a message aimed at this user (worth calling out
+/// specifically) from a plain message in some other channel: an @mention or
+/// DM, but also a reply in a thread they started or a message linking to one
+/// of theirs — see `ws::addresses_user`. The name predates those two.
 #[derive(Debug, Clone, Serialize)]
 pub struct MentionEvent {
     pub post_id: String,

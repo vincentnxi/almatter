@@ -1445,6 +1445,28 @@
                 </StackPanel>
 
                 <StackPanel Spacing="6">
+                    <TextBlock Text="NOTIFICATIONS" FontSize="10.5" FontWeight="Bold" Foreground="{DynamicResource TextTertiaryBrush}" />
+                    <Button Classes="row-button" Command="{Binding ToggleSoundForAllMessagesCommand}">
+                        <Border Background="{DynamicResource BgPanelBrush}" CornerRadius="{DynamicResource RowRadiusValue}" Padding="10,8">
+                            <Grid ColumnDefinitions="*,Auto">
+                                <StackPanel Grid.Column="0" Spacing="1">
+                                    <TextBlock Text="Son pour tous les messages" FontSize="12.5" />
+                                    <TextBlock Text="Sinon, seules les notifications 🔔 qui vous sont destinées font du bruit."
+                                               FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}" TextWrapping="Wrap" />
+                                </StackPanel>
+                                <Border Grid.Column="1" Width="18" Height="18" CornerRadius="4" BorderThickness="1.4"
+                                        VerticalAlignment="Center" Margin="10,0,0,0"
+                                        BorderBrush="{DynamicResource DividerStrongBrush}" Background="{Binding Settings.SoundForAllMessagesCheckBrush}">
+                                    <Path IsVisible="{Binding Settings.SoundForAllMessages}" Data="M4 9l3 3 6-7"
+                                          Stroke="{DynamicResource OnAccentBrush}" StrokeThickness="1.6" StrokeLineCap="Round" StrokeJoin="Round"
+                                          Width="10" Height="10" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                </Border>
+                            </Grid>
+                        </Border>
+                    </Button>
+                </StackPanel>
+
+                <StackPanel Spacing="6">
                     <TextBlock Text="LIENS" FontSize="10.5" FontWeight="Bold" Foreground="{DynamicResource TextTertiaryBrush}" />
                     <Button Classes="row-button" Command="{Binding ToggleLinkPreviewsCommand}">
                         <Border Background="{DynamicResource BgPanelBrush}" CornerRadius="{DynamicResource RowRadiusValue}" Padding="10,8">
