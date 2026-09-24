@@ -12,8 +12,20 @@ public enum ChannelKind
 public sealed partial class ChannelItem : ObservableObject, IChannelListItem
 {
     public required string Id { get; init; }
+
+    /// <summary>What the sidebar shows: the name this user gave the channel, when they gave it one, otherwise the server's.</summary>
     public required string Name { get; init; }
+
+    /// <summary>The server's own name — the one everyone else sees.</summary>
+    public required string OriginalName { get; init; }
+
     public ChannelKind Kind { get; init; } = ChannelKind.Public;
+
+    public string ShownName => Name;
+    public bool HasAlias => Name != OriginalName;
+
+    /// <summary>Hovering a renamed channel tells you what it's really called; an ordinary one needs no tooltip.</summary>
+    public string? OriginalNameTip => HasAlias ? $"Nom d'origine : {OriginalName}" : null;
 
     [ObservableProperty]
     public partial bool IsSelected { get; set; }

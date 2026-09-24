@@ -175,6 +175,22 @@ enum Request {
         channel_id: String,
         is_favorite: bool,
     },
+    /// The names this user gave channels for themselves — see
+    /// `MattermostClient::get_channel_aliases`.
+    GetChannelAliases {
+        base_url: String,
+        token: String,
+        user_id: String,
+    },
+    GetCachedChannelAliases,
+    /// An empty `alias` gives the channel its own name back.
+    SetChannelAlias {
+        base_url: String,
+        token: String,
+        user_id: String,
+        channel_id: String,
+        alias: String,
+    },
     /// Opens (or resolves the existing) 1:1 direct-message channel with
     /// `other_user_id` — driven from a message's avatar popover ("Envoyer
     /// un message") rather than the DM sidebar. Warms the cache with the
@@ -839,6 +855,32 @@ async fn handle(request_json: &str, db: &'static Mutex<Database>) -> Value {
                 Err(e) => Err(e.to_string()),
             }
         }
+        Request::GetChannelAliases { base_url, token, user_id } => MattermostClient::new(base_url)
+            .with_token(token)
+            .get_channel_aliases(&user_id)
+            .await
+            .map(|aliases| {
+                cache_write(db, |cache| cache.replace_channel_aliases(&aliases));
+                json!({ "aliases": aliases_to_json(aliases) })
+            })
+            .map_err(|e| e.to_string()),
+        Request::GetCachedChannelAliases => db
+            .lock()
+            .expect("cache db mutex poisoned")
+            .cached_channel_aliases()
+            .map(|aliases| json!({ "aliases": aliases_to_json(aliases) }))
+            .map_err(|e| e.to_string()),
+        Request::SetChannelAlias { base_url, token, user_id, channel_id, alias } => {
+            let alias = alias.trim().to_string();
+            let client = MattermostClient::new(base_url).with_token(token);
+            match client.set_channel_alias(&user_id, &channel_id, &alias).await {
+                Ok(()) => {
+                    cache_write(db, |cache| cache.set_channel_alias(&channel_id, &alias));
+                    Ok(json!({}))
+                }
+                Err(e) => Err(e.to_string()),
+            }
+        }
         Request::OpenDirectMessage { base_url, token, user_id, other_user_id } => {
             let client = MattermostClient::new(base_url).with_token(token);
             match client.create_direct_channel(&user_id, &other_user_id).await {
@@ -963,6 +1005,11 @@ fn cache_write(db: &Mutex<Database>, f: impl FnOnce(&Database) -> rusqlite::Resu
     if let Err(e) = cache.in_transaction(|| f(&cache)) {
         eprintln!("almatter-core: failed to update local cache: {e}");
     }
+}
+
+/// Channel id → name, which is how the UI looks them up.
+fn aliases_to_json(aliases: Vec<(String, String)>) -> serde_json::Map<String, serde_json::Value> {
+    aliases.into_iter().map(|(id, alias)| (id, serde_json::Value::String(alias))).collect()
 }
 
 /// Fetches a team's channels together with this user's read state for each

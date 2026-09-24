@@ -89,9 +89,15 @@
                         <MenuItem Header="Réactiver les notifications" IsVisible="{Binding IsMuted}"
                                   Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).ToggleMuteCommand}"
                                   CommandParameter="{Binding}" />
+                        <MenuItem Header="Renommer pour moi…"
+                                  Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).RequestRenameChannelCommand}"
+                                  CommandParameter="{Binding}" />
+                        <MenuItem Header="Rétablir le nom d'origine" IsVisible="{Binding HasAlias}"
+                                  Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).ResetChannelNameCommand}"
+                                  CommandParameter="{Binding}" />
                     </MenuFlyout>
                 </Button.ContextFlyout>
-                <StackPanel>
+                <StackPanel ToolTip.Tip="{Binding OriginalNameTip}">
                     <Border Height="2" Margin="8,0" CornerRadius="1" Background="{DynamicResource AccentBrush}" IsVisible="{Binding ShowDropIndicatorAbove}" />
                     <Border Background="{Binding RowBackground}" CornerRadius="{DynamicResource RowRadiusValue}" Padding="8,7">
                         <Grid ColumnDefinitions="Auto,*,Auto,Auto">
@@ -133,9 +139,15 @@
                         <MenuItem Header="Réactiver les notifications" IsVisible="{Binding IsMuted}"
                                   Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).ToggleMuteCommand}"
                                   CommandParameter="{Binding}" />
+                        <MenuItem Header="Renommer pour moi…"
+                                  Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).RequestRenameChannelCommand}"
+                                  CommandParameter="{Binding}" />
+                        <MenuItem Header="Rétablir le nom d'origine" IsVisible="{Binding HasAlias}"
+                                  Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).ResetChannelNameCommand}"
+                                  CommandParameter="{Binding}" />
                     </MenuFlyout>
                 </Button.ContextFlyout>
-                <StackPanel>
+                <StackPanel ToolTip.Tip="{Binding OriginalNameTip}">
                     <Border Height="2" Margin="8,0" CornerRadius="1" Background="{DynamicResource AccentBrush}" IsVisible="{Binding ShowDropIndicatorAbove}" />
                     <Border Background="{Binding RowBackground}" CornerRadius="{DynamicResource RowRadiusValue}" Padding="8,6">
                         <Grid ColumnDefinitions="Auto,*,Auto,Auto">
@@ -562,7 +574,12 @@
                 <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto,Auto">
                     <Path Grid.Column="0" Data="M9 4l-1 16M16 4l-1 16M4 9h16M3 15h16" Stroke="{DynamicResource TextPrimaryBrush}" StrokeThickness="1.8"
                           Width="16" Height="16" Stretch="Uniform" VerticalAlignment="Center" />
-                    <TextBlock Grid.Column="1" Text="{Binding ActiveChannelName}" FontWeight="Bold" FontSize="15" Margin="10,0,0,0" VerticalAlignment="Center" />
+                    <StackPanel Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding ActiveChannelName}" FontWeight="Bold" FontSize="15" />
+                        <!-- Only for a channel renamed "pour moi": its real name, the one colleagues will use. -->
+                        <TextBlock Text="{Binding ActiveChannelOriginalName}" IsVisible="{Binding HasActiveChannelOriginalName}"
+                                   FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}" />
+                    </StackPanel>
                     <Border Grid.Column="2" Width="1" Height="16" Background="{DynamicResource DividerStrongBrush}" Margin="12,0" />
                     <TextBlock Grid.Column="3" Text="{Binding ActiveChannelTopic}" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
                     <Button Grid.Column="4" Classes="row-button" Height="28" ToolTip.Tip="Messages épinglés" Margin="4,0"
@@ -1974,6 +1991,46 @@
                     <Button Classes="row-button" Command="{Binding ConfirmDeleteMessageCommand}">
                         <Border Background="{DynamicResource DangerBrush}" CornerRadius="{DynamicResource RowRadiusValue}" Padding="12,6">
                             <TextBlock Text="Supprimer" Foreground="White" FontSize="12.5" FontWeight="SemiBold" />
+                        </Border>
+                    </Button>
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
+        <!-- RENAME CHANNEL FOR ME -->
+        <Button Classes="row-button" Grid.Column="0" Grid.ColumnSpan="3" IsVisible="{Binding IsRenameChannelOpen}"
+                HorizontalAlignment="Stretch" VerticalAlignment="Stretch" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"
+                Command="{Binding CancelRenameChannelCommand}" Background="Transparent" Content="" />
+
+        <Border Grid.Column="0" Grid.ColumnSpan="3" IsVisible="{Binding IsRenameChannelOpen}"
+                HorizontalAlignment="Center" VerticalAlignment="Center" Width="360"
+                Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource DividerStrongBrush}" BorderThickness="1"
+                CornerRadius="{DynamicResource SurfaceRadiusValue}" Padding="16" BoxShadow="{DynamicResource PopoverShadow}">
+            <StackPanel Spacing="10">
+                <StackPanel Spacing="2">
+                    <TextBlock Text="Renommer pour moi" FontWeight="Bold" FontSize="14" />
+                    <TextBlock FontSize="12" Foreground="{DynamicResource TextTertiaryBrush}" TextWrapping="Wrap">
+                        <Run Text="Nom d'origine : " /><Run Text="{Binding RenameChannelOriginalName}" />
+                    </TextBlock>
+                </StackPanel>
+                <Border BorderBrush="{DynamicResource DividerStrongBrush}" BorderThickness="1"
+                        CornerRadius="{DynamicResource SurfaceRadiusValue}">
+                    <TextBox x:Name="RenameChannelBox" Classes="composer" Text="{Binding RenameChannelText}"
+                             MaxLength="{x:Static vm:MainViewModel.MaxChannelAliasLength}"
+                             PlaceholderText="Laisser vide pour garder le nom d'origine" Padding="10,8" />
+                </Border>
+                <TextBlock Text="Seul vous verrez ce nom." FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" />
+                <TextBlock Text="{Binding RenameChannelError}" Foreground="{DynamicResource DangerBrush}" FontSize="12.5" TextWrapping="Wrap"
+                           IsVisible="{Binding RenameChannelError, Converter={x:Static conv:ObjectConverters.IsNotNull}}" />
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+                    <Button Classes="row-button" Command="{Binding CancelRenameChannelCommand}">
+                        <Border Background="{DynamicResource BgPanelBrush}" CornerRadius="{DynamicResource RowRadiusValue}" Padding="12,6">
+                            <TextBlock Text="Annuler" FontSize="12.5" />
+                        </Border>
+                    </Button>
+                    <Button Classes="row-button" Command="{Binding ConfirmRenameChannelCommand}">
+                        <Border Background="{DynamicResource AccentBrush}" CornerRadius="{DynamicResource RowRadiusValue}" Padding="12,6">
+                            <TextBlock Text="Enregistrer" Foreground="{DynamicResource OnAccentBrush}" FontSize="12.5" FontWeight="SemiBold" />
                         </Border>
                     </Button>
                 </StackPanel>

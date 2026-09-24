@@ -59,6 +59,10 @@ fn upload_http_client() -> reqwest::Client {
 /// The post prop carrying the id this app gave a message before sending it.
 const LOCAL_ID_PROP: &str = "almatter_local_id";
 
+/// The preference category holding the names a user gave channels for
+/// themselves. Mattermost caps a category at 32 characters.
+const CHANNEL_ALIAS_CATEGORY: &str = "almatter_channel_alias";
+
 #[derive(Debug, Error)]
 pub enum ApiError {
     #[error("request failed: {0}")]
@@ -636,6 +640,50 @@ impl MattermostClient {
         Ok(())
     }
 
+    /// The names this user gave channels for themselves, as (channel id,
+    /// name) pairs. Kept in the server's preferences store under a category
+    /// of Almatter's own: Mattermost accepts any category a client makes up,
+    /// keeps it private to the user, and hands it back on every device —
+    /// the official clients simply never read it.
+    ///
+    /// The server answers 404 rather than an empty list when a category has
+    /// nothing in it yet, which is the normal state for anyone who never
+    /// renamed anything — so that reads as "no names", not as a failure.
+    pub async fn get_channel_aliases(&self, user_id: &str) -> Result<Vec<(String, String)>, ApiError> {
+        let result: Result<Vec<Preference>, ApiError> = self
+            .get_json(&format!("/users/{user_id}/preferences/{CHANNEL_ALIAS_CATEGORY}"))
+            .await;
+        match result {
+            Ok(prefs) => Ok(prefs
+                .into_iter()
+                .filter(|p| !p.value.trim().is_empty())
+                .map(|p| (p.name, p.value))
+                .collect()),
+            Err(ApiError::Server { status: 404, .. }) => Ok(Vec::new()),
+            Err(e) => Err(e),
+        }
+    }
+
+    /// Gives a channel a name of this user's own, or takes it away again
+    /// when `alias` is empty — deleted outright rather than stored blank, so
+    /// the category doesn't slowly fill with channels that no longer have one.
+    pub async fn set_channel_alias(&self, user_id: &str, channel_id: &str, alias: &str) -> Result<(), ApiError> {
+        let body = serde_json::json!([{
+            "user_id": user_id,
+            "category": CHANNEL_ALIAS_CATEGORY,
+            "name": channel_id,
+            "value": alias,
+        }]);
+        if alias.trim().is_empty() {
+            let _: serde_json::Value = self
+                .post_json(&format!("/users/{user_id}/preferences/delete"), &body)
+                .await?;
+        } else {
+            let _: serde_json::Value = self.put_json(&format!("/users/{user_id}/preferences"), &body).await?;
+        }
+        Ok(())
+    }
+
     async fn get_json<T: serde::de::DeserializeOwned>(&self, path: &str) -> Result<T, ApiError> {
         let mut req = self.http.get(self.url(path));
         if let Some(token) = &self.token {
@@ -742,7 +790,7 @@ async fn body_bytes(resp: reqwest::Response) -> Result<Vec<u8>, ApiError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use wiremock::matchers::{method, path};
+    use wiremock::matchers::{body_json, method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
     #[tokio::test]
@@ -1284,6 +1332,72 @@ mod tests {
             .set_favorite_channel("u1", "c1", true)
             .await
             .expect("favoriting a channel should succeed");
+    }
+
+    #[tokio::test]
+    async fn get_channel_aliases_reads_names_and_skips_blank_ones() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/api/v4/users/u1/preferences/almatter_channel_alias"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
+                { "user_id": "u1", "category": "almatter_channel_alias", "name": "c1", "value": "Projet Dupont" },
+                { "user_id": "u1", "category": "almatter_channel_alias", "name": "c2", "value": " " }
+            ])))
+            .mount(&server)
+            .await;
+
+        let client = MattermostClient::new(server.uri()).with_token("abc123");
+        let aliases = client.get_channel_aliases("u1").await.expect("aliases should parse");
+
+        assert_eq!(aliases, vec![("c1".to_string(), "Projet Dupont".to_string())]);
+    }
+
+    #[tokio::test]
+    async fn get_channel_aliases_treats_an_empty_category_as_no_names() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/api/v4/users/u1/preferences/almatter_channel_alias"))
+            .respond_with(ResponseTemplate::new(404).set_body_json(serde_json::json!({
+                "id": "api.preference.preferences_category.get.app_error",
+                "message": "Unable to find preferences for this category."
+            })))
+            .mount(&server)
+            .await;
+
+        let client = MattermostClient::new(server.uri()).with_token("abc123");
+        let aliases = client.get_channel_aliases("u1").await.expect("a 404 should read as empty");
+
+        assert!(aliases.is_empty());
+    }
+
+    #[tokio::test]
+    async fn set_channel_alias_puts_a_name_and_deletes_a_blank_one() {
+        let server = MockServer::start().await;
+        Mock::given(method("PUT"))
+            .and(path("/api/v4/users/u1/preferences"))
+            .and(body_json(serde_json::json!([
+                { "user_id": "u1", "category": "almatter_channel_alias", "name": "c1", "value": "Projet Dupont" }
+            ])))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({ "status": "OK" })))
+            .expect(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/api/v4/users/u1/preferences/delete"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({ "status": "OK" })))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let client = MattermostClient::new(server.uri()).with_token("abc123");
+        client
+            .set_channel_alias("u1", "c1", "Projet Dupont")
+            .await
+            .expect("naming a channel should succeed");
+        client
+            .set_channel_alias("u1", "c1", "")
+            .await
+            .expect("clearing a name should succeed");
     }
 
     #[tokio::test]

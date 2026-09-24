@@ -198,6 +198,14 @@ impl Database {
                 channel_id TEXT PRIMARY KEY
             );
 
+            -- The names this user gave channels for themselves, mirrored
+            -- from the server's almatter_channel_alias preferences the same
+            -- way favorite_channels mirrors favorite_channel.
+            CREATE TABLE IF NOT EXISTS channel_aliases (
+                channel_id TEXT PRIMARY KEY,
+                alias      TEXT NOT NULL
+            );
+
             -- A mention the WebSocket saw for the current user, waiting to
             -- be picked up (and cleared) by the UI's poll loop and turned
             -- into a desktop notification. INSERT OR IGNORE on the way in
@@ -488,6 +496,35 @@ impl Database {
     pub fn cached_favorite_channel_ids(&self) -> rusqlite::Result<Vec<String>> {
         let mut stmt = self.conn.prepare("SELECT channel_id FROM favorite_channels")?;
         let rows = stmt.query_map([], |row| row.get(0))?;
+        rows.collect()
+    }
+
+    /// Same wholesale overwrite as favorites: always follows a fresh fetch.
+    pub fn replace_channel_aliases(&self, aliases: &[(String, String)]) -> rusqlite::Result<()> {
+        self.conn.execute("DELETE FROM channel_aliases", [])?;
+        for (channel_id, alias) in aliases {
+            self.set_channel_alias(channel_id, alias)?;
+        }
+        Ok(())
+    }
+
+    /// An empty alias removes the row, matching the server side.
+    pub fn set_channel_alias(&self, channel_id: &str, alias: &str) -> rusqlite::Result<()> {
+        if alias.trim().is_empty() {
+            self.conn
+                .execute("DELETE FROM channel_aliases WHERE channel_id = ?1", params![channel_id])?;
+        } else {
+            self.conn.execute(
+                "INSERT OR REPLACE INTO channel_aliases (channel_id, alias) VALUES (?1, ?2)",
+                params![channel_id, alias],
+            )?;
+        }
+        Ok(())
+    }
+
+    pub fn cached_channel_aliases(&self) -> rusqlite::Result<Vec<(String, String)>> {
+        let mut stmt = self.conn.prepare("SELECT channel_id, alias FROM channel_aliases")?;
+        let rows = stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?;
         rows.collect()
     }
 
@@ -2012,6 +2049,21 @@ mod tests {
 
         db.set_favorite_channel("c1", false).unwrap();
         assert_eq!(db.cached_favorite_channel_ids().unwrap(), vec!["c2".to_string()]);
+    }
+
+    #[test]
+    fn channel_aliases_replace_wholesale_rename_and_clear() {
+        let db = Database::open_in_memory().unwrap();
+        db.replace_channel_aliases(&[("c1".into(), "Un".into()), ("c2".into(), "Deux".into())])
+            .unwrap();
+        db.replace_channel_aliases(&[("c1".into(), "Un".into())]).unwrap();
+        assert_eq!(db.cached_channel_aliases().unwrap(), vec![("c1".to_string(), "Un".to_string())]);
+
+        db.set_channel_alias("c1", "Premier").unwrap();
+        assert_eq!(db.cached_channel_aliases().unwrap(), vec![("c1".to_string(), "Premier".to_string())]);
+
+        db.set_channel_alias("c1", "").unwrap();
+        assert!(db.cached_channel_aliases().unwrap().is_empty());
     }
 
     #[test]

@@ -369,6 +369,41 @@ public sealed class MattermostService
         await CallAsync<JsonObject>(request);
     }
 
+    /// <summary>The names this user gave channels for themselves, keyed by channel id. Stored in the server's preferences under a category of Almatter's own, so they follow the account to any device running Almatter.</summary>
+    public async Task<Dictionary<string, string>> GetChannelAliasesAsync(string baseUrl, string token, string userId)
+    {
+        var request = new JsonObject
+        {
+            ["command"] = "get_channel_aliases",
+            ["base_url"] = baseUrl,
+            ["token"] = token,
+            ["user_id"] = userId,
+        };
+        var data = await CallAsync<ChannelAliasesData>(request);
+        return data.Aliases;
+    }
+
+    public async Task<Dictionary<string, string>> GetCachedChannelAliasesAsync()
+    {
+        var data = await CallAsync<ChannelAliasesData>(new JsonObject { ["command"] = "get_cached_channel_aliases" });
+        return data.Aliases;
+    }
+
+    /// <summary>An empty <paramref name="alias"/> gives the channel its own name back.</summary>
+    public async Task SetChannelAliasAsync(string baseUrl, string token, string userId, string channelId, string alias)
+    {
+        var request = new JsonObject
+        {
+            ["command"] = "set_channel_alias",
+            ["base_url"] = baseUrl,
+            ["token"] = token,
+            ["user_id"] = userId,
+            ["channel_id"] = channelId,
+            ["alias"] = alias,
+        };
+        await CallAsync<JsonObject>(request);
+    }
+
     /// <summary>Opens (or resolves the existing) 1:1 direct-message channel with <paramref name="otherUserId"/> — e.g. from a message's avatar popover.</summary>
     public async Task<ChannelDto> OpenDirectMessageAsync(string baseUrl, string token, string userId, string otherUserId)
     {

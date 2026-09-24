@@ -6,7 +6,16 @@ namespace Almatter.App.Models;
 public sealed partial class DirectMessageItem : ObservableObject, IChannelListItem
 {
     public required string Id { get; init; }
+
+    /// <summary>What the sidebar shows: the name this user gave the conversation, when they gave it one, otherwise the participants' names.</summary>
     public required string DisplayName { get; init; }
+
+    /// <summary>The participants' names, as the conversation would be called without a name of its own.</summary>
+    public required string OriginalName { get; init; }
+
+    public string ShownName => DisplayName;
+    public bool HasAlias => DisplayName != OriginalName;
+    public string? OriginalNameTip => HasAlias ? $"Nom d'origine : {OriginalName}" : null;
     public required string Initials { get; init; }
     public required string AvatarHex { get; init; }
 

@@ -33,6 +33,8 @@ public partial class MainViewModel : ViewModelBase
     private Dictionary<string, string> _dmDisplayNames = [];
     /// <summary>Channel ids favorited via the server's own preferences store — mirrors the official clients rather than being an Almatter-only flag.</summary>
     private HashSet<string> _favoriteChannelIds = [];
+    /// <summary>Channel id -> the name this user gave it for themselves ("Renommer pour moi"). Nobody else sees these; they live in the server's preferences so they follow the account between devices.</summary>
+    private Dictionary<string, string> _channelAliases = [];
     private string? _activeChannelId;
     /// <summary>Set once the team is known (cache or network) — search needs it, since Mattermost search is scoped per team.</summary>
     private string? _teamId;
@@ -90,6 +92,25 @@ public partial class MainViewModel : ViewModelBase
 
     [ObservableProperty]
     public partial string ActiveChannelName { get; set; } = "";
+
+    /// <summary>
+    /// The open channel's real name, shown small under the header when this
+    /// user renamed it for themselves — so "#support-n2" in a colleague's
+    /// message can still be matched to the channel on screen. Empty for a
+    /// channel that kept its own name.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasActiveChannelOriginalName))]
+    public partial string ActiveChannelOriginalName { get; set; } = "";
+
+    public bool HasActiveChannelOriginalName => ActiveChannelOriginalName.Length > 0;
+
+    private void ShowActiveChannelName(ChannelDto channel)
+    {
+        ActiveChannelName = ChannelDisplayName(channel);
+        var original = ChannelOriginalName(channel);
+        ActiveChannelOriginalName = ActiveChannelName == original ? "" : original;
+    }
 
     [ObservableProperty]
     public partial string ActiveChannelTopic { get; set; } = "";
@@ -1222,7 +1243,7 @@ public partial class MainViewModel : ViewModelBase
         {
             item.IsSelected = item.Id == channelId;
         }
-        ActiveChannelName = ChannelDisplayName(channel);
+        ShowActiveChannelName(channel);
         ActiveChannelTopic = "";
         TypingIndicatorText = "";
         ErrorMessage = null;
@@ -1858,7 +1879,7 @@ public partial class MainViewModel : ViewModelBase
         }
 
         // A cheap local repaint from what's already loaded — no network round trip needed.
-        var visibleChannels = _loadedChannels.Where(c => c.IsPublicOrPrivate).OrderBy(c => c.DisplayName).ToList();
+        var visibleChannels = VisibleChannelsSorted(_loadedChannels);
         PopulateChannels(visibleChannels, _activeChannelId ?? "");
         await PopulateDirectMessagesAsync(_loadedChannels, allowNetwork: false);
     }
@@ -2369,7 +2390,7 @@ public partial class MainViewModel : ViewModelBase
         {
             item.IsSelected = item.Id == channelId;
         }
-        ActiveChannelName = ChannelDisplayName(channel);
+        ShowActiveChannelName(channel);
         ActiveChannelTopic = "";
         TypingIndicatorText = "";
         ErrorMessage = null;
@@ -3751,10 +3772,19 @@ public partial class MainViewModel : ViewModelBase
                 // A cold cache just starts empty — the network refresh below fills it in.
             }
 
+            try
+            {
+                _channelAliases = await _service.GetCachedChannelAliasesAsync();
+            }
+            catch
+            {
+                // Same: the network refresh fills it in.
+            }
+
             var allChannels = await _service.GetCachedChannelsAsync(team.Id);
             _loadedChannels = allChannels;
 
-            var visibleChannels = allChannels.Where(c => c.IsPublicOrPrivate).OrderBy(c => c.DisplayName).ToList();
+            var visibleChannels = VisibleChannelsSorted(allChannels);
             var firstChannel = visibleChannels.FirstOrDefault();
             if (firstChannel is null)
             {
@@ -3771,7 +3801,7 @@ public partial class MainViewModel : ViewModelBase
             TeamName = team.DisplayName;
             PopulateChannels(visibleChannels, target.Id);
             await PopulateDirectMessagesAsync(allChannels, allowNetwork: false);
-            ActiveChannelName = ChannelDisplayName(target);
+            ShowActiveChannelName(target);
             ActiveChannelTopic = "";
             TypingIndicatorText = "";
             _activeChannelId = target.Id;
@@ -3839,10 +3869,19 @@ public partial class MainViewModel : ViewModelBase
             // Favorites are a nice-to-have; don't let a failure here block loading channels themselves.
         }
 
+        try
+        {
+            _channelAliases = await _service.GetChannelAliasesAsync(_session.BaseUrl, _session.Token, _session.User.Id);
+        }
+        catch
+        {
+            // Keeps whatever the cache gave: the server's own names are a fine fallback.
+        }
+
         var allChannels = await _service.GetChannelsAsync(_session.BaseUrl, _session.Token, team.Id);
         _loadedChannels = allChannels;
 
-        var visibleChannels = allChannels.Where(c => c.IsPublicOrPrivate).OrderBy(c => c.DisplayName).ToList();
+        var visibleChannels = VisibleChannelsSorted(allChannels);
         var firstChannel = visibleChannels.FirstOrDefault();
         if (firstChannel is null)
         {
@@ -3860,7 +3899,7 @@ public partial class MainViewModel : ViewModelBase
 
         PopulateChannels(visibleChannels, targetChannelId);
         await PopulateDirectMessagesAsync(allChannels, allowNetwork: true);
-        ActiveChannelName = ChannelDisplayName(targetChannel);
+        ShowActiveChannelName(targetChannel);
         ActiveChannelTopic = "";
         TypingIndicatorText = "";
         _activeChannelId = targetChannelId;
@@ -3909,7 +3948,7 @@ public partial class MainViewModel : ViewModelBase
         }
 
         _loadedChannels = allChannels;
-        var visibleChannels = allChannels.Where(c => c.IsPublicOrPrivate).OrderBy(c => c.DisplayName).ToList();
+        var visibleChannels = VisibleChannelsSorted(allChannels);
 
         await Dispatcher.UIThread.InvokeAsync(async () =>
         {
@@ -3929,7 +3968,8 @@ public partial class MainViewModel : ViewModelBase
             var item = new ChannelItem
             {
                 Id = c.Id,
-                Name = c.DisplayName,
+                Name = AliasOr(c.Id, c.DisplayName),
+                OriginalName = c.DisplayName,
                 Kind = c.IsPrivate ? ChannelKind.Private : ChannelKind.Public,
                 IsSelected = c.Id == selectedChannelId,
                 IsFavorite = isFavorite,
@@ -4042,6 +4082,121 @@ public partial class MainViewModel : ViewModelBase
         RefreshUnreadAggregates();
     }
 
+    /// <summary>The "Renommer pour moi" box — open while a name is being typed for RenameTarget.</summary>
+    [ObservableProperty]
+    public partial bool IsRenameChannelOpen { get; set; }
+
+    [ObservableProperty]
+    public partial string RenameChannelText { get; set; } = "";
+
+    /// <summary>"Nom d'origine : …" under the box's title, so the real name stays in view while typing a new one.</summary>
+    [ObservableProperty]
+    public partial string RenameChannelOriginalName { get; set; } = "";
+
+    [ObservableProperty]
+    public partial string? RenameChannelError { get; set; }
+
+    private IChannelListItem? _renameTarget;
+
+    /// <summary>Generous for a sidebar row, and far under the 2000 characters the server allows a preference value.</summary>
+    public const int MaxChannelAliasLength = 64;
+
+    [RelayCommand]
+    private void RequestRenameChannel(IChannelListItem item)
+    {
+        _renameTarget = item;
+        RenameChannelText = item.ShownName;
+        RenameChannelOriginalName = item.OriginalName;
+        RenameChannelError = null;
+        IsRenameChannelOpen = true;
+    }
+
+    [RelayCommand]
+    private void CancelRenameChannel()
+    {
+        _renameTarget = null;
+        IsRenameChannelOpen = false;
+    }
+
+    [RelayCommand]
+    private async Task ConfirmRenameChannelAsync()
+    {
+        if (_renameTarget is not { } item)
+        {
+            IsRenameChannelOpen = false;
+            return;
+        }
+
+        // Typing the real name back, or clearing the box, both mean "no name
+        // of my own" — stored as nothing rather than as a copy of the
+        // original, which would stop following the channel if its owner
+        // renamed it on the server.
+        var alias = RenameChannelText.Trim();
+        if (alias.Length > MaxChannelAliasLength)
+        {
+            alias = alias[..MaxChannelAliasLength].TrimEnd();
+        }
+        if (alias == item.OriginalName)
+        {
+            alias = "";
+        }
+
+        if (await SaveChannelAliasAsync(item.Id, alias))
+        {
+            _renameTarget = null;
+            IsRenameChannelOpen = false;
+        }
+    }
+
+    [RelayCommand]
+    private async Task ResetChannelNameAsync(IChannelListItem item)
+    {
+        await SaveChannelAliasAsync(item.Id, "");
+    }
+
+    /// <summary>
+    /// Saves to the server first and only then repaints: a name that failed
+    /// to save would otherwise show here and quietly vanish on the next
+    /// launch. The repaint is the same cheap local rebuild a favorite drag
+    /// uses — nothing is re-fetched.
+    /// </summary>
+    private async Task<bool> SaveChannelAliasAsync(string channelId, string alias)
+    {
+        try
+        {
+            await _service.SetChannelAliasAsync(_session.BaseUrl, _session.Token, _session.User.Id, channelId, alias);
+        }
+        catch (MattermostServiceException ex)
+        {
+            if (IsRenameChannelOpen)
+            {
+                RenameChannelError = ex.Message;
+            }
+            else
+            {
+                ErrorMessage = ex.Message;
+            }
+            return false;
+        }
+
+        if (alias.Length == 0)
+        {
+            _channelAliases.Remove(channelId);
+        }
+        else
+        {
+            _channelAliases[channelId] = alias;
+        }
+
+        PopulateChannels(VisibleChannelsSorted(_loadedChannels), _activeChannelId ?? "");
+        await PopulateDirectMessagesAsync(_loadedChannels, allowNetwork: false);
+        if (_activeChannelId == channelId && _loadedChannels.FirstOrDefault(c => c.Id == channelId) is { } active)
+        {
+            ShowActiveChannelName(active);
+        }
+        return true;
+    }
+
     private async Task MarkChannelViewedOnServerAsync(string channelId)
     {
         try
@@ -4056,8 +4211,21 @@ public partial class MainViewModel : ViewModelBase
         }
     }
 
-    private string ChannelDisplayName(ChannelDto channel) =>
+    /// <summary>The name shown everywhere in the app: the one this user gave the channel, when there is one.</summary>
+    private string ChannelDisplayName(ChannelDto channel) => AliasOr(channel.Id, ChannelOriginalName(channel));
+
+    /// <summary>The name everyone else sees — the server's, or for a DM the participants' names.</summary>
+    private string ChannelOriginalName(ChannelDto channel) =>
         _dmDisplayNames.TryGetValue(channel.Id, out var name) ? name : channel.DisplayName;
+
+    private string AliasOr(string channelId, string originalName) =>
+        _channelAliases.TryGetValue(channelId, out var alias) && !string.IsNullOrWhiteSpace(alias) ? alias : originalName;
+
+    /// <summary>Sidebar order follows the name on screen, so a renamed channel sits where its new name says it should.</summary>
+    private List<ChannelDto> VisibleChannelsSorted(IEnumerable<ChannelDto> allChannels) =>
+        allChannels.Where(c => c.IsPublicOrPrivate)
+            .OrderBy(c => AliasOr(c.Id, c.DisplayName))
+            .ToList();
 
     /// <summary>
     /// Mattermost direct-message channels don't carry a useful display_name
@@ -4381,7 +4549,8 @@ public partial class MainViewModel : ViewModelBase
                 items.Add(new DirectMessageItem
                 {
                     Id = c.Id,
-                    DisplayName = displayName,
+                    DisplayName = AliasOr(c.Id, displayName),
+                    OriginalName = displayName,
                     Initials = "",
                     AvatarHex = AvatarColorFor(c.Id),
                     Presence = PresenceStatus.Offline,
@@ -4413,7 +4582,8 @@ public partial class MainViewModel : ViewModelBase
             var dmItem = new DirectMessageItem
             {
                 Id = c.Id,
-                DisplayName = otherDisplayName,
+                DisplayName = AliasOr(c.Id, otherDisplayName),
+                OriginalName = otherDisplayName,
                 Initials = user?.Initials ?? "?",
                 AvatarHex = AvatarColorFor(otherId),
                 OtherUserId = otherId,

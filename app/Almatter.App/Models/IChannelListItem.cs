@@ -6,6 +6,11 @@ public interface IChannelListItem
     string Id { get; }
     bool IsFavorite { get; }
 
+    /// <summary>The name on the row, which may be one this user gave it — see OriginalName for the real one.</summary>
+    string ShownName { get; }
+    string OriginalName { get; }
+    bool HasAlias { get; }
+
     /// <summary>Drives the thin insertion-line shown just above/below this row while it's the current drop target of a Favoris reorder drag.</summary>
     bool ShowDropIndicatorAbove { get; set; }
     bool ShowDropIndicatorBelow { get; set; }

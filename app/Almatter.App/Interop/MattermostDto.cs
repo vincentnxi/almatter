@@ -254,6 +254,12 @@ internal sealed class FavoritesData
     [JsonPropertyName("channel_ids")] public List<string> ChannelIds { get; set; } = [];
 }
 
+internal sealed class ChannelAliasesData
+{
+    /// <summary>Channel id → the name this user gave it.</summary>
+    [JsonPropertyName("aliases")] public Dictionary<string, string> Aliases { get; set; } = [];
+}
+
 public sealed class OutboxItemDto
 {
     [JsonPropertyName("local_id")] public string LocalId { get; set; } = "";

@@ -241,6 +241,7 @@ public partial class MainWindow : Window
                     nameof(MainViewModel.IsSearchOpen) when vm.IsSearchOpen => SearchBox,
                     nameof(MainViewModel.IsBrowseChannelsOpen) when vm.IsBrowseChannelsOpen => BrowseChannelsBox,
                     nameof(MainViewModel.IsNewConversationOpen) when vm.IsNewConversationOpen => NewConversationBox,
+                    nameof(MainViewModel.IsRenameChannelOpen) when vm.IsRenameChannelOpen => RenameChannelBox,
 
                     // Closing the emoji picker hands the caret back to the
                     // composer. Not cosmetic: the picker took focus into its
@@ -289,6 +290,7 @@ public partial class MainWindow : Window
         ThreadComposerBox.AddHandler(KeyDownEvent, OnThreadComposerKeyDown, RoutingStrategies.Tunnel);
         SearchBox.AddHandler(KeyDownEvent, OnSearchKeyDown, RoutingStrategies.Tunnel);
         EmojiSearchBox.AddHandler(KeyDownEvent, OnEmojiSearchKeyDown, RoutingStrategies.Tunnel);
+        RenameChannelBox.AddHandler(KeyDownEvent, OnRenameChannelKeyDown, RoutingStrategies.Tunnel);
 
         ComposerBox.TextChanged += (_, _) => UpdateMentionAutocomplete(ComposerBox, isThread: false);
         ThreadComposerBox.TextChanged += (_, _) => UpdateMentionAutocomplete(ThreadComposerBox, isThread: true);
@@ -1039,6 +1041,25 @@ public partial class MainWindow : Window
         }
         e.Handled = true;
         vm.RunSearchCommand.Execute(null);
+    }
+
+    private void OnRenameChannelKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (DataContext is not MainViewModel vm)
+        {
+            return;
+        }
+
+        if (e.Key == Key.Escape)
+        {
+            e.Handled = true;
+            vm.CancelRenameChannelCommand.Execute(null);
+        }
+        else if (e.Key == Key.Enter)
+        {
+            e.Handled = true;
+            vm.ConfirmRenameChannelCommand.Execute(null);
+        }
     }
 
     private void OnEmojiSearchKeyDown(object? sender, KeyEventArgs e)
