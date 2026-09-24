@@ -1,0 +1,93 @@
+# Builds Almatter-Setup-<version>.exe on GitHub's own Windows machines, with
+# the same installer\build-installer.ps1 used locally, and keeps the result
+# as a downloadable artifact of the run.
+#
+# Why build here rather than on a personal PC: code signing through the
+# SignPath Foundation (free for open-source projects) only signs files it can
+# trace back to a build of the public source on GitHub. A signed installer is
+# far less likely to be deleted by an antivirus mid-install (seen with 0.7.0).
+# The signing steps will slot in around the "Build the installer" step once
+# SignPath has accepted the project.
+#
+# Runs when a version tag (v0.8.0, ...) is pushed, or by hand from the
+# Actions tab ("Run workflow").
+
+name: Build installer
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-2025
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: pwsh
+
+    steps:
+      # Third-party actions are pinned to a commit rather than a tag: a tag
+      # can be moved to different code, a commit cannot.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # A tag that disagrees with <Version> in the csproj would publish an
+      # installer whose name and "About" say something else than the release.
+      - name: Check the tag matches the app version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          $version = ([xml](Get-Content app\Almatter.App\Almatter.App.csproj -Raw)).Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1
+          if ("v$version" -ne '${{ github.ref_name }}') {
+            throw "Tag ${{ github.ref_name }} does not match <Version>$version</Version> in Almatter.App.csproj"
+          }
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Install Rust
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+
+      # Reuses compiled dependencies from earlier runs; the fat-LTO release
+      # build of the core is by far the slowest part otherwise.
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: core
+
+      # Same Inno Setup release as on the development PC, checked against its
+      # SHA-256 so a tampered download stops the build. To update: take the
+      # innosetup-<version>.exe of a release at
+      # https://github.com/jrsoftware/issrc/releases, check it is signed by
+      # "Pyrsys B.V." (right-click > Properties > Digital Signatures), then put
+      # its URL and SHA-256 here.
+      - name: Install Inno Setup 6.7.3
+        env:
+          INNO_URL: https://github.com/jrsoftware/issrc/releases/download/is-6_7_3/innosetup-6.7.3.exe
+          INNO_SHA256: 9c73c3bae7ed48d44112a0f48e66742c00090bdb5bef71d9d3c056c66e97b732
+        run: |
+          $setup = Join-Path $env:RUNNER_TEMP 'innosetup.exe'
+          Invoke-WebRequest $env:INNO_URL -OutFile $setup
+          $hash = (Get-FileHash $setup -Algorithm SHA256).Hash
+          if ($hash -ne $env:INNO_SHA256) { throw "Inno Setup download has SHA-256 $hash, expected $env:INNO_SHA256" }
+          $dir = Join-Path $env:RUNNER_TEMP 'InnoSetup'
+          $p = Start-Process $setup -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', '/CURRENTUSER', "/DIR=$dir" -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "Inno Setup install failed ($($p.ExitCode))" }
+          # First on PATH, so build-installer.ps1 picks this copy over any
+          # other version the runner image might carry.
+          $dir | Out-File $env:GITHUB_PATH -Append -Encoding utf8
+
+      - name: Build the installer
+        run: .\installer\build-installer.ps1
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: Almatter-Setup
+          path: installer/output/Almatter-Setup-*.exe
+          if-no-files-found: error
+          retention-days: 30
