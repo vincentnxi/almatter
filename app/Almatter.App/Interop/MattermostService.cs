@@ -701,7 +701,7 @@ public sealed class MattermostService
 
         if (!envelope.Ok || envelope.Data is null)
         {
-            throw new MattermostServiceException(envelope.Error ?? "Unknown error from the core.");
+            throw new MattermostServiceException(CoreErrors.Translate(envelope.Error ?? "Unknown error from the core."));
         }
 
         return envelope.Data;

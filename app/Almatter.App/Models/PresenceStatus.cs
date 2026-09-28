@@ -1,3 +1,5 @@
+using Almatter.App.Localization;
+
 namespace Almatter.App.Models;
 
 public enum PresenceStatus
@@ -18,9 +20,9 @@ public static class PresenceText
 {
     public static string Label(PresenceStatus status) => status switch
     {
-        PresenceStatus.Online => "Disponible",
-        PresenceStatus.Away => "Absent",
-        PresenceStatus.DoNotDisturb => "Ne pas déranger",
-        _ => "Hors ligne",
+        PresenceStatus.Online => Loc.S.StatusOnline,
+        PresenceStatus.Away => Loc.S.StatusAway,
+        PresenceStatus.DoNotDisturb => Loc.S.StatusDoNotDisturb,
+        _ => Loc.S.StatusOffline,
     };
 }

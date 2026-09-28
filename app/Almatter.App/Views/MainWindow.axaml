@@ -4,6 +4,7 @@
         xmlns:models="using:Almatter.App.Models"
         xmlns:views="using:Almatter.App.Views"
         xmlns:conv="using:Avalonia.Data.Converters"
+        xmlns:loc="using:Almatter.App.Localization"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d" d:DesignWidth="1280" d:DesignHeight="800"
@@ -83,16 +84,16 @@
                     CommandParameter="{Binding Id}">
                 <Button.ContextFlyout>
                     <MenuFlyout>
-                        <MenuItem Header="Mettre en sourdine" IsVisible="{Binding !IsMuted}"
+                        <MenuItem Header="{Binding T.ChannelMute, Source={x:Static loc:Loc.Instance}}" IsVisible="{Binding !IsMuted}"
                                   Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).ToggleMuteCommand}"
                                   CommandParameter="{Binding}" />
-                        <MenuItem Header="Réactiver les notifications" IsVisible="{Binding IsMuted}"
+                        <MenuItem Header="{Binding T.ChannelUnmute, Source={x:Static loc:Loc.Instance}}" IsVisible="{Binding IsMuted}"
                                   Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).ToggleMuteCommand}"
                                   CommandParameter="{Binding}" />
-                        <MenuItem Header="Renommer pour moi…"
+                        <MenuItem Header="{Binding T.ChannelRename, Source={x:Static loc:Loc.Instance}}"
                                   Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).RequestRenameChannelCommand}"
                                   CommandParameter="{Binding}" />
-                        <MenuItem Header="Rétablir le nom d'origine" IsVisible="{Binding HasAlias}"
+                        <MenuItem Header="{Binding T.ChannelRestoreName, Source={x:Static loc:Loc.Instance}}" IsVisible="{Binding HasAlias}"
                                   Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).ResetChannelNameCommand}"
                                   CommandParameter="{Binding}" />
                     </MenuFlyout>
@@ -109,7 +110,7 @@
                             </Canvas>
                             <TextBlock Grid.Column="1" Text="{Binding Name}" FontWeight="{Binding NameWeight}" Foreground="{Binding NameBrush}"
                                        FontSize="14.5" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-                            <Path Grid.Column="2" IsVisible="{Binding IsMuted}" ToolTip.Tip="En sourdine"
+                            <Path Grid.Column="2" IsVisible="{Binding IsMuted}" ToolTip.Tip="{Binding T.ChannelMutedTip, Source={x:Static loc:Loc.Instance}}"
                                   Data="M11 5 6 9H2v6h4l5 4V5z M23 9l-6 6 M17 9l6 6" Stroke="{DynamicResource TextTertiaryBrush}" StrokeThickness="1.6"
                                   StrokeLineCap="Round" StrokeJoin="Round" Width="13" Height="13" Stretch="Uniform" VerticalAlignment="Center" Margin="6,0,0,0" />
                             <Border Grid.Column="3" IsVisible="{Binding HasMentions}" Background="{DynamicResource AccentBrush}"
@@ -133,16 +134,16 @@
                     CommandParameter="{Binding Id}">
                 <Button.ContextFlyout>
                     <MenuFlyout>
-                        <MenuItem Header="Mettre en sourdine" IsVisible="{Binding !IsMuted}"
+                        <MenuItem Header="{Binding T.ChannelMute, Source={x:Static loc:Loc.Instance}}" IsVisible="{Binding !IsMuted}"
                                   Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).ToggleMuteCommand}"
                                   CommandParameter="{Binding}" />
-                        <MenuItem Header="Réactiver les notifications" IsVisible="{Binding IsMuted}"
+                        <MenuItem Header="{Binding T.ChannelUnmute, Source={x:Static loc:Loc.Instance}}" IsVisible="{Binding IsMuted}"
                                   Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).ToggleMuteCommand}"
                                   CommandParameter="{Binding}" />
-                        <MenuItem Header="Renommer pour moi…"
+                        <MenuItem Header="{Binding T.ChannelRename, Source={x:Static loc:Loc.Instance}}"
                                   Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).RequestRenameChannelCommand}"
                                   CommandParameter="{Binding}" />
-                        <MenuItem Header="Rétablir le nom d'origine" IsVisible="{Binding HasAlias}"
+                        <MenuItem Header="{Binding T.ChannelRestoreName, Source={x:Static loc:Loc.Instance}}" IsVisible="{Binding HasAlias}"
                                   Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).ResetChannelNameCommand}"
                                   CommandParameter="{Binding}" />
                     </MenuFlyout>
@@ -167,7 +168,7 @@
                             </Grid>
                             <TextBlock Grid.Column="1" Text="{Binding DisplayName}" FontWeight="{Binding NameWeight}" Foreground="{Binding NameBrush}"
                                        FontSize="14.5" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-                            <Path Grid.Column="2" IsVisible="{Binding IsMuted}" ToolTip.Tip="En sourdine"
+                            <Path Grid.Column="2" IsVisible="{Binding IsMuted}" ToolTip.Tip="{Binding T.ChannelMutedTip, Source={x:Static loc:Loc.Instance}}"
                                   Data="M11 5 6 9H2v6h4l5 4V5z M23 9l-6 6 M17 9l6 6" Stroke="{DynamicResource TextTertiaryBrush}" StrokeThickness="1.6"
                                   StrokeLineCap="Round" StrokeJoin="Round" Width="13" Height="13" Stretch="Uniform" VerticalAlignment="Center" Margin="6,0,0,0" />
                             <Border Grid.Column="3" IsVisible="{Binding HasMentions}" Background="{DynamicResource AccentBrush}"
@@ -419,7 +420,7 @@
                             <Ellipse Width="10" Height="10" Stroke="{DynamicResource TextTertiaryBrush}" StrokeThickness="1.6" />
                             <Line StartPoint="9,9" EndPoint="14,14" Stroke="{DynamicResource TextTertiaryBrush}" StrokeThickness="1.6" StrokeLineCap="Round" />
                         </Canvas>
-                        <TextBlock Text="Rechercher" Foreground="{DynamicResource TextTertiaryBrush}" VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding T.Search, Source={x:Static loc:Loc.Instance}}" Foreground="{DynamicResource TextTertiaryBrush}" VerticalAlignment="Center" />
                     </StackPanel>
                 </Border>
 
@@ -435,7 +436,7 @@
                                     <Path IsVisible="{Binding !IsFavoritesSectionExpanded}" Data="M9 6l6 6-6 6"
                                           Stroke="{DynamicResource TextTertiaryBrush}" StrokeThickness="2.4" StrokeLineCap="Round" StrokeJoin="Round"
                                           Width="9" Height="9" Stretch="Uniform" VerticalAlignment="Center" />
-                                    <TextBlock Text="FAVORIS" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource TextTertiaryBrush}" />
+                                    <TextBlock Text="{Binding T.FavoritesHeader, Source={x:Static loc:Loc.Instance}}" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource TextTertiaryBrush}" />
                                 </StackPanel>
                             </Button>
 
@@ -456,7 +457,7 @@
                             </ItemsControl>
 
                             <!-- Empty-state hint — otherwise an empty Favoris zone has no drop target visible at all. -->
-                            <TextBlock IsVisible="{Binding !HasFavorites}" Text="Glisse un canal ou une conversation ici"
+                            <TextBlock IsVisible="{Binding !HasFavorites}" Text="{Binding T.FavoritesEmptyHint, Source={x:Static loc:Loc.Instance}}"
                                        IsHitTestVisible="False" FontSize="11" FontStyle="Italic" Foreground="{DynamicResource TextTertiaryBrush}"
                                        Margin="10,2,10,8" TextWrapping="Wrap" />
                         </StackPanel>
@@ -471,11 +472,11 @@
                                         <Path IsVisible="{Binding !IsChannelsSectionExpanded}" Data="M9 6l6 6-6 6"
                                               Stroke="{DynamicResource TextTertiaryBrush}" StrokeThickness="2.4" StrokeLineCap="Round" StrokeJoin="Round"
                                               Width="9" Height="9" Stretch="Uniform" VerticalAlignment="Center" />
-                                        <TextBlock Text="CANAUX" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource TextTertiaryBrush}" />
+                                        <TextBlock Text="{Binding T.ChannelsHeader, Source={x:Static loc:Loc.Instance}}" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource TextTertiaryBrush}" />
                                     </StackPanel>
                                 </Button>
                                 <Button Grid.Column="1" Classes="row-button" Width="20" Height="20" Margin="0,0,8,0"
-                                        HorizontalAlignment="Right" ToolTip.Tip="Parcourir les canaux"
+                                        HorizontalAlignment="Right" ToolTip.Tip="{Binding T.BrowseChannels, Source={x:Static loc:Loc.Instance}}"
                                         Command="{Binding OpenBrowseChannelsCommand}">
                                     <Path Data="M12 5v14M5 12h14" Stroke="{DynamicResource TextTertiaryBrush}" StrokeThickness="2"
                                           StrokeLineCap="Round" Width="12" Height="12" Stretch="Uniform"
@@ -500,11 +501,11 @@
                                         <Path IsVisible="{Binding !IsDirectMessagesSectionExpanded}" Data="M9 6l6 6-6 6"
                                               Stroke="{DynamicResource TextTertiaryBrush}" StrokeThickness="2.4" StrokeLineCap="Round" StrokeJoin="Round"
                                               Width="9" Height="9" Stretch="Uniform" VerticalAlignment="Center" />
-                                        <TextBlock Text="MESSAGES PRIVÉS" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource TextTertiaryBrush}" />
+                                        <TextBlock Text="{Binding T.DirectMessagesHeader, Source={x:Static loc:Loc.Instance}}" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource TextTertiaryBrush}" />
                                     </StackPanel>
                                 </Button>
                                 <Button Grid.Column="1" Classes="row-button" Width="20" Height="20" Margin="0,0,8,0"
-                                        HorizontalAlignment="Right" ToolTip.Tip="Nouvelle conversation"
+                                        HorizontalAlignment="Right" ToolTip.Tip="{Binding T.NewConversation, Source={x:Static loc:Loc.Instance}}"
                                         Command="{Binding OpenNewConversationCommand}">
                                     <Path Data="M12 5v14M5 12h14" Stroke="{DynamicResource TextTertiaryBrush}" StrokeThickness="2"
                                           StrokeLineCap="Round" Width="12" Height="12" Stretch="Uniform"
@@ -526,7 +527,7 @@
 
                 <Border Grid.Row="3" x:Name="SettingsAnchor" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,1,0,0" Padding="12,10">
                     <Grid ColumnDefinitions="*,Auto">
-                        <Button Grid.Column="0" Classes="row-button" ToolTip.Tip="Changer de statut"
+                        <Button Grid.Column="0" Classes="row-button" ToolTip.Tip="{Binding T.ChangeStatus, Source={x:Static loc:Loc.Instance}}"
                                 Command="{Binding ToggleStatusPickerCommand}">
                             <Grid ColumnDefinitions="Auto,*">
                                 <Grid Grid.Column="0" Width="28" Height="28">
@@ -545,7 +546,7 @@
                                 </StackPanel>
                             </Grid>
                         </Button>
-                        <Button Grid.Column="1" Classes="row-button" Width="28" Height="28" ToolTip.Tip="Réglages"
+                        <Button Grid.Column="1" Classes="row-button" Width="28" Height="28" ToolTip.Tip="{Binding T.SettingsTitle, Source={x:Static loc:Loc.Instance}}"
                                 Command="{Binding ToggleSettingsCommand}">
                             <Path Data="M12 15a3 3 0 100-6 3 3 0 000 6z M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z"
                                   Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.6" Width="16" Height="16" Stretch="Uniform"
@@ -582,7 +583,7 @@
                     </StackPanel>
                     <Border Grid.Column="2" Width="1" Height="16" Background="{DynamicResource DividerStrongBrush}" Margin="12,0" />
                     <TextBlock Grid.Column="3" Text="{Binding ActiveChannelTopic}" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-                    <Button Grid.Column="4" Classes="row-button" Height="28" ToolTip.Tip="Messages épinglés" Margin="4,0"
+                    <Button Grid.Column="4" Classes="row-button" Height="28" ToolTip.Tip="{Binding T.PinnedMessages, Source={x:Static loc:Loc.Instance}}" Margin="4,0"
                             Command="{Binding OpenPinnedPanelCommand}">
                         <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
                             <Path Data="M12 17v5 M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"
@@ -592,7 +593,7 @@
                                        FontSize="11.5" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
                         </StackPanel>
                     </Button>
-                    <Button Grid.Column="5" Classes="row-button" Width="28" Height="28" ToolTip.Tip="Rechercher" Margin="4,0"
+                    <Button Grid.Column="5" Classes="row-button" Width="28" Height="28" ToolTip.Tip="{Binding T.Search, Source={x:Static loc:Loc.Instance}}" Margin="4,0"
                             Command="{Binding OpenSearchCommand}">
                         <Canvas Width="16" Height="16" HorizontalAlignment="Center" VerticalAlignment="Center">
                             <Ellipse Canvas.Left="1" Canvas.Top="1" Width="9" Height="9" Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.6" />
@@ -653,7 +654,7 @@
                                                             Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).OpenDirectMessageWithCommand}"
                                                             CommandParameter="{Binding AuthorUserId}">
                                                         <Border Background="{DynamicResource AccentBrush}" CornerRadius="{DynamicResource RowRadiusValue}" Padding="10,7" HorizontalAlignment="Stretch">
-                                                            <TextBlock Text="Envoyer un message" Foreground="{DynamicResource OnAccentBrush}" FontWeight="SemiBold" FontSize="12.5" HorizontalAlignment="Center" />
+                                                            <TextBlock Text="{Binding T.SendMessage, Source={x:Static loc:Loc.Instance}}" Foreground="{DynamicResource OnAccentBrush}" FontWeight="SemiBold" FontSize="12.5" HorizontalAlignment="Center" />
                                                         </Border>
                                                     </Button>
                                                 </StackPanel>
@@ -683,7 +684,7 @@
                                             <TextBlock Text="{Binding AuthorName}" FontWeight="Bold"
                                                        FontSize="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.MessageFontSize}" />
                                             <TextBlock Text="{Binding TimeLabel}" FontSize="11.5" Foreground="{DynamicResource TextTertiaryBrush}" VerticalAlignment="Center" />
-                                            <TextBlock Text="Envoi en cours…" FontSize="11.5" FontStyle="Italic" Foreground="{DynamicResource TextTertiaryBrush}" VerticalAlignment="Center" IsVisible="{Binding IsPending}" />
+                                            <TextBlock Text="{Binding T.Sending, Source={x:Static loc:Loc.Instance}}" FontSize="11.5" FontStyle="Italic" Foreground="{DynamicResource TextTertiaryBrush}" VerticalAlignment="Center" IsVisible="{Binding IsPending}" />
                                             <!-- Sits on the header line, which already exists, so marking a
                                                  message pinned costs the row no extra height — and with the
                                                  list virtualized, a height change is what makes the
@@ -692,7 +693,7 @@
                                                 <Path Data="M12 17v5 M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"
                                                       Stroke="{DynamicResource AccentBrush}" StrokeThickness="1.7" StrokeLineCap="Round" StrokeJoin="Round"
                                                       Width="11" Height="11" Stretch="Uniform" VerticalAlignment="Center" />
-                                                <TextBlock Text="Épinglé" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource AccentBrush}" VerticalAlignment="Center" />
+                                                <TextBlock Text="{Binding T.Pinned, Source={x:Static loc:Loc.Instance}}" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource AccentBrush}" VerticalAlignment="Center" />
                                             </StackPanel>
                                         </StackPanel>
                                         <Button IsVisible="{Binding HasQuotedMessage}" Classes="row-button" Margin="0,0,0,2"
@@ -730,7 +731,7 @@
                                             </Border>
                                         </Border>
 
-                                        <TextBlock Text="(modifié)" IsVisible="{Binding IsEdited}" Margin="6,1,0,0"
+                                        <TextBlock Text="{Binding T.Edited, Source={x:Static loc:Loc.Instance}}" IsVisible="{Binding IsEdited}" Margin="6,1,0,0"
                                                    FontSize="11" FontStyle="Italic" Foreground="{DynamicResource TextTertiaryBrush}" />
 
                                         <ItemsControl IsVisible="{Binding HasAttachments}" ItemsSource="{Binding Attachments}" Margin="0,4,0,0">
@@ -741,7 +742,7 @@
                                             </ItemsControl.ItemsPanel>
                                             <ItemsControl.ItemTemplate>
                                                 <DataTemplate DataType="models:AttachmentItem">
-                                                    <Button Classes="row-button" ToolTip.Tip="Ouvrir"
+                                                    <Button Classes="row-button" ToolTip.Tip="{Binding T.Open, Source={x:Static loc:Loc.Instance}}"
                                                             Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).OpenAttachmentCommand}"
                                                             CommandParameter="{Binding}">
                                                         <Border Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1"
@@ -752,7 +753,7 @@
                                                                 <StackPanel>
                                                                     <TextBlock Text="{Binding FileName}" FontWeight="SemiBold" FontSize="12.5" />
                                                                     <TextBlock Text="{Binding SizeLabel}" FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}" IsVisible="{Binding !IsDownloading}" />
-                                                                    <TextBlock Text="Téléchargement…" FontSize="11" FontStyle="Italic" Foreground="{DynamicResource TextTertiaryBrush}" IsVisible="{Binding IsDownloading}" />
+                                                                    <TextBlock Text="{Binding T.Downloading, Source={x:Static loc:Loc.Instance}}" FontSize="11" FontStyle="Italic" Foreground="{DynamicResource TextTertiaryBrush}" IsVisible="{Binding IsDownloading}" />
                                                                 </StackPanel>
                                                             </StackPanel>
                                                         </Border>
@@ -792,7 +793,7 @@
                                                 CommandParameter="{Binding Id}">
                                             <StackPanel Orientation="Horizontal" Spacing="6">
                                                 <TextBlock Foreground="{DynamicResource AccentBrush}" FontWeight="SemiBold">
-                                                    <Run Text="{Binding ThreadReplyCount}" /><Run Text=" réponses" />
+                                                    <Run Text="{Binding ThreadReplyLabel}" />
                                                 </TextBlock>
                                             </StackPanel>
                                         </Button>
@@ -803,7 +804,7 @@
                                      no scrolling back up to its first line to react or reply. -->
                                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,4,2" Spacing="4">
                                     <Button Classes="row-button hover-reveal-btn" IsVisible="{Binding IsMine}"
-                                            Width="26" Height="26" ToolTip.Tip="Modifier"
+                                            Width="26" Height="26" ToolTip.Tip="{Binding T.Edit, Source={x:Static loc:Loc.Instance}}"
                                             Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).StartEditMessageCommand}"
                                             CommandParameter="{Binding}">
                                         <Border CornerRadius="13" Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1" BoxShadow="{DynamicResource CardShadow}">
@@ -813,7 +814,7 @@
                                         </Border>
                                     </Button>
                                     <Button Classes="row-button hover-reveal-btn" IsVisible="{Binding IsMine}"
-                                            Width="26" Height="26" ToolTip.Tip="Supprimer"
+                                            Width="26" Height="26" ToolTip.Tip="{Binding T.Delete, Source={x:Static loc:Loc.Instance}}"
                                             Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).RequestDeleteMessageCommand}"
                                             CommandParameter="{Binding}">
                                         <Border CornerRadius="13" Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1" BoxShadow="{DynamicResource CardShadow}">
@@ -832,7 +833,7 @@
                                                   Width="14" Height="14" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center" />
                                         </Border>
                                     </Button>
-                                    <Button Classes="row-button hover-reveal-btn" ToolTip.Tip="Ajouter une réaction"
+                                    <Button Classes="row-button hover-reveal-btn" ToolTip.Tip="{Binding T.AddReaction, Source={x:Static loc:Loc.Instance}}"
                                             Width="26" Height="26"
                                             Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).OpenEmojiPickerCommand}"
                                             CommandParameter="{Binding Id}">
@@ -845,7 +846,7 @@
                                             </Canvas>
                                         </Border>
                                     </Button>
-                                    <Button Classes="row-button hover-reveal-btn" IsVisible="{Binding !IsPending}" ToolTip.Tip="Répondre"
+                                    <Button Classes="row-button hover-reveal-btn" IsVisible="{Binding !IsPending}" ToolTip.Tip="{Binding T.Reply, Source={x:Static loc:Loc.Instance}}"
                                             Width="26" Height="26"
                                             Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).OpenThreadCommand}"
                                             CommandParameter="{Binding ReplyTargetId}">
@@ -870,7 +871,7 @@
                  leaves the "looking at an older message" state. -->
             <Button Grid.Row="1" Classes="row-button" IsVisible="{Binding ShowReturnToLiveButton}"
                     HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,28,14"
-                    Width="34" Height="34" ToolTip.Tip="Revenir au dernier message"
+                    Width="34" Height="34" ToolTip.Tip="{Binding T.JumpToLatest, Source={x:Static loc:Loc.Instance}}"
                     Command="{Binding ReturnToLiveTailCommand}">
                 <Border Width="34" Height="34" CornerRadius="17"
                         Background="{DynamicResource CardBgBrush}"
@@ -913,9 +914,9 @@
                             <Path Grid.Column="0" Data="M12 20h9 M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"
                                   Stroke="{DynamicResource AccentBrush}" StrokeThickness="1.5" StrokeLineCap="Round" StrokeJoin="Round"
                                   Width="13" Height="13" Stretch="Uniform" VerticalAlignment="Center" Margin="0,0,8,0" />
-                            <TextBlock Grid.Column="1" Text="Modification du message" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="1" Text="{Binding T.EditingMessage, Source={x:Static loc:Loc.Instance}}" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
                             <Button Grid.Column="2" Classes="row-button" Command="{Binding CancelEditMessageCommand}">
-                                <TextBlock Text="Annuler" FontSize="12" Foreground="{DynamicResource AccentBrush}" FontWeight="SemiBold" />
+                                <TextBlock Text="{Binding T.Cancel, Source={x:Static loc:Loc.Instance}}" FontSize="12" Foreground="{DynamicResource AccentBrush}" FontWeight="SemiBold" />
                             </Button>
                         </Grid>
                     </Border>
@@ -969,19 +970,19 @@
                         <views:FormattingToolbar x:Name="ComposerFormattingToolbar" />
                     </Border>
                     <TextBox x:Name="ComposerBox" Classes="composer" Text="{Binding ComposeText}"
-                             PlaceholderText="{Binding ActiveChannelName, StringFormat='Écrire dans #{0}…'}"
+                             PlaceholderText="{Binding ComposerPlaceholder}"
                              FontSize="{Binding Settings.MessageFontSize}"
                              TextWrapping="Wrap"
                              Padding="12,10,12,4" AcceptsReturn="True" MinHeight="20" />
                     <Grid ColumnDefinitions="Auto,*,Auto" Margin="10,4,10,10">
                         <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="2">
-                            <Button Classes="row-button" Width="28" Height="28" ToolTip.Tip="Joindre un fichier"
+                            <Button Classes="row-button" Width="28" Height="28" ToolTip.Tip="{Binding T.AttachFile, Source={x:Static loc:Loc.Instance}}"
                                     Command="{Binding AttachFileCommand}">
                                 <Path Data="M21.4 11.1 L12.2 20.3 A5 5 0 0 1 5.1 13.2 L14.1 4.2 A3.5 3.5 0 0 1 19.1 9.2 L10.1 18.2 A2 2 0 0 1 7.3 15.4 L15.4 7.3"
                                       Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.8" StrokeLineCap="Round" Width="17" Height="17" Stretch="Uniform"
                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
                             </Button>
-                            <Button Classes="row-button" Width="28" Height="28" ToolTip.Tip="Insérer un émoji"
+                            <Button Classes="row-button" Width="28" Height="28" ToolTip.Tip="{Binding T.InsertEmoji, Source={x:Static loc:Loc.Instance}}"
                                 Command="{Binding OpenComposerEmojiPickerCommand}">
                             <Canvas Width="17" Height="17" HorizontalAlignment="Center" VerticalAlignment="Center">
                                 <Ellipse Canvas.Left="1" Canvas.Top="1" Width="15" Height="15"
@@ -992,7 +993,7 @@
                                       StrokeThickness="1.5" StrokeLineCap="Round" />
                             </Canvas>
                         </Button>
-                            <Button Classes="row-button format-toggle" Width="28" Height="28" ToolTip.Tip="Mise en forme"
+                            <Button Classes="row-button format-toggle" Width="28" Height="28" ToolTip.Tip="{Binding T.Formatting, Source={x:Static loc:Loc.Instance}}"
                                     Classes.active="{Binding Settings.ShowFormattingToolbar}"
                                     Command="{Binding ToggleFormattingToolbarCommand}">
                                 <Path Data="M6 19 L12 4.5 L18 19 M8.3 13.5 H15.7" StrokeThickness="1.8"
@@ -1017,7 +1018,7 @@
             <Grid RowDefinitions="52,*,Auto">
                 <Border Grid.Row="0" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1" Padding="14,0">
                     <Grid ColumnDefinitions="*,Auto,Auto">
-                        <TextBlock Grid.Column="0" Text="Fil de discussion" FontWeight="Bold" VerticalAlignment="Center" />
+                        <TextBlock Grid.Column="0" Text="{Binding T.Thread, Source={x:Static loc:Loc.Instance}}" FontWeight="Bold" VerticalAlignment="Center" />
                         <TextBlock Grid.Column="1" Text="{Binding ActiveChannelName}" Foreground="{DynamicResource TextTertiaryBrush}" FontSize="12" VerticalAlignment="Center" Margin="0,0,10,0" />
                         <Button Grid.Column="2" Classes="row-button" Width="20" Height="20"
                                 Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).CloseThreadCommand}">
@@ -1065,7 +1066,7 @@
                                                             Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).OpenDirectMessageWithCommand}"
                                                             CommandParameter="{Binding AuthorUserId}">
                                                         <Border Background="{DynamicResource AccentBrush}" CornerRadius="{DynamicResource RowRadiusValue}" Padding="10,7" HorizontalAlignment="Stretch">
-                                                            <TextBlock Text="Envoyer un message" Foreground="{DynamicResource OnAccentBrush}" FontWeight="SemiBold" FontSize="12.5" HorizontalAlignment="Center" />
+                                                            <TextBlock Text="{Binding T.SendMessage, Source={x:Static loc:Loc.Instance}}" Foreground="{DynamicResource OnAccentBrush}" FontWeight="SemiBold" FontSize="12.5" HorizontalAlignment="Center" />
                                                         </Border>
                                                     </Button>
                                                 </StackPanel>
@@ -1092,7 +1093,7 @@
                                                 <Path Data="M12 17v5 M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"
                                                       Stroke="{DynamicResource AccentBrush}" StrokeThickness="1.7" StrokeLineCap="Round" StrokeJoin="Round"
                                                       Width="10" Height="10" Stretch="Uniform" VerticalAlignment="Center" />
-                                                <TextBlock Text="Épinglé" FontSize="10.5" FontWeight="SemiBold" Foreground="{DynamicResource AccentBrush}" VerticalAlignment="Center" />
+                                                <TextBlock Text="{Binding T.Pinned, Source={x:Static loc:Loc.Instance}}" FontSize="10.5" FontWeight="SemiBold" Foreground="{DynamicResource AccentBrush}" VerticalAlignment="Center" />
                                             </StackPanel>
                                         </StackPanel>
                                         <ItemsControl ItemsSource="{Binding Blocks}" />
@@ -1124,7 +1125,7 @@
 
                             <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,14">
                                 <Border Height="1" Background="{DynamicResource DividerBrush}" HorizontalAlignment="Stretch" Width="60" />
-                                <TextBlock Text="{Binding ThreadReplies.Count, StringFormat='{}{0} réponses'}" FontSize="11.5" Foreground="{DynamicResource TextTertiaryBrush}" />
+                                <TextBlock Text="{Binding ThreadReplyCountLabel}" FontSize="11.5" Foreground="{DynamicResource TextTertiaryBrush}" />
                                 <Border Height="1" Background="{DynamicResource DividerBrush}" HorizontalAlignment="Stretch" Width="60" />
                             </StackPanel>
 
@@ -1164,7 +1165,7 @@
                                                                     Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).OpenDirectMessageWithCommand}"
                                                                     CommandParameter="{Binding AuthorUserId}">
                                                                 <Border Background="{DynamicResource AccentBrush}" CornerRadius="{DynamicResource RowRadiusValue}" Padding="10,7" HorizontalAlignment="Stretch">
-                                                                    <TextBlock Text="Envoyer un message" Foreground="{DynamicResource OnAccentBrush}" FontWeight="SemiBold" FontSize="12.5" HorizontalAlignment="Center" />
+                                                                    <TextBlock Text="{Binding T.SendMessage, Source={x:Static loc:Loc.Instance}}" Foreground="{DynamicResource OnAccentBrush}" FontWeight="SemiBold" FontSize="12.5" HorizontalAlignment="Center" />
                                                                 </Border>
                                                             </Button>
                                                         </StackPanel>
@@ -1187,12 +1188,12 @@
                                                     <TextBlock Text="{Binding AuthorName}" FontWeight="Bold"
                                                                FontSize="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.MessageFontSize}" />
                                                     <TextBlock Text="{Binding TimeLabel}" FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}" VerticalAlignment="Center" />
-                                                    <TextBlock Text="Envoi en cours…" FontSize="11" FontStyle="Italic" Foreground="{DynamicResource TextTertiaryBrush}" VerticalAlignment="Center" IsVisible="{Binding IsPending}" />
+                                                    <TextBlock Text="{Binding T.Sending, Source={x:Static loc:Loc.Instance}}" FontSize="11" FontStyle="Italic" Foreground="{DynamicResource TextTertiaryBrush}" VerticalAlignment="Center" IsVisible="{Binding IsPending}" />
                                                     <StackPanel Orientation="Horizontal" Spacing="3" VerticalAlignment="Center" IsVisible="{Binding IsPinned}">
                                                         <Path Data="M12 17v5 M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"
                                                               Stroke="{DynamicResource AccentBrush}" StrokeThickness="1.7" StrokeLineCap="Round" StrokeJoin="Round"
                                                               Width="10" Height="10" Stretch="Uniform" VerticalAlignment="Center" />
-                                                        <TextBlock Text="Épinglé" FontSize="10.5" FontWeight="SemiBold" Foreground="{DynamicResource AccentBrush}" VerticalAlignment="Center" />
+                                                        <TextBlock Text="{Binding T.Pinned, Source={x:Static loc:Loc.Instance}}" FontSize="10.5" FontWeight="SemiBold" Foreground="{DynamicResource AccentBrush}" VerticalAlignment="Center" />
                                                     </StackPanel>
                                                 </StackPanel>
                                                 <ItemsControl ItemsSource="{Binding Blocks}" />
@@ -1280,18 +1281,18 @@
                             <views:FormattingToolbar x:Name="ThreadFormattingToolbar" />
                         </Border>
                         <TextBox x:Name="ThreadComposerBox" Classes="composer" Text="{Binding ThreadComposeText}"
-                                 PlaceholderText="Répondre au fil…" Padding="0"
+                                 PlaceholderText="{Binding T.ReplyToThreadPlaceholder, Source={x:Static loc:Loc.Instance}}" Padding="0"
                                  FontSize="{Binding Settings.MessageFontSize}"
                                  TextWrapping="Wrap"
                                  AcceptsReturn="True" />
                         <StackPanel Orientation="Horizontal" Spacing="2" HorizontalAlignment="Left">
-                            <Button Classes="row-button" Width="24" Height="24" ToolTip.Tip="Joindre un fichier"
+                            <Button Classes="row-button" Width="24" Height="24" ToolTip.Tip="{Binding T.AttachFile, Source={x:Static loc:Loc.Instance}}"
                                     Command="{Binding AttachThreadFileCommand}">
                                 <Path Data="M21.4 11.1 L12.2 20.3 A5 5 0 0 1 5.1 13.2 L14.1 4.2 A3.5 3.5 0 0 1 19.1 9.2 L10.1 18.2 A2 2 0 0 1 7.3 15.4 L15.4 7.3"
                                       Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.8" StrokeLineCap="Round" Width="15" Height="15" Stretch="Uniform"
                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
                             </Button>
-                            <Button Classes="row-button" Width="24" Height="24" ToolTip.Tip="Insérer un émoji"
+                            <Button Classes="row-button" Width="24" Height="24" ToolTip.Tip="{Binding T.InsertEmoji, Source={x:Static loc:Loc.Instance}}"
                                 Command="{Binding OpenThreadEmojiPickerCommand}">
                             <Canvas Width="17" Height="17" HorizontalAlignment="Center" VerticalAlignment="Center">
                                 <Ellipse Canvas.Left="1" Canvas.Top="1" Width="15" Height="15"
@@ -1302,7 +1303,7 @@
                                       StrokeThickness="1.5" StrokeLineCap="Round" />
                             </Canvas>
                         </Button>
-                            <Button Classes="row-button format-toggle" Width="24" Height="24" ToolTip.Tip="Mise en forme"
+                            <Button Classes="row-button format-toggle" Width="24" Height="24" ToolTip.Tip="{Binding T.Formatting, Source={x:Static loc:Loc.Instance}}"
                                     Classes.active="{Binding Settings.ShowThreadFormattingToolbar}"
                                     Command="{Binding ToggleThreadFormattingToolbarCommand}">
                                 <Path Data="M6 19 L12 4.5 L18 19 M8.3 13.5 H15.7" StrokeThickness="1.8"
@@ -1318,8 +1319,8 @@
         <!-- LOADING OVERLAY -->
         <Border Grid.Column="0" Grid.ColumnSpan="3" IsVisible="{Binding IsLoading}" Background="{DynamicResource ScrimBrush}">
             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="10">
-                <TextBlock Text="Connexion au serveur…" FontWeight="SemiBold" HorizontalAlignment="Center" />
-                <TextBlock Text="{Binding TeamName, StringFormat='Récupération des équipes et des canaux'}" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" HorizontalAlignment="Center" />
+                <TextBlock Text="{Binding T.ConnectingToServer, Source={x:Static loc:Loc.Instance}}" FontWeight="SemiBold" HorizontalAlignment="Center" />
+                <TextBlock Text="{Binding T.LoadingTeamsAndChannels, Source={x:Static loc:Loc.Instance}}" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" HorizontalAlignment="Center" />
             </StackPanel>
         </Border>
 
@@ -1330,7 +1331,7 @@
             <Grid ColumnDefinitions="20,*,20">
                 <TextBlock Grid.Column="1" Text="{Binding ErrorMessage}" Foreground="{DynamicResource DangerBrush}" HorizontalAlignment="Center" TextWrapping="Wrap" Margin="8,0" />
                 <Button Grid.Column="2" Classes="row-button" Width="20" Height="20" VerticalAlignment="Center"
-                        ToolTip.Tip="Fermer" Command="{Binding DismissErrorCommand}">
+                        ToolTip.Tip="{Binding T.Close, Source={x:Static loc:Loc.Instance}}" Command="{Binding DismissErrorCommand}">
                     <Canvas Width="12" Height="12" HorizontalAlignment="Center" VerticalAlignment="Center">
                         <Line StartPoint="1,1" EndPoint="11,11" Stroke="{DynamicResource DangerBrush}" StrokeThickness="1.6" StrokeLineCap="Round" />
                         <Line StartPoint="11,1" EndPoint="1,11" Stroke="{DynamicResource DangerBrush}" StrokeThickness="1.6" StrokeLineCap="Round" />
@@ -1357,7 +1358,7 @@
                 CornerRadius="{DynamicResource SurfaceRadiusValue}" Padding="14" BoxShadow="{DynamicResource PopoverShadow}">
             <StackPanel Spacing="16">
                 <Grid ColumnDefinitions="*,Auto">
-                    <TextBlock Grid.Column="0" Text="Réglages" FontWeight="Bold" FontSize="14" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="0" Text="{Binding T.SettingsTitle, Source={x:Static loc:Loc.Instance}}" FontWeight="Bold" FontSize="14" VerticalAlignment="Center" />
                     <Button Grid.Column="1" Classes="row-button" Width="20" Height="20" Command="{Binding CloseSettingsCommand}">
                         <Canvas Width="14" Height="14" HorizontalAlignment="Center" VerticalAlignment="Center">
                             <Line StartPoint="1,1" EndPoint="13,13" Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.6" StrokeLineCap="Round" />
@@ -1367,7 +1368,31 @@
                 </Grid>
 
                 <StackPanel Spacing="6">
-                    <TextBlock Text="APPARENCE" FontSize="10.5" FontWeight="Bold" Foreground="{DynamicResource TextTertiaryBrush}" />
+                    <TextBlock Text="{Binding T.SettingsLanguage, Source={x:Static loc:Loc.Instance}}" FontSize="10.5" FontWeight="Bold" Foreground="{DynamicResource TextTertiaryBrush}" />
+                    <!-- Each language is named in itself, so someone who
+                         switched by mistake can still find their way back. -->
+                    <ItemsControl ItemsSource="{Binding LanguageOptions}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel Orientation="Horizontal" Spacing="6" />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="models:LanguageOption">
+                                <Button Classes="row-button"
+                                        Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).SetLanguageCommand}"
+                                        CommandParameter="{Binding Language}">
+                                    <Border Background="{Binding RowBackground}" CornerRadius="{DynamicResource RowRadiusValue}" Padding="10,7">
+                                        <TextBlock Text="{Binding Name}" Foreground="{Binding TextBrush}" FontSize="12.5" />
+                                    </Border>
+                                </Button>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+
+                <StackPanel Spacing="6">
+                    <TextBlock Text="{Binding T.SettingsAppearance, Source={x:Static loc:Loc.Instance}}" FontSize="10.5" FontWeight="Bold" Foreground="{DynamicResource TextTertiaryBrush}" />
                     <ItemsControl ItemsSource="{Binding ThemeOptions}">
                         <ItemsControl.ItemsPanel>
                             <ItemsPanelTemplate>
@@ -1391,15 +1416,15 @@
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
-                    <TextBlock Text="« Système » suit le réglage clair/sombre de Windows."
+                    <TextBlock Text="{Binding T.ThemeSystemHint, Source={x:Static loc:Loc.Instance}}"
                                FontSize="11.5" Foreground="{DynamicResource TextTertiaryBrush}" TextWrapping="Wrap" />
 
                     <Button Classes="row-button" Command="{Binding ToggleReducedContrastCommand}" Margin="0,4,0,0">
                         <Border Background="{DynamicResource BgPanelBrush}" CornerRadius="{DynamicResource RowRadiusValue}" Padding="10,8">
                             <Grid ColumnDefinitions="*,Auto">
                                 <StackPanel Grid.Column="0" Spacing="1">
-                                    <TextBlock Text="Réduire le contraste" FontSize="12.5" />
-                                    <TextBlock Text="Texte et fonds plus doux, pour les longues sessions."
+                                    <TextBlock Text="{Binding T.ReducedContrast, Source={x:Static loc:Loc.Instance}}" FontSize="12.5" />
+                                    <TextBlock Text="{Binding T.ReducedContrastHint, Source={x:Static loc:Loc.Instance}}"
                                                FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}" TextWrapping="Wrap" />
                                 </StackPanel>
                                 <Border Grid.Column="1" Width="18" Height="18" CornerRadius="4" BorderThickness="1.4"
@@ -1415,7 +1440,7 @@
                 </StackPanel>
 
                 <StackPanel Spacing="6">
-                    <TextBlock Text="POLICE" FontSize="10.5" FontWeight="Bold" Foreground="{DynamicResource TextTertiaryBrush}" />
+                    <TextBlock Text="{Binding T.SettingsFont, Source={x:Static loc:Loc.Instance}}" FontSize="10.5" FontWeight="Bold" Foreground="{DynamicResource TextTertiaryBrush}" />
                     <ItemsControl ItemsSource="{Binding FontChoiceOptions}">
                         <ItemsControl.ItemsPanel>
                             <ItemsPanelTemplate>
@@ -1435,12 +1460,12 @@
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
-                    <TextBlock Text="« Mattermost » utilise Open Sans, la police du client officiel."
+                    <TextBlock Text="{Binding T.FontMattermostHint, Source={x:Static loc:Loc.Instance}}"
                                FontSize="11.5" Foreground="{DynamicResource TextTertiaryBrush}" TextWrapping="Wrap" />
                 </StackPanel>
 
                 <StackPanel Spacing="6">
-                    <TextBlock Text="TAILLE DE POLICE DES MESSAGES" FontSize="10.5" FontWeight="Bold" Foreground="{DynamicResource TextTertiaryBrush}" />
+                    <TextBlock Text="{Binding T.SettingsMessageFontSize, Source={x:Static loc:Loc.Instance}}" FontSize="10.5" FontWeight="Bold" Foreground="{DynamicResource TextTertiaryBrush}" />
                     <ItemsControl ItemsSource="{Binding FontSizeOptions}">
                         <ItemsControl.ItemsPanel>
                             <ItemsPanelTemplate>
@@ -1462,13 +1487,13 @@
                 </StackPanel>
 
                 <StackPanel Spacing="6">
-                    <TextBlock Text="NOTIFICATIONS" FontSize="10.5" FontWeight="Bold" Foreground="{DynamicResource TextTertiaryBrush}" />
+                    <TextBlock Text="{Binding T.SettingsNotifications, Source={x:Static loc:Loc.Instance}}" FontSize="10.5" FontWeight="Bold" Foreground="{DynamicResource TextTertiaryBrush}" />
                     <Button Classes="row-button" Command="{Binding ToggleSoundForAllMessagesCommand}">
                         <Border Background="{DynamicResource BgPanelBrush}" CornerRadius="{DynamicResource RowRadiusValue}" Padding="10,8">
                             <Grid ColumnDefinitions="*,Auto">
                                 <StackPanel Grid.Column="0" Spacing="1">
-                                    <TextBlock Text="Son pour tous les messages" FontSize="12.5" />
-                                    <TextBlock Text="Sinon, seules les notifications 🔔 qui vous sont destinées font du bruit."
+                                    <TextBlock Text="{Binding T.SoundForAllMessages, Source={x:Static loc:Loc.Instance}}" FontSize="12.5" />
+                                    <TextBlock Text="{Binding T.SoundForAllMessagesHint, Source={x:Static loc:Loc.Instance}}"
                                                FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}" TextWrapping="Wrap" />
                                 </StackPanel>
                                 <Border Grid.Column="1" Width="18" Height="18" CornerRadius="4" BorderThickness="1.4"
@@ -1484,11 +1509,11 @@
                 </StackPanel>
 
                 <StackPanel Spacing="6">
-                    <TextBlock Text="LIENS" FontSize="10.5" FontWeight="Bold" Foreground="{DynamicResource TextTertiaryBrush}" />
+                    <TextBlock Text="{Binding T.SettingsLinks, Source={x:Static loc:Loc.Instance}}" FontSize="10.5" FontWeight="Bold" Foreground="{DynamicResource TextTertiaryBrush}" />
                     <Button Classes="row-button" Command="{Binding ToggleLinkPreviewsCommand}">
                         <Border Background="{DynamicResource BgPanelBrush}" CornerRadius="{DynamicResource RowRadiusValue}" Padding="10,8">
                             <Grid ColumnDefinitions="*,Auto">
-                                <TextBlock Grid.Column="0" Text="Aperçus de liens" FontSize="12.5" VerticalAlignment="Center" />
+                                <TextBlock Grid.Column="0" Text="{Binding T.LinkPreviews, Source={x:Static loc:Loc.Instance}}" FontSize="12.5" VerticalAlignment="Center" />
                                 <Border Grid.Column="1" Width="18" Height="18" CornerRadius="4" BorderThickness="1.4"
                                         BorderBrush="{DynamicResource DividerStrongBrush}" Background="{Binding Settings.LinkPreviewsCheckBrush}">
                                     <Path IsVisible="{Binding Settings.ShowLinkPreviews}" Data="M4 9l3 3 6-7"
@@ -1508,7 +1533,7 @@
                             <Path Data="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"
                                   Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.7" StrokeLineCap="Round" StrokeJoin="Round"
                                   Width="15" Height="15" Stretch="Uniform" VerticalAlignment="Center" />
-                            <TextBlock Text="Se déconnecter" VerticalAlignment="Center" />
+                            <TextBlock Text="{Binding T.LogOut, Source={x:Static loc:Loc.Instance}}" VerticalAlignment="Center" />
                         </StackPanel>
                     </Border>
                 </Button>
@@ -1529,7 +1554,7 @@
                     <Border CornerRadius="{DynamicResource RowRadiusValue}" Padding="8,7">
                         <StackPanel Orientation="Horizontal" Spacing="8">
                             <Ellipse Width="10" Height="10" Fill="{DynamicResource PresenceOnlineBrush}" />
-                            <TextBlock Text="Disponible" VerticalAlignment="Center" />
+                            <TextBlock Text="{Binding T.StatusOnline, Source={x:Static loc:Loc.Instance}}" VerticalAlignment="Center" />
                         </StackPanel>
                     </Border>
                 </Button>
@@ -1537,7 +1562,7 @@
                     <Border CornerRadius="{DynamicResource RowRadiusValue}" Padding="8,7">
                         <StackPanel Orientation="Horizontal" Spacing="8">
                             <Ellipse Width="10" Height="10" Fill="{DynamicResource PresenceAwayBrush}" />
-                            <TextBlock Text="Absent" VerticalAlignment="Center" />
+                            <TextBlock Text="{Binding T.StatusAway, Source={x:Static loc:Loc.Instance}}" VerticalAlignment="Center" />
                         </StackPanel>
                     </Border>
                 </Button>
@@ -1545,7 +1570,7 @@
                     <Border CornerRadius="{DynamicResource RowRadiusValue}" Padding="8,7">
                         <StackPanel Orientation="Horizontal" Spacing="8">
                             <Ellipse Width="10" Height="10" Fill="{DynamicResource DangerBrush}" />
-                            <TextBlock Text="Ne pas déranger" VerticalAlignment="Center" />
+                            <TextBlock Text="{Binding T.StatusDoNotDisturb, Source={x:Static loc:Loc.Instance}}" VerticalAlignment="Center" />
                         </StackPanel>
                     </Border>
                 </Button>
@@ -1553,7 +1578,7 @@
                     <Border CornerRadius="{DynamicResource RowRadiusValue}" Padding="8,7">
                         <StackPanel Orientation="Horizontal" Spacing="8">
                             <Ellipse Width="10" Height="10" Fill="{DynamicResource PresenceOfflineBrush}" />
-                            <TextBlock Text="Hors ligne" VerticalAlignment="Center" />
+                            <TextBlock Text="{Binding T.StatusOffline, Source={x:Static loc:Loc.Instance}}" VerticalAlignment="Center" />
                         </StackPanel>
                     </Border>
                 </Button>
@@ -1571,7 +1596,7 @@
                 CornerRadius="{DynamicResource SurfaceRadiusValue}" Padding="14" BoxShadow="{DynamicResource PopoverShadow}">
             <Grid RowDefinitions="Auto,Auto,Auto,Auto">
                 <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,10">
-                    <TextBlock Grid.Column="0" Text="Nouvelle conversation" FontWeight="Bold" FontSize="14" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="0" Text="{Binding T.NewConversation, Source={x:Static loc:Loc.Instance}}" FontWeight="Bold" FontSize="14" VerticalAlignment="Center" />
                     <Button Grid.Column="1" Classes="row-button" Width="20" Height="20" Command="{Binding CloseNewConversationCommand}">
                         <Canvas Width="14" Height="14" HorizontalAlignment="Center" VerticalAlignment="Center">
                             <Line StartPoint="1,1" EndPoint="13,13" Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.6" StrokeLineCap="Round" />
@@ -1583,7 +1608,7 @@
                 <Border Grid.Row="1" BorderBrush="{DynamicResource DividerStrongBrush}" BorderThickness="1"
                         CornerRadius="{DynamicResource SurfaceRadiusValue}" Margin="0,0,0,10">
                     <TextBox x:Name="NewConversationBox" Classes="composer" Text="{Binding NewConversationQuery}"
-                             PlaceholderText="Rechercher une personne…" Padding="10,8" />
+                             PlaceholderText="{Binding T.SearchPersonPlaceholder, Source={x:Static loc:Loc.Instance}}" Padding="10,8" />
                 </Border>
 
                 <TextBlock Grid.Row="2" Text="{Binding NewConversationError}" Foreground="{DynamicResource DangerBrush}"
@@ -1592,9 +1617,9 @@
 
                 <ScrollViewer Grid.Row="3" MaxHeight="440">
                     <StackPanel Spacing="2">
-                        <TextBlock Text="Recherche…" Foreground="{DynamicResource TextTertiaryBrush}"
+                        <TextBlock Text="{Binding T.Searching, Source={x:Static loc:Loc.Instance}}" Foreground="{DynamicResource TextTertiaryBrush}"
                                    HorizontalAlignment="Center" Margin="0,20" IsVisible="{Binding IsSearchingPeople}" />
-                        <TextBlock Text="Personne ne correspond" Foreground="{DynamicResource TextTertiaryBrush}"
+                        <TextBlock Text="{Binding T.NoPersonMatches, Source={x:Static loc:Loc.Instance}}" Foreground="{DynamicResource TextTertiaryBrush}"
                                    HorizontalAlignment="Center" Margin="0,20" IsVisible="{Binding NoPeopleResults}" />
                         <ItemsControl ItemsSource="{Binding PeopleResults}">
                             <ItemsControl.ItemsPanel>
@@ -1639,7 +1664,7 @@
                 CornerRadius="{DynamicResource SurfaceRadiusValue}" Padding="14" BoxShadow="{DynamicResource PopoverShadow}">
             <Grid RowDefinitions="Auto,Auto,Auto,Auto">
                 <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,10">
-                    <TextBlock Grid.Column="0" Text="Parcourir les canaux" FontWeight="Bold" FontSize="14" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="0" Text="{Binding T.BrowseChannels, Source={x:Static loc:Loc.Instance}}" FontWeight="Bold" FontSize="14" VerticalAlignment="Center" />
                     <Button Grid.Column="1" Classes="row-button" Width="20" Height="20" Command="{Binding CloseBrowseChannelsCommand}">
                         <Canvas Width="14" Height="14" HorizontalAlignment="Center" VerticalAlignment="Center">
                             <Line StartPoint="1,1" EndPoint="13,13" Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.6" StrokeLineCap="Round" />
@@ -1651,7 +1676,7 @@
                 <Border Grid.Row="1" BorderBrush="{DynamicResource DividerStrongBrush}" BorderThickness="1"
                         CornerRadius="{DynamicResource SurfaceRadiusValue}" Margin="0,0,0,10">
                     <TextBox x:Name="BrowseChannelsBox" Classes="composer" Text="{Binding BrowseChannelsQuery}"
-                             PlaceholderText="Filtrer par nom…" Padding="10,8" />
+                             PlaceholderText="{Binding T.FilterByNamePlaceholder, Source={x:Static loc:Loc.Instance}}" Padding="10,8" />
                 </Border>
 
                 <TextBlock Grid.Row="2" Text="{Binding BrowseChannelsError}" Foreground="{DynamicResource DangerBrush}"
@@ -1660,9 +1685,9 @@
 
                 <ScrollViewer Grid.Row="3" MaxHeight="440">
                     <StackPanel Spacing="2">
-                        <TextBlock Text="Chargement des canaux…" Foreground="{DynamicResource TextTertiaryBrush}"
+                        <TextBlock Text="{Binding T.LoadingChannels, Source={x:Static loc:Loc.Instance}}" Foreground="{DynamicResource TextTertiaryBrush}"
                                    HorizontalAlignment="Center" Margin="0,20" IsVisible="{Binding IsBrowsingChannels}" />
-                        <TextBlock Text="Aucun canal public à rejoindre" Foreground="{DynamicResource TextTertiaryBrush}"
+                        <TextBlock Text="{Binding T.NoChannelsToJoin, Source={x:Static loc:Loc.Instance}}" Foreground="{DynamicResource TextTertiaryBrush}"
                                    HorizontalAlignment="Center" Margin="0,20" TextWrapping="Wrap"
                                    IsVisible="{Binding NoBrowseChannelResults}" />
                         <ItemsControl ItemsSource="{Binding BrowseChannelResults}">
@@ -1713,7 +1738,7 @@
                 CornerRadius="{DynamicResource SurfaceRadiusValue}" Padding="14" BoxShadow="{DynamicResource PopoverShadow}">
             <Grid RowDefinitions="Auto,Auto,Auto">
                 <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,10">
-                    <TextBlock Grid.Column="0" Text="Rechercher" FontWeight="Bold" FontSize="14" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="0" Text="{Binding T.Search, Source={x:Static loc:Loc.Instance}}" FontWeight="Bold" FontSize="14" VerticalAlignment="Center" />
                     <Button Grid.Column="1" Classes="row-button" Width="20" Height="20" Command="{Binding CloseSearchCommand}">
                         <Canvas Width="14" Height="14" HorizontalAlignment="Center" VerticalAlignment="Center">
                             <Line StartPoint="1,1" EndPoint="13,13" Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.6" StrokeLineCap="Round" />
@@ -1725,12 +1750,12 @@
                 <Border Grid.Row="1" BorderBrush="{DynamicResource DividerStrongBrush}" BorderThickness="1"
                         CornerRadius="{DynamicResource SurfaceRadiusValue}" Margin="0,0,0,10">
                     <TextBox x:Name="SearchBox" Classes="composer" Text="{Binding SearchQuery}"
-                             PlaceholderText="Rechercher un message…" Padding="10,8" />
+                             PlaceholderText="{Binding T.SearchMessagePlaceholder, Source={x:Static loc:Loc.Instance}}" Padding="10,8" />
                 </Border>
 
                 <ScrollViewer Grid.Row="2" MaxHeight="440">
                     <StackPanel Spacing="2">
-                        <TextBlock Text="Aucun résultat" Foreground="{DynamicResource TextTertiaryBrush}" HorizontalAlignment="Center" Margin="0,20"
+                        <TextBlock Text="{Binding T.NoResults, Source={x:Static loc:Loc.Instance}}" Foreground="{DynamicResource TextTertiaryBrush}" HorizontalAlignment="Center" Margin="0,20"
                                    IsVisible="{Binding NoSearchResults}" />
                         <ItemsControl ItemsSource="{Binding SearchResults}">
                             <ItemsControl.ItemsPanel>
@@ -1779,7 +1804,7 @@
             <Grid RowDefinitions="Auto,*">
                 <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,10">
                     <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                        <TextBlock Text="Messages épinglés" FontWeight="Bold" FontSize="14" VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding T.PinnedMessages, Source={x:Static loc:Loc.Instance}}" FontWeight="Bold" FontSize="14" VerticalAlignment="Center" />
                         <TextBlock Text="{Binding ActiveChannelName, StringFormat='#{0}'}" FontSize="12"
                                    Foreground="{DynamicResource TextTertiaryBrush}" VerticalAlignment="Center" />
                     </StackPanel>
@@ -1795,7 +1820,7 @@
                     <StackPanel Spacing="2">
                         <TextBlock IsVisible="{Binding !HasPinnedMessages}" TextWrapping="Wrap" Margin="0,16,0,20"
                                    Foreground="{DynamicResource TextTertiaryBrush}" HorizontalAlignment="Center" TextAlignment="Center"
-                                   Text="Aucun message épinglé dans ce canal. Survolez un message et utilisez l'épingle pour en garder un sous la main." />
+                                   Text="{Binding T.NoPinnedMessages, Source={x:Static loc:Loc.Instance}}" />
 
                         <ItemsControl ItemsSource="{Binding PinnedMessages}">
                             <ItemsControl.ItemsPanel>
@@ -1807,7 +1832,7 @@
                                 <DataTemplate DataType="models:PinnedMessageItem">
                                     <Grid ColumnDefinitions="*,Auto">
                                         <Button Grid.Column="0" Classes="row-button" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
-                                                ToolTip.Tip="Aller à ce message"
+                                                ToolTip.Tip="{Binding T.GoToMessage, Source={x:Static loc:Loc.Instance}}"
                                                 Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).JumpToPinnedMessageCommand}"
                                                 CommandParameter="{Binding}">
                                             <Border CornerRadius="{DynamicResource RowRadiusValue}" Padding="8,7">
@@ -1827,7 +1852,7 @@
                                             </Border>
                                         </Button>
                                         <Button Grid.Column="1" Classes="row-button" Width="26" Height="26" VerticalAlignment="Top" Margin="4,8,0,0"
-                                                ToolTip.Tip="Détacher du canal"
+                                                ToolTip.Tip="{Binding T.UnpinFromChannel, Source={x:Static loc:Loc.Instance}}"
                                                 Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).UnpinFromPanelCommand}"
                                                 CommandParameter="{Binding}">
                                             <Canvas Width="14" Height="14" HorizontalAlignment="Center" VerticalAlignment="Center">
@@ -1867,13 +1892,13 @@
                 <Border Grid.Row="1" BorderBrush="{DynamicResource DividerStrongBrush}" BorderThickness="1"
                         CornerRadius="{DynamicResource SurfaceRadiusValue}" Margin="0,0,0,8">
                     <TextBox x:Name="EmojiSearchBox" Classes="composer" Text="{Binding EmojiSearchText}"
-                             PlaceholderText="Rechercher un émoji…" Padding="10,7" />
+                             PlaceholderText="{Binding T.SearchEmojiPlaceholder, Source={x:Static loc:Loc.Instance}}" Padding="10,7" />
                 </Border>
 
                 <!-- Skin tone is a preference rather than a per-pick choice, so
                      it sits in the picker chrome instead of on every swatch. -->
                 <Grid Grid.Row="2" ColumnDefinitions="Auto,*" Margin="0,0,0,10">
-                    <TextBlock Grid.Column="0" Text="TEINT" FontSize="10.5" FontWeight="Bold"
+                    <TextBlock Grid.Column="0" Text="{Binding T.SkinToneHeader, Source={x:Static loc:Loc.Instance}}" FontSize="10.5" FontWeight="Bold"
                                Foreground="{DynamicResource TextTertiaryBrush}" VerticalAlignment="Center" />
                     <ItemsControl Grid.Column="1" ItemsSource="{Binding SkinToneOptions}" HorizontalAlignment="Right">
                         <ItemsControl.ItemsPanel>
@@ -1897,11 +1922,11 @@
 
                 <ScrollViewer Grid.Row="3" MaxHeight="320">
                     <StackPanel Spacing="12">
-                        <TextBlock Text="Aucun émoji ne correspond" IsVisible="{Binding HasNoEmojiResults}"
+                        <TextBlock Text="{Binding T.NoEmojiMatches, Source={x:Static loc:Loc.Instance}}" IsVisible="{Binding HasNoEmojiResults}"
                                    Foreground="{DynamicResource TextTertiaryBrush}" HorizontalAlignment="Center" Margin="0,24" />
 
                         <StackPanel Spacing="6" IsVisible="{Binding ShowFrequentEmoji}">
-                            <TextBlock Text="LES PLUS UTILISÉS" FontSize="10.5" FontWeight="Bold" Foreground="{DynamicResource TextTertiaryBrush}" />
+                            <TextBlock Text="{Binding T.MostUsedEmoji, Source={x:Static loc:Loc.Instance}}" FontSize="10.5" FontWeight="Bold" Foreground="{DynamicResource TextTertiaryBrush}" />
                             <ItemsControl ItemsSource="{Binding FrequentEmojiOptions}">
                                 <ItemsControl.ItemsPanel>
                                     <ItemsPanelTemplate>
@@ -1926,7 +1951,7 @@
                         </StackPanel>
 
                         <StackPanel Spacing="6" IsVisible="{Binding HasStandardEmojiResults}">
-                            <TextBlock Text="STANDARD" FontSize="10.5" FontWeight="Bold" Foreground="{DynamicResource TextTertiaryBrush}" />
+                            <TextBlock Text="{Binding T.StandardEmoji, Source={x:Static loc:Loc.Instance}}" FontSize="10.5" FontWeight="Bold" Foreground="{DynamicResource TextTertiaryBrush}" />
                             <ItemsControl ItemsSource="{Binding StandardEmojiOptions}">
                                 <ItemsControl.ItemsPanel>
                                     <ItemsPanelTemplate>
@@ -1947,7 +1972,7 @@
                         </StackPanel>
 
                         <StackPanel Spacing="6" IsVisible="{Binding HasCustomEmojiResults}">
-                            <TextBlock Text="PERSONNALISÉS" FontSize="10.5" FontWeight="Bold" Foreground="{DynamicResource TextTertiaryBrush}" />
+                            <TextBlock Text="{Binding T.CustomEmoji, Source={x:Static loc:Loc.Instance}}" FontSize="10.5" FontWeight="Bold" Foreground="{DynamicResource TextTertiaryBrush}" />
                             <ItemsControl ItemsSource="{Binding CustomEmojiOptions}">
                                 <ItemsControl.ItemsPanel>
                                     <ItemsPanelTemplate>
@@ -1981,16 +2006,16 @@
                 Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource DividerStrongBrush}" BorderThickness="1"
                 CornerRadius="{DynamicResource SurfaceRadiusValue}" Padding="16" BoxShadow="{DynamicResource PopoverShadow}">
             <StackPanel Spacing="14">
-                <TextBlock Text="Supprimer ce message ?" FontWeight="Bold" FontSize="14" TextWrapping="Wrap" />
+                <TextBlock Text="{Binding T.DeleteMessageQuestion, Source={x:Static loc:Loc.Instance}}" FontWeight="Bold" FontSize="14" TextWrapping="Wrap" />
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
                     <Button Classes="row-button" Command="{Binding CancelDeleteMessageCommand}">
                         <Border Background="{DynamicResource BgPanelBrush}" CornerRadius="{DynamicResource RowRadiusValue}" Padding="12,6">
-                            <TextBlock Text="Annuler" FontSize="12.5" />
+                            <TextBlock Text="{Binding T.Cancel, Source={x:Static loc:Loc.Instance}}" FontSize="12.5" />
                         </Border>
                     </Button>
                     <Button Classes="row-button" Command="{Binding ConfirmDeleteMessageCommand}">
                         <Border Background="{DynamicResource DangerBrush}" CornerRadius="{DynamicResource RowRadiusValue}" Padding="12,6">
-                            <TextBlock Text="Supprimer" Foreground="White" FontSize="12.5" FontWeight="SemiBold" />
+                            <TextBlock Text="{Binding T.Delete, Source={x:Static loc:Loc.Instance}}" Foreground="White" FontSize="12.5" FontWeight="SemiBold" />
                         </Border>
                     </Button>
                 </StackPanel>
@@ -2008,29 +2033,29 @@
                 CornerRadius="{DynamicResource SurfaceRadiusValue}" Padding="16" BoxShadow="{DynamicResource PopoverShadow}">
             <StackPanel Spacing="10">
                 <StackPanel Spacing="2">
-                    <TextBlock Text="Renommer pour moi" FontWeight="Bold" FontSize="14" />
+                    <TextBlock Text="{Binding T.RenameForMe, Source={x:Static loc:Loc.Instance}}" FontWeight="Bold" FontSize="14" />
                     <TextBlock FontSize="12" Foreground="{DynamicResource TextTertiaryBrush}" TextWrapping="Wrap">
-                        <Run Text="Nom d'origine : " /><Run Text="{Binding RenameChannelOriginalName}" />
+                        <Run Text="{Binding T.OriginalNameLabel, Source={x:Static loc:Loc.Instance}}" /><Run Text="{Binding RenameChannelOriginalName}" />
                     </TextBlock>
                 </StackPanel>
                 <Border BorderBrush="{DynamicResource DividerStrongBrush}" BorderThickness="1"
                         CornerRadius="{DynamicResource SurfaceRadiusValue}">
                     <TextBox x:Name="RenameChannelBox" Classes="composer" Text="{Binding RenameChannelText}"
                              MaxLength="{x:Static vm:MainViewModel.MaxChannelAliasLength}"
-                             PlaceholderText="Laisser vide pour garder le nom d'origine" Padding="10,8" />
+                             PlaceholderText="{Binding T.RenamePlaceholder, Source={x:Static loc:Loc.Instance}}" Padding="10,8" />
                 </Border>
-                <TextBlock Text="Seul vous verrez ce nom." FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" />
+                <TextBlock Text="{Binding T.RenameOnlyYou, Source={x:Static loc:Loc.Instance}}" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" />
                 <TextBlock Text="{Binding RenameChannelError}" Foreground="{DynamicResource DangerBrush}" FontSize="12.5" TextWrapping="Wrap"
                            IsVisible="{Binding RenameChannelError, Converter={x:Static conv:ObjectConverters.IsNotNull}}" />
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
                     <Button Classes="row-button" Command="{Binding CancelRenameChannelCommand}">
                         <Border Background="{DynamicResource BgPanelBrush}" CornerRadius="{DynamicResource RowRadiusValue}" Padding="12,6">
-                            <TextBlock Text="Annuler" FontSize="12.5" />
+                            <TextBlock Text="{Binding T.Cancel, Source={x:Static loc:Loc.Instance}}" FontSize="12.5" />
                         </Border>
                     </Button>
                     <Button Classes="row-button" Command="{Binding ConfirmRenameChannelCommand}">
                         <Border Background="{DynamicResource AccentBrush}" CornerRadius="{DynamicResource RowRadiusValue}" Padding="12,6">
-                            <TextBlock Text="Enregistrer" Foreground="{DynamicResource OnAccentBrush}" FontSize="12.5" FontWeight="SemiBold" />
+                            <TextBlock Text="{Binding T.Save, Source={x:Static loc:Loc.Instance}}" Foreground="{DynamicResource OnAccentBrush}" FontSize="12.5" FontWeight="SemiBold" />
                         </Border>
                     </Button>
                 </StackPanel>

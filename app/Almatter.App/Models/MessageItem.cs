@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Threading.Tasks;
+using Almatter.App.Localization;
 using Avalonia;
 using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -97,6 +98,7 @@ public sealed partial class MessageItem : ObservableObject
     public ObservableCollection<AttachmentItem> Attachments { get; init; } = [];
     public int ThreadReplyCount { get; init; }
     public bool HasThreadReplies => ThreadReplyCount > 0;
+    public string ThreadReplyLabel => Loc.S.ReplyCount(ThreadReplyCount);
     public bool HasAttachments => Attachments.Count > 0;
     public bool HasReactions => Reactions.Count > 0;
 
@@ -112,7 +114,7 @@ public sealed partial class MessageItem : ObservableObject
     /// </summary>
     public bool ShowHeader => !IsContinuation || IsPinned;
 
-    public string PinActionLabel => IsPinned ? "Détacher du canal" : "Épingler au canal";
+    public string PinActionLabel => IsPinned ? Loc.S.UnpinFromChannel : Loc.S.PinToChannel;
 
     partial void OnIsPinnedChanged(bool value)
     {
@@ -238,6 +240,26 @@ public sealed partial class MessageItem : ObservableObject
 
     partial void OnIsHighlightedChanged(bool value) => OnPropertyChanged(nameof(IsTinted));
     partial void OnIsBeingEditedChanged(bool value) => OnPropertyChanged(nameof(IsTinted));
+
+    /// <summary>
+    /// Rewords everything this row put into words itself, after the interface
+    /// language changes. The day separator is not among them: MainViewModel
+    /// rewords those, since only it knows which day is today.
+    /// </summary>
+    public void RefreshLanguage()
+    {
+        OnPropertyChanged(nameof(PinActionLabel));
+        OnPropertyChanged(nameof(PresenceLabel));
+        OnPropertyChanged(nameof(ThreadReplyLabel));
+        foreach (var attachment in Attachments)
+        {
+            attachment.RefreshLanguage();
+        }
+        foreach (var reaction in Reactions)
+        {
+            reaction.ForgetReactors();
+        }
+    }
 
     /// <summary>Called after Reactions is cleared and rebuilt in place, so the reactions row's visibility follows.</summary>
     public void NotifyReactionsChanged() => OnPropertyChanged(nameof(HasReactions));

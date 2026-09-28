@@ -1,3 +1,4 @@
+using Almatter.App.Localization;
 using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 
@@ -25,7 +26,9 @@ public sealed partial class ChannelItem : ObservableObject, IChannelListItem
     public bool HasAlias => Name != OriginalName;
 
     /// <summary>Hovering a renamed channel tells you what it's really called; an ordinary one needs no tooltip.</summary>
-    public string? OriginalNameTip => HasAlias ? $"Nom d'origine : {OriginalName}" : null;
+    public string? OriginalNameTip => HasAlias ? Loc.S.OriginalNameLabel + OriginalName : null;
+
+    public void RefreshLanguage() => OnPropertyChanged(nameof(OriginalNameTip));
 
     [ObservableProperty]
     public partial bool IsSelected { get; set; }

@@ -13,6 +13,7 @@ using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
+using Almatter.App.Localization;
 using Almatter.App.Models;
 using Almatter.App.Services;
 using Almatter.App.ViewModels;
@@ -941,7 +942,7 @@ public partial class MainWindow : Window
 
         var files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
-            Title = "Joindre un ou plusieurs fichiers",
+            Title = Loc.S.AttachFilesDialogTitle,
             AllowMultiple = true,
         });
 

@@ -9,6 +9,7 @@ using Avalonia.Input;
 using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
 using Avalonia.Media;
+using Almatter.App.Localization;
 using Almatter.App.Models;
 
 namespace Almatter.App.Views;
@@ -349,7 +350,7 @@ public sealed class MessageInlineText : SelectableTextBlock
         }
 
         e.Handled = true;
-        var copy = new MenuItem { Header = "Copier le lien" };
+        var copy = new MenuItem { Header = Loc.S.CopyLink };
         copy.Click += async (_, _) =>
         {
             // The window's clipboard rather than the menu's: the menu lives in

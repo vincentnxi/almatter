@@ -2,14 +2,15 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:Almatter.App.ViewModels"
         xmlns:conv="using:Avalonia.Data.Converters"
+        xmlns:loc="using:Almatter.App.Localization"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d" d:DesignWidth="420" d:DesignHeight="480"
         x:Class="Almatter.App.Views.LoginWindow"
         x:DataType="vm:LoginViewModel"
         Icon="/Assets/almatter-logo.ico"
-        Title="Almatter — Connexion"
-        Width="420" Height="480" CanResize="False"
+        Title="{Binding T.LoginWindowTitle, Source={x:Static loc:Loc.Instance}}"
+        Width="420" Height="520" CanResize="False"
         WindowStartupLocation="CenterScreen"
         FontFamily="{DynamicResource AppFontFamily}"
         FontSize="13">
@@ -31,18 +32,32 @@
         <SolidColorBrush x:Key="DangerSoftBrush" Color="#FBEAE8" />
     </Window.Resources>
 
+    <Window.Styles>
+        <Style Selector="Button.language-link">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Padding" Value="4,2" />
+            <Setter Property="Cursor" Value="Hand" />
+        </Style>
+        <Style Selector="Button.language-link:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+        </Style>
+    </Window.Styles>
+
     <StackPanel Margin="40" Spacing="4" VerticalAlignment="Center">
 
         <Image Source="/Assets/almatter-logo.png" Width="48" Height="48" HorizontalAlignment="Center" Margin="0,0,0,12" />
-        <TextBlock Text="Se connecter à Almatter" FontWeight="Bold" FontSize="17" HorizontalAlignment="Center" Margin="0,0,0,24" />
+        <TextBlock Text="{Binding T.LoginHeading, Source={x:Static loc:Loc.Instance}}" FontWeight="Bold" FontSize="17" HorizontalAlignment="Center" Margin="0,0,0,24" />
 
-        <TextBlock Text="Serveur" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" Margin="2,0,0,4" />
-        <TextBox Text="{Binding ServerUrl}" PlaceholderText="https://mon-serveur.exemple.com" Margin="0,0,0,14" />
+        <TextBlock Text="{Binding T.LoginServer, Source={x:Static loc:Loc.Instance}}" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" Margin="2,0,0,4" />
+        <TextBox Text="{Binding ServerUrl}" PlaceholderText="{Binding T.LoginServerPlaceholder, Source={x:Static loc:Loc.Instance}}" Margin="0,0,0,14" />
 
-        <TextBlock Text="Identifiant" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" Margin="2,0,0,4" />
-        <TextBox Text="{Binding LoginId}" PlaceholderText="Nom d'utilisateur ou e-mail" Margin="0,0,0,14" />
+        <TextBlock Text="{Binding T.LoginId, Source={x:Static loc:Loc.Instance}}" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" Margin="2,0,0,4" />
+        <TextBox Text="{Binding LoginId}" PlaceholderText="{Binding T.LoginIdPlaceholder, Source={x:Static loc:Loc.Instance}}" Margin="0,0,0,14" />
 
-        <TextBlock Text="Mot de passe" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" Margin="2,0,0,4" />
+        <TextBlock Text="{Binding T.LoginPassword, Source={x:Static loc:Loc.Instance}}" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" Margin="2,0,0,4" />
         <TextBox Text="{Binding Password}" PasswordChar="•" Margin="0,0,0,6" />
 
         <Border IsVisible="{Binding ErrorMessage, Converter={x:Static conv:ObjectConverters.IsNotNull}}"
@@ -56,6 +71,13 @@
                 HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
                 Background="{DynamicResource AccentBrush}" Foreground="{DynamicResource OnAccentBrush}" FontWeight="SemiBold"
                 Padding="0,10" CornerRadius="8" Margin="0,18,0,0" />
+
+        <!-- Each language named in itself, like the settings panel's picker. -->
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="4" Margin="0,14,0,0">
+            <Button Classes="language-link" Content="Français" Command="{Binding SetLanguageCommand}" CommandParameter="{x:Static loc:AppLanguage.French}" />
+            <TextBlock Text="·" VerticalAlignment="Center" Foreground="{DynamicResource TextSecondaryBrush}" />
+            <Button Classes="language-link" Content="English" Command="{Binding SetLanguageCommand}" CommandParameter="{x:Static loc:AppLanguage.English}" />
+        </StackPanel>
 
     </StackPanel>
 </Window>

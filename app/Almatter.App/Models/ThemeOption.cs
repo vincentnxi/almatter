@@ -1,4 +1,5 @@
 using Avalonia.Media;
+using Almatter.App.Localization;
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace Almatter.App.Models;
@@ -7,7 +8,12 @@ namespace Almatter.App.Models;
 public sealed partial class ThemeOption : ObservableObject
 {
     public required AppThemeMode Mode { get; init; }
-    public required string Name { get; init; }
+    public string Name => Mode switch
+    {
+        AppThemeMode.Light => Loc.S.ThemeLight,
+        AppThemeMode.Dark => Loc.S.ThemeDark,
+        _ => Loc.S.ThemeSystem,
+    };
 
     /// <summary>Path geometry for the option's glyph — a sun, a moon, or a half-filled disc for "follow Windows".</summary>
     public required string IconData { get; init; }
@@ -26,6 +32,8 @@ public sealed partial class ThemeOption : ObservableObject
         OnPropertyChanged(nameof(TextBrush));
         OnPropertyChanged(nameof(IconBrush));
     }
+
+    public void RefreshLanguage() => OnPropertyChanged(nameof(Name));
 
     partial void OnIsSelectedChanged(bool value) => RefreshColors();
 }

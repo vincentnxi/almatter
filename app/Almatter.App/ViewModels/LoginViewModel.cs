@@ -2,7 +2,9 @@ using System;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Almatter.App.Interop;
+using Almatter.App.Localization;
 using Almatter.App.Models;
+using Almatter.App.Services;
 
 namespace Almatter.App.ViewModels;
 
@@ -28,7 +30,23 @@ public partial class LoginViewModel : ViewModelBase
     /// <summary>Raised once login succeeds; the view closes itself and hands the session off.</summary>
     public event EventHandler<Session>? LoggedIn;
 
-    public string ButtonLabel => IsBusy ? "Connexion…" : "Se connecter";
+    public string ButtonLabel => IsBusy ? Loc.S.LoginBusy : Loc.S.LoginButton;
+
+    /// <summary>
+    /// The login screen comes before the settings panel, so it carries its
+    /// own small language switch: someone handed the app on a Windows in the
+    /// other language shouldn't have to sign in blind first. Saved like any
+    /// other preference, so the main window opens in the same language.
+    /// </summary>
+    [RelayCommand]
+    private void SetLanguage(AppLanguage language)
+    {
+        var settings = SettingsStore.Load();
+        settings.Language = language;
+        SettingsStore.Save(settings);
+        Loc.Instance.SetLanguage(language);
+        OnPropertyChanged(nameof(ButtonLabel));
+    }
 
     private bool CanLogIn => !IsBusy && ServerUrl.Trim().Length > 0 && LoginId.Trim().Length > 0 && Password.Length > 0;
 
@@ -49,7 +67,7 @@ public partial class LoginViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            ErrorMessage = $"Connexion impossible : {ex.Message}";
+            ErrorMessage = Loc.S.LoginFailed(ex.Message);
         }
         finally
         {

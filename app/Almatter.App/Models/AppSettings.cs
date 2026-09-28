@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Almatter.App.Localization;
 using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 
@@ -16,6 +17,14 @@ public sealed partial class AppSettings : ObservableObject
     /// </summary>
     [ObservableProperty]
     public partial AppThemeMode ThemeMode { get; set; } = AppThemeMode.System;
+
+    /// <summary>
+    /// The interface language. A settings.json from before languages existed
+    /// has no such key and lands on Windows' own language — French for
+    /// everyone who was using the French-only versions on a French Windows.
+    /// </summary>
+    [ObservableProperty]
+    public partial AppLanguage Language { get; set; } = Loc.SystemDefault;
 
     /// <summary>Defaults to the official client's own typeface, so someone switching over isn't met with unfamiliar lettering on day one.</summary>
     [ObservableProperty]

@@ -1,5 +1,6 @@
 using System;
 using System.Runtime.InteropServices;
+using Almatter.App.Localization;
 using SkiaSharp;
 
 namespace Almatter.App.Services;
@@ -129,7 +130,7 @@ internal static class TaskbarBadge
             }
             try
             {
-                var description = kind == TaskbarBadgeKind.Dot ? "Nouveaux messages" : $"{count} notification(s)";
+                var description = kind == TaskbarBadgeKind.Dot ? Loc.S.TaskbarNewMessages : Loc.S.TaskbarNotifications(count);
                 taskbar.SetOverlayIcon(hwnd, hIcon, description);
             }
             finally

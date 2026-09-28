@@ -24,6 +24,13 @@ public sealed partial class ReactionItem : ObservableObject
     /// <summary>Set once a name lookup has started, so moving the pointer in and out doesn't repeat it.</summary>
     public bool ReactorsRequested { get; set; }
 
+    /// <summary>Drops the resolved names after a language change — "Vous" has to become "You" — so the next hover words them afresh.</summary>
+    public void ForgetReactors()
+    {
+        ReactorsRequested = false;
+        ReactorsText = "…";
+    }
+
     /// <summary>Set asynchronously for a server custom emoji once its image has downloaded — null (and Emoji's ":name:" fallback shown instead) until then, or permanently if it fails to resolve.</summary>
     [ObservableProperty]
     public partial Bitmap? Image { get; set; }

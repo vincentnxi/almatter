@@ -1,3 +1,4 @@
+using Almatter.App.Localization;
 using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 
@@ -15,7 +16,9 @@ public sealed partial class DirectMessageItem : ObservableObject, IChannelListIt
 
     public string ShownName => DisplayName;
     public bool HasAlias => DisplayName != OriginalName;
-    public string? OriginalNameTip => HasAlias ? $"Nom d'origine : {OriginalName}" : null;
+    public string? OriginalNameTip => HasAlias ? Loc.S.OriginalNameLabel + OriginalName : null;
+
+    public void RefreshLanguage() => OnPropertyChanged(nameof(OriginalNameTip));
     public required string Initials { get; init; }
     public required string AvatarHex { get; init; }
 

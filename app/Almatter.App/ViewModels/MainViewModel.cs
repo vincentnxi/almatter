@@ -14,6 +14,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Almatter.App.Diagnostics;
 using Almatter.App.Interop;
+using Almatter.App.Localization;
 using Almatter.App.Models;
 using Almatter.App.Services;
 
@@ -92,6 +93,10 @@ public partial class MainViewModel : ViewModelBase
 
     [ObservableProperty]
     public partial string ActiveChannelName { get; set; } = "";
+
+    public string ComposerPlaceholder => Loc.S.WriteInChannel(ActiveChannelName);
+
+    partial void OnActiveChannelNameChanged(string value) => OnPropertyChanged(nameof(ComposerPlaceholder));
 
     /// <summary>
     /// The open channel's real name, shown small under the header when this
@@ -382,7 +387,7 @@ public partial class MainViewModel : ViewModelBase
     private EmojiPickerTarget _emojiPickerTarget = EmojiPickerTarget.Reaction;
 
     public string EmojiPickerTitle =>
-        _emojiPickerTarget == EmojiPickerTarget.Reaction ? "Choisir une réaction" : "Insérer un émoji";
+        _emojiPickerTarget == EmojiPickerTarget.Reaction ? Loc.S.ChooseReaction : Loc.S.InsertEmoji;
 
     public bool IsEmojiSearchActive => EmojiPickerItem.NormalizeQuery(EmojiSearchText).Length > 0;
 
@@ -588,6 +593,9 @@ public partial class MainViewModel : ViewModelBase
     public ObservableCollection<MessageItem> Messages { get; } = [];
     public ObservableCollection<MessageItem> ThreadReplies { get; } = [];
 
+    /// <summary>The count between the thread's root and its replies.</summary>
+    public string ThreadReplyCountLabel => Loc.S.ReplyCount(ThreadReplies.Count);
+
     /// <summary>The composer's @mention autocomplete popup — shared between the main and thread composers (only one can be focused at a time); see MentionPopupIsForThread for which one is currently showing it.</summary>
     public ObservableCollection<MentionSuggestionItem> MentionSuggestions { get; } = [];
 
@@ -596,22 +604,26 @@ public partial class MainViewModel : ViewModelBase
         new()
         {
             Choice = AppFontChoice.Mattermost,
-            Name = "Mattermost",
             Preview = AppFonts.Resolve(AppFontChoice.Mattermost),
         },
         new()
         {
             Choice = AppFontChoice.System,
-            Name = "Système",
             Preview = AppFonts.Resolve(AppFontChoice.System),
         },
     ];
 
     public ObservableCollection<FontSizeOption> FontSizeOptions { get; } =
     [
-        new() { Label = "Petite", Size = 13 },
-        new() { Label = "Normale", Size = 14.5 },
-        new() { Label = "Grande", Size = 16.5 },
+        new() { Wording = s => s.FontSizeSmall, Size = 13 },
+        new() { Wording = s => s.FontSizeNormal, Size = 14.5 },
+        new() { Wording = s => s.FontSizeLarge, Size = 16.5 },
+    ];
+
+    public ObservableCollection<LanguageOption> LanguageOptions { get; } =
+    [
+        new() { Language = AppLanguage.French, Name = "Français" },
+        new() { Language = AppLanguage.English, Name = "English" },
     ];
 
     public ObservableCollection<ThemeOption> ThemeOptions { get; } =
@@ -619,19 +631,16 @@ public partial class MainViewModel : ViewModelBase
         new()
         {
             Mode = AppThemeMode.System,
-            Name = "Système",
             IconData = "M12 3a9 9 0 0 0 0 18zM12 3a9 9 0 0 1 0 18",
         },
         new()
         {
             Mode = AppThemeMode.Light,
-            Name = "Clair",
             IconData = "M12 7.5a4.5 4.5 0 1 0 0 9 4.5 4.5 0 0 0 0-9zM12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M19.1 4.9l-1.8 1.8M6.7 17.3l-1.8 1.8",
         },
         new()
         {
             Mode = AppThemeMode.Dark,
-            Name = "Sombre",
             IconData = "M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z",
         },
     ];
@@ -710,7 +719,7 @@ public partial class MainViewModel : ViewModelBase
         }
         catch
         {
-            CoreVersion = "indisponible";
+            CoreVersion = "?";
         }
 
         Settings = SettingsStore.Load();
@@ -727,6 +736,9 @@ public partial class MainViewModel : ViewModelBase
             _activeChannelId = Settings.LastChannelId;
         }
 
+        Loc.Instance.SetLanguage(Settings.Language);
+        RefreshLanguageSelection();
+        ThreadReplies.CollectionChanged += (_, _) => OnPropertyChanged(nameof(ThreadReplyCountLabel));
         ApplyTheme();
         RefreshFontChoiceSelection();
         RefreshFontSizeSelection();
@@ -736,6 +748,10 @@ public partial class MainViewModel : ViewModelBase
             if (e.PropertyName is nameof(AppSettings.ThemeMode) or nameof(AppSettings.ReducedContrast))
             {
                 ApplyTheme();
+            }
+            else if (e.PropertyName == nameof(AppSettings.Language))
+            {
+                ApplyLanguage();
             }
             else if (e.PropertyName == nameof(AppSettings.FontChoice))
             {
@@ -785,7 +801,7 @@ public partial class MainViewModel : ViewModelBase
         {
             if (!paintedFromCache)
             {
-                ErrorMessage = $"Erreur inattendue : {ex.Message}";
+                ErrorMessage = Loc.S.UnexpectedError(ex.Message);
             }
         }
         finally
@@ -1158,8 +1174,8 @@ public partial class MainViewModel : ViewModelBase
 
         // Nothing to quote when the message was only a file or an image.
         var text = excerpt.Length == 0
-            ? $"a réagi {glyph} à votre message"
-            : $"a réagi {glyph} à « {excerpt} »";
+            ? Loc.S.ReactedToYourMessage(glyph)
+            : Loc.S.ReactedToQuote(glyph, excerpt);
 
         var notification = new DesktopNotification
         {
@@ -1181,11 +1197,11 @@ public partial class MainViewModel : ViewModelBase
         try
         {
             var users = await _service.GetCachedUsersAsync([userId]);
-            return users.FirstOrDefault()?.DisplayName ?? "Quelqu'un";
+            return users.FirstOrDefault()?.DisplayName ?? Loc.S.Someone;
         }
         catch
         {
-            return "Quelqu'un";
+            return Loc.S.Someone;
         }
     }
 
@@ -2044,7 +2060,7 @@ public partial class MainViewModel : ViewModelBase
 
         if (_teamId is null)
         {
-            BrowseChannelsError = "Équipe inconnue — reconnectez-vous.";
+            BrowseChannelsError = Loc.S.UnknownTeam;
             return;
         }
 
@@ -2075,7 +2091,7 @@ public partial class MainViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            BrowseChannelsError = $"Erreur inattendue : {ex.Message}";
+            BrowseChannelsError = Loc.S.UnexpectedError(ex.Message);
         }
         finally
         {
@@ -2149,7 +2165,7 @@ public partial class MainViewModel : ViewModelBase
         {
             if (!cts.IsCancellationRequested)
             {
-                NewConversationError = $"Erreur inattendue : {ex.Message}";
+                NewConversationError = Loc.S.UnexpectedError(ex.Message);
                 IsSearchingPeople = false;
             }
             return;
@@ -2232,7 +2248,7 @@ public partial class MainViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            BrowseChannelsError = $"Erreur inattendue : {ex.Message}";
+            BrowseChannelsError = Loc.S.UnexpectedError(ex.Message);
             IsBrowseChannelsOpen = true;
         }
         finally
@@ -2309,7 +2325,7 @@ public partial class MainViewModel : ViewModelBase
             }
             catch
             {
-                // A missing author just shows as "Utilisateur inconnu" below — not worth failing the whole search over.
+                // A missing author just shows as an unknown user below — not worth failing the whole search over.
             }
         }
 
@@ -2322,8 +2338,8 @@ public partial class MainViewModel : ViewModelBase
             {
                 PostId = post.Id,
                 ChannelId = post.ChannelId,
-                ChannelLabel = channel is null ? "Canal inconnu" : ChannelDisplayName(channel),
-                AuthorName = author?.DisplayName ?? "Utilisateur inconnu",
+                ChannelLabel = channel is null ? Loc.S.UnknownChannel : ChannelDisplayName(channel),
+                AuthorName = author?.DisplayName ?? Loc.S.UnknownUser,
                 AuthorInitials = author?.Initials ?? "?",
                 AvatarHex = AvatarColorFor(post.UserId),
                 TimeLabel = FormatSearchResultTime(post.CreateAt),
@@ -2561,9 +2577,9 @@ public partial class MainViewModel : ViewModelBase
         var names = new List<string>();
         if (reaction.ReactedByMe)
         {
-            names.Add("Vous");
+            names.Add(Loc.S.You);
         }
-        names.AddRange(others.Select(id => users.TryGetValue(id, out var u) ? u.DisplayName : "Utilisateur inconnu"));
+        names.AddRange(others.Select(id => users.TryGetValue(id, out var u) ? u.DisplayName : Loc.S.UnknownUser));
         reaction.ReactorsText = FormatReactorsText(names, reaction.ReactedByMe, reaction.EmojiName);
     }
 
@@ -2575,15 +2591,13 @@ public partial class MainViewModel : ViewModelBase
         var hidden = names.Count - shown.Count;
         if (hidden > 0)
         {
-            shown.Add(hidden == 1 ? "1 autre" : $"{hidden} autres");
+            shown.Add(Loc.S.OtherPeople(hidden));
         }
 
         var list = shown.Count == 1
             ? shown[0]
-            : $"{string.Join(", ", shown.Take(shown.Count - 1))} et {shown[^1]}";
-        // Any list including "Vous" takes "avez", whatever else is in it.
-        var verb = includesMe ? "avez" : names.Count == 1 ? "a" : "ont";
-        return $"{list} {verb} réagi avec :{emojiName}:";
+            : Loc.S.JoinLastName(string.Join(", ", shown.Take(shown.Count - 1)), shown[^1]);
+        return Loc.S.ReactedWith(list, includesMe, names.Count, emojiName);
     }
 
     /// <summary>
@@ -2744,7 +2758,7 @@ public partial class MainViewModel : ViewModelBase
             PinnedMessages.Add(new PinnedMessageItem
             {
                 PostId = post.Id,
-                AuthorName = author?.DisplayName ?? "Utilisateur inconnu",
+                AuthorName = author?.DisplayName ?? Loc.S.UnknownUser,
                 AuthorInitials = author?.Initials ?? "?",
                 AvatarHex = AvatarColorFor(post.UserId),
                 TimeLabel = FormatTime(post.CreateAt),
@@ -2908,14 +2922,14 @@ public partial class MainViewModel : ViewModelBase
     private static readonly string[] DefaultFrequentEmoji =
         ["+1", "smile", "joy", "heart", "tada", "rocket", "eyes", "pray", "clap", "fire"];
 
-    private static readonly (EmojiSkinTone Tone, string Label)[] SkinToneLabels =
+    private static readonly EmojiSkinTone[] SkinTones =
     [
-        (EmojiSkinTone.Default, "Par défaut"),
-        (EmojiSkinTone.Light, "Clair"),
-        (EmojiSkinTone.MediumLight, "Moyen clair"),
-        (EmojiSkinTone.Medium, "Moyen"),
-        (EmojiSkinTone.MediumDark, "Moyen foncé"),
-        (EmojiSkinTone.Dark, "Foncé"),
+        EmojiSkinTone.Default,
+        EmojiSkinTone.Light,
+        EmojiSkinTone.MediumLight,
+        EmojiSkinTone.Medium,
+        EmojiSkinTone.MediumDark,
+        EmojiSkinTone.Dark,
     ];
 
     /// <summary>
@@ -2930,12 +2944,11 @@ public partial class MainViewModel : ViewModelBase
             _allStandardEmoji.Add(EmojiPickerItem.Standard(shortcode, glyph, common, Settings.SkinTone));
         }
 
-        foreach (var (tone, label) in SkinToneLabels)
+        foreach (var tone in SkinTones)
         {
             SkinToneOptions.Add(new SkinToneOption
             {
                 Tone = tone,
-                Label = label,
                 Swatch = EmojiShortcodes.ToneSwatch(tone),
             });
         }
@@ -3507,6 +3520,83 @@ public partial class MainViewModel : ViewModelBase
     [RelayCommand]
     private void SetTheme(AppThemeMode mode) => Settings.ThemeMode = mode;
 
+    [RelayCommand]
+    private void SetLanguage(AppLanguage language) => Settings.Language = language;
+
+    private void RefreshLanguageSelection()
+    {
+        foreach (var option in LanguageOptions)
+        {
+            option.IsSelected = option.Language == Settings.Language;
+        }
+    }
+
+    /// <summary>
+    /// Switches the interface language on the spot. Everything the windows
+    /// word themselves follows Loc on its own; this rewords what was put
+    /// into words here, in code, and is already on screen — the same walk
+    /// over already-built items as ApplyTheme, for the same reason: without
+    /// it, the new language would only show up as things got rebuilt.
+    ///
+    /// The typing indicator isn't touched: it is re-worded on every poll
+    /// tick anyway. The author names of a few rare fallbacks ("Unknown user")
+    /// stay as they were until the conversation is next reloaded.
+    /// </summary>
+    private void ApplyLanguage()
+    {
+        Loc.Instance.SetLanguage(Settings.Language);
+        RefreshLanguageSelection();
+
+        foreach (var option in ThemeOptions)
+        {
+            option.RefreshLanguage();
+        }
+        foreach (var option in FontChoiceOptions)
+        {
+            option.RefreshLanguage();
+        }
+        foreach (var option in FontSizeOptions)
+        {
+            option.RefreshLanguage();
+        }
+        foreach (var option in SkinToneOptions)
+        {
+            option.RefreshLanguage();
+        }
+
+        OnPropertyChanged(nameof(MyStatusLabel));
+        OnPropertyChanged(nameof(EmojiPickerTitle));
+        OnPropertyChanged(nameof(ComposerPlaceholder));
+        OnPropertyChanged(nameof(ThreadReplyCountLabel));
+
+        foreach (var channel in Channels.Concat(FavoriteChannels))
+        {
+            channel.RefreshLanguage();
+        }
+        foreach (var dm in DirectMessages.Concat(FavoriteDirectMessages))
+        {
+            dm.RefreshLanguage();
+        }
+        foreach (var message in Messages.Concat(ThreadReplies))
+        {
+            message.RefreshLanguage();
+        }
+        ThreadRootMessage?.RefreshLanguage();
+        RefreshDateSeparatorLabels();
+
+        foreach (var channel in BrowseChannelResults)
+        {
+            channel.RefreshLanguage();
+        }
+
+        // Result rows carry their dates already worded; searching again is
+        // the simplest way to reword them, and starts from the cache.
+        if (HasSearched)
+        {
+            _ = RunSearchAsync();
+        }
+    }
+
     /// <summary>
     /// Re-resolves the palette against the OS setting. Called when Windows
     /// flips light/dark underneath a "System" preference — a no-op for an
@@ -3662,7 +3752,7 @@ public partial class MainViewModel : ViewModelBase
             {
                 Id = post.Id,
                 AuthorUserId = post.UserId,
-                AuthorName = author?.DisplayName ?? "Utilisateur inconnu",
+                AuthorName = author?.DisplayName ?? Loc.S.UnknownUser,
                 AuthorInitials = author?.Initials ?? "?",
                 AvatarHex = AvatarColorFor(post.UserId),
                 TimeLabel = FormatTime(post.CreateAt),
@@ -3855,7 +3945,7 @@ public partial class MainViewModel : ViewModelBase
         var team = teams.FirstOrDefault();
         if (team is null)
         {
-            throw new MattermostServiceException("Aucune équipe trouvée pour ce compte.");
+            throw new MattermostServiceException(Loc.S.NoTeamFound);
         }
         _teamId = team.Id;
         TeamName = team.DisplayName;
@@ -3885,7 +3975,7 @@ public partial class MainViewModel : ViewModelBase
         var firstChannel = visibleChannels.FirstOrDefault();
         if (firstChannel is null)
         {
-            throw new MattermostServiceException("Aucun canal trouvé pour cette équipe.");
+            throw new MattermostServiceException(Loc.S.NoChannelFound);
         }
 
         // Keep whatever channel the user is already looking at (they may have
@@ -4540,7 +4630,7 @@ public partial class MainViewModel : ViewModelBase
                     continue;
                 }
                 var participantNames = participantIds
-                    .Select(id => users.TryGetValue(id, out var u) ? u.DisplayName : "Utilisateur inconnu")
+                    .Select(id => users.TryGetValue(id, out var u) ? u.DisplayName : Loc.S.UnknownUser)
                     .OrderBy(name => name)
                     .ToList();
                 var displayName = string.Join(", ", participantNames);
@@ -4569,7 +4659,7 @@ public partial class MainViewModel : ViewModelBase
                 continue;
             }
             users.TryGetValue(otherId, out var user);
-            var otherDisplayName = user?.DisplayName ?? "Utilisateur inconnu";
+            var otherDisplayName = user?.DisplayName ?? Loc.S.UnknownUser;
             _dmDisplayNames[c.Id] = otherDisplayName;
 
             // Falls back to what was last known rather than to Offline: a
@@ -4651,10 +4741,9 @@ public partial class MainViewModel : ViewModelBase
         DateTimeOffset.FromUnixTimeMilliseconds(createAtMillis).ToLocalTime().Date;
 
     /// <summary>
-    /// The rest of the interface is French whatever the machine's locale is,
-    /// so the day name and month are spelled out in French too rather than
-    /// following CurrentCulture and landing a lone English line in the middle
-    /// of the conversation. The year is dropped for the current year, which
+    /// Spelled out in the interface language, whatever the machine's locale
+    /// is, rather than following CurrentCulture and landing a line in another
+    /// language in the middle of the conversation. The year is dropped for the current year, which
     /// is where nearly all reading happens.
     /// </summary>
     private static string FormatDateSeparator(DateTime day)
@@ -4662,18 +4751,17 @@ public partial class MainViewModel : ViewModelBase
         var today = DateTime.Today;
         if (day == today)
         {
-            return "Aujourd'hui";
+            return Loc.S.Today;
         }
         if (day == today.AddDays(-1))
         {
-            return "Hier";
+            return Loc.S.Yesterday;
         }
 
-        var label = day.ToString(day.Year == today.Year ? "dddd d MMMM" : "dddd d MMMM yyyy", FrenchCulture);
-        return char.ToUpper(label[0], FrenchCulture) + label[1..];
+        var format = day.Year == today.Year ? Loc.S.DaySeparatorFormat : Loc.S.DaySeparatorFormatWithYear;
+        var label = day.ToString(format, Loc.Culture);
+        return char.ToUpper(label[0], Loc.Culture) + label[1..];
     }
-
-    private static readonly CultureInfo FrenchCulture = CultureInfo.GetCultureInfo("fr-FR");
 
     /// <summary>The day the separators on screen were worded for — compared on every poll tick so a session left open overnight re-words them (see StartPollingLoop).</summary>
     private DateTime _dateSeparatorDay = DateTime.Today;
@@ -4801,7 +4889,7 @@ public partial class MainViewModel : ViewModelBase
             if (!string.IsNullOrEmpty(post.RootId) && !continuesSameThread && postsById.TryGetValue(post.RootId, out var rootPost))
             {
                 authors.TryGetValue(rootPost.UserId, out var rootAuthor);
-                quotedAuthorName = rootAuthor?.DisplayName ?? "Utilisateur inconnu";
+                quotedAuthorName = rootAuthor?.DisplayName ?? Loc.S.UnknownUser;
                 quotedText = TruncateQuote(rootPost.Message);
             }
 
@@ -4809,7 +4897,7 @@ public partial class MainViewModel : ViewModelBase
             {
                 Id = post.Id,
                 AuthorUserId = post.UserId,
-                AuthorName = author?.DisplayName ?? "Utilisateur inconnu",
+                AuthorName = author?.DisplayName ?? Loc.S.UnknownUser,
                 AuthorInitials = author?.Initials ?? "?",
                 AvatarHex = AvatarColorFor(post.UserId),
                 TimeLabel = FormatTime(post.CreateAt),
@@ -4976,22 +5064,9 @@ public partial class MainViewModel : ViewModelBase
         {
             Id = f.Id,
             FileName = f.Name,
-            SizeLabel = FormatFileSize(f.Size),
+            SizeBytes = f.Size,
         });
         return new ObservableCollection<AttachmentItem>(items);
-    }
-
-    private static string FormatFileSize(long bytes)
-    {
-        double size = bytes;
-        string[] units = ["o", "Ko", "Mo", "Go"];
-        var unitIndex = 0;
-        while (size >= 1024 && unitIndex < units.Length - 1)
-        {
-            size /= 1024;
-            unitIndex++;
-        }
-        return unitIndex == 0 ? $"{size:0} {units[unitIndex]}" : $"{size:0.#} {units[unitIndex]}";
     }
 
     private static string FormatTime(long createAtMillis) =>
@@ -5000,14 +5075,14 @@ public partial class MainViewModel : ViewModelBase
     private static string BuildTypingIndicatorText(List<string> names) => names.Count switch
     {
         0 => "",
-        1 => $"{names[0]} est en train d'écrire…",
-        2 => $"{names[0]} et {names[1]} sont en train d'écrire…",
-        _ => "Plusieurs personnes sont en train d'écrire…",
+        1 => Loc.S.TypingOne(names[0]),
+        2 => Loc.S.TypingTwo(names[0], names[1]),
+        _ => Loc.S.TypingMany,
     };
 
     /// <summary>Search results can span months, so — unlike the plain message list — the date matters, not just the time.</summary>
     private static string FormatSearchResultTime(long createAtMillis) =>
-        DateTimeOffset.FromUnixTimeMilliseconds(createAtMillis).ToLocalTime().ToString("dd/MM/yy HH:mm");
+        DateTimeOffset.FromUnixTimeMilliseconds(createAtMillis).ToLocalTime().ToString(Loc.S.SearchResultTimeFormat, Loc.Culture);
 
     /// <summary>A single-line, length-capped preview for a reply's quoted-root block — a citation, not the full message.</summary>
     private static string TruncateQuote(string text)

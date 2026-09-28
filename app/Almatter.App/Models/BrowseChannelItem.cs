@@ -1,3 +1,4 @@
+using Almatter.App.Localization;
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace Almatter.App.Models;
@@ -22,7 +23,9 @@ public sealed partial class BrowseChannelItem : ObservableObject
     [ObservableProperty]
     public partial bool IsJoining { get; set; }
 
-    public string JoinLabel => IsJoining ? "…" : "Rejoindre";
+    public string JoinLabel => IsJoining ? "…" : Loc.S.Join;
 
     partial void OnIsJoiningChanged(bool value) => OnPropertyChanged(nameof(JoinLabel));
+
+    public void RefreshLanguage() => OnPropertyChanged(nameof(JoinLabel));
 }

@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Almatter.App.Diagnostics;
+using Almatter.App.Localization;
 using Almatter.App.Models;
 using Almatter.App.Services;
 using Almatter.App.ViewModels;
@@ -22,6 +23,9 @@ public partial class App : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
+            // Before any window, the login screen included, is built.
+            Loc.Instance.SetLanguage(SettingsStore.Load().Language);
+
             var stored = SessionStore.Load();
             if (stored is not null)
             {

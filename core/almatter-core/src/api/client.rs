@@ -71,12 +71,16 @@ pub enum ApiError {
     /// response arrived. reqwest reports this with the same "error decoding
     /// response body" wording as unreadable JSON, which made the two
     /// impossible to tell apart on screen.
-    #[error("La connexion au serveur a été coupée pendant la réception de la réponse. Réessaie.")]
+    ///
+    /// This wording and UnexpectedResponse's are matched word for word by
+    /// the app (CoreErrors.cs), which shows its own translation of them in
+    /// the interface language. Change one, change the other.
+    #[error("The connection to the server dropped while the response was arriving.")]
     Interrupted(reqwest::Error),
     /// The server answered in full, but not in a shape this app can read —
     /// a field it expected is missing or of another type. The parser's own
     /// message goes to core.log rather than on screen.
-    #[error("Le serveur a renvoyé une réponse que l'app ne sait pas lire ({path}).")]
+    #[error("The server sent a response this app cannot read ({path}).")]
     UnexpectedResponse { path: String },
     #[error("{message}")]
     Server { status: u16, message: String },

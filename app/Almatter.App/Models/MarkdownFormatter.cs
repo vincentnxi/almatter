@@ -1,6 +1,7 @@
 using System;
 using System.Text;
 using System.Text.RegularExpressions;
+using Almatter.App.Localization;
 
 namespace Almatter.App.Models;
 
@@ -49,7 +50,6 @@ public static partial class MarkdownFormatter
     [GeneratedRegex(@"^[ \t]*(?:[-*+]|\d{1,9}[.)])[ \t]+")]
     private static partial Regex AnyListPrefix();
 
-    private const string LinkPlaceholder = "texte du lien";
     private const string UrlPlaceholder = "https://";
 
     public static FormatResult Apply(string text, int selectionStart, int selectionEnd, FormatAction action)
@@ -70,7 +70,7 @@ public static partial class MarkdownFormatter
             FormatAction.CodeBlock => Fence(text, start, end),
             FormatAction.Link => Link(text, start, end),
             FormatAction.Rule => InsertBlock(text, end, "---", selectFrom: 3, selectTo: 3, caretAfterBlock: true),
-            FormatAction.Table => InsertBlock(text, end, "| Colonne 1 | Colonne 2 |\n| --- | --- |\n|  |  |", selectFrom: 2, selectTo: 11, caretAfterBlock: false),
+            FormatAction.Table => Table(text, end),
             _ => new FormatResult(text, start, end),
         };
     }
@@ -317,13 +317,24 @@ public static partial class MarkdownFormatter
 
         if (selected.Length == 0)
         {
-            var placeholder = text[..start] + "[" + LinkPlaceholder + "](" + UrlPlaceholder + ")" + text[end..];
-            return new FormatResult(placeholder, start + 1, start + 1 + LinkPlaceholder.Length);
+            // Typed into the message itself, so it follows the interface language.
+            var label = Loc.S.LinkTextPlaceholder;
+            var placeholder = text[..start] + "[" + label + "](" + UrlPlaceholder + ")" + text[end..];
+            return new FormatResult(placeholder, start + 1, start + 1 + label.Length);
         }
 
         var link = "[" + selected + "](" + UrlPlaceholder + ")";
         var urlStart = start + 1 + selected.Length + 2;
         return new FormatResult(text[..start] + link + text[end..], urlStart, urlStart + UrlPlaceholder.Length);
+    }
+
+    /// <summary>A two-column table with its first header selected, ready to be typed over.</summary>
+    private static FormatResult Table(string text, int position)
+    {
+        var first = Loc.S.TableColumn(1);
+        var second = Loc.S.TableColumn(2);
+        var block = $"| {first} | {second} |\n| --- | --- |\n|  |  |";
+        return InsertBlock(text, position, block, selectFrom: 2, selectTo: 2 + first.Length, caretAfterBlock: false);
     }
 
     /// <summary>

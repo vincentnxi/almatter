@@ -1,4 +1,5 @@
 using Avalonia.Media;
+using Almatter.App.Localization;
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace Almatter.App.Models;
@@ -7,7 +8,8 @@ namespace Almatter.App.Models;
 public sealed partial class FontChoiceOption : ObservableObject
 {
     public required AppFontChoice Choice { get; init; }
-    public required string Name { get; init; }
+    /// <summary>"Mattermost" is a name, the same in every language.</summary>
+    public string Name => Choice == AppFontChoice.System ? Loc.S.FontSystem : "Mattermost";
 
     /// <summary>Rendered in the face it selects, so the pill previews the actual lettering.</summary>
     public required FontFamily Preview { get; init; }
@@ -23,6 +25,8 @@ public sealed partial class FontChoiceOption : ObservableObject
         OnPropertyChanged(nameof(RowBackground));
         OnPropertyChanged(nameof(TextBrush));
     }
+
+    public void RefreshLanguage() => OnPropertyChanged(nameof(Name));
 
     partial void OnIsSelectedChanged(bool value) => RefreshColors();
 }
