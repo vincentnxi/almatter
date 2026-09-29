@@ -40,10 +40,22 @@ public partial class App : Application
         base.OnFrameworkInitializationCompleted();
     }
 
-    /// <summary>Shows a fresh login screen — used at startup with no remembered session, and again after logging out.</summary>
-    public static void ShowLoginWindow(IClassicDesktopStyleApplicationLifetime desktop)
+    /// <summary>
+    /// Shows a fresh login screen — used at startup with no remembered session, and again after logging out.
+    /// <paramref name="sessionNotice"/> is set when the session ran out instead: the screen then already
+    /// holds the server and account it was for, and says why it is here.
+    /// </summary>
+    public static void ShowLoginWindow(
+        IClassicDesktopStyleApplicationLifetime desktop,
+        string? sessionNotice = null,
+        string serverUrl = "",
+        string loginId = "")
     {
         var loginViewModel = new LoginViewModel();
+        if (sessionNotice is not null)
+        {
+            loginViewModel.ShowSessionNotice(sessionNotice, serverUrl, loginId);
+        }
         var loginWindow = new LoginWindow(loginViewModel);
 
         loginViewModel.LoggedIn += (_, session) =>

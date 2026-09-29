@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
@@ -30,12 +31,18 @@ public partial class MainViewModel : ViewModelBase
 
     /// <summary>Every channel (public/private/direct) loaded for the active team, so a click can find any of them by id.</summary>
     private List<ChannelDto> _loadedChannels = [];
-    /// <summary>Direct-message channel id -> the other participant's display name (DM channels don't carry a useful display_name of their own).</summary>
-    private Dictionary<string, string> _dmDisplayNames = [];
+    /// <summary>
+    /// Direct-message channel id -> the other participant's display name (DM channels don't carry a useful display_name of their own).
+    /// Concurrent because the polling loop reads it (a notification's title) while the UI thread rebuilds it.
+    /// </summary>
+    private ConcurrentDictionary<string, string> _dmDisplayNames = new();
     /// <summary>Channel ids favorited via the server's own preferences store — mirrors the official clients rather than being an Almatter-only flag.</summary>
     private HashSet<string> _favoriteChannelIds = [];
-    /// <summary>Channel id -> the name this user gave it for themselves ("Renommer pour moi"). Nobody else sees these; they live in the server's preferences so they follow the account between devices.</summary>
-    private Dictionary<string, string> _channelAliases = [];
+    /// <summary>
+    /// Channel id -> the name this user gave it for themselves ("Renommer pour moi"). Nobody else sees these; they live in the server's preferences so they follow the account between devices.
+    /// Concurrent for the same reason as <see cref="_dmDisplayNames"/>.
+    /// </summary>
+    private ConcurrentDictionary<string, string> _channelAliases = new();
     private string? _activeChannelId;
     /// <summary>Set once the team is known (cache or network) — search needs it, since Mattermost search is scoped per team.</summary>
     private string? _teamId;
@@ -199,7 +206,7 @@ public partial class MainViewModel : ViewModelBase
 
     partial void OnThreadComposeTextChanged(string value)
     {
-        if (string.IsNullOrEmpty(value) || _activeChannelId is not { } channelId || _openThreadRootId is not { } rootId
+        if (string.IsNullOrEmpty(value) || (_openThreadChannelId ?? _activeChannelId) is not { } channelId || _openThreadRootId is not { } rootId
             || DateTime.UtcNow - _lastThreadTypingSentAt < TypingResendInterval)
         {
             return;
@@ -509,15 +516,49 @@ public partial class MainViewModel : ViewModelBase
     public bool WindowIsInForeground
     {
         get => _windowIsInForeground;
-        set => _windowIsInForeground = value;
+        set
+        {
+            var wasInForeground = _windowIsInForeground;
+            _windowIsInForeground = value;
+            if (value && !wasInForeground)
+            {
+                MarkActiveChannelSeen();
+            }
+        }
     }
 
     private volatile bool _windowIsInForeground = true;
+
+    /// <summary>
+    /// The window is back in front of the user, so whatever reached the open
+    /// channel while it wasn't has now been seen. The polling loop leaves a
+    /// channel unread while nobody is looking at it (a message arriving in
+    /// the channel the app was left on used to be marked read on the spot,
+    /// server included); this is the other half — the moment it is looked at
+    /// again. Only asks the server when there is something to clear.
+    /// </summary>
+    private void MarkActiveChannelSeen()
+    {
+        if (_activeChannelId is not { } channelId)
+        {
+            return;
+        }
+        var channel = _loadedChannels.FirstOrDefault(c => c.Id == channelId);
+        if (channel is null || (channel.MsgCount >= channel.TotalMsgCount && channel.MentionCount == 0))
+        {
+            return;
+        }
+        MarkChannelViewed(channelId);
+    }
 
     private string? _openThreadRootId;
 
     public string CurrentUserDisplayName => _session.User.DisplayName;
     public string CurrentUserInitials => _session.User.Initials;
+
+    /// <summary>The server and account of this session — what the sign-in screen is pre-filled with when the session runs out.</summary>
+    public string SessionServerUrl => _session.BaseUrl;
+    public string SessionLoginId => _session.User.Username;
 
     /// <summary>Own avatar shown at the bottom of the sidebar — same fetch-once-and-cache mechanism as message authors' avatars.</summary>
     [ObservableProperty]
@@ -550,6 +591,16 @@ public partial class MainViewModel : ViewModelBase
 
     /// <summary>What the thread panel currently shows, same "id, edit stamp, reactions" key as the main list.</summary>
     private List<string> _lastRenderedThreadKeys = [];
+
+    /// <summary>The same key for the thread's root, which sits above the replies and so isn't among <see cref="_lastRenderedThreadKeys"/>.</summary>
+    private string _lastRenderedThreadRootKey = "";
+
+    /// <summary>
+    /// The channel the open thread belongs to. Not necessarily the selected one:
+    /// the panel stays open when another channel is picked, and a reply typed
+    /// in it has to go where its thread is, not where the sidebar points.
+    /// </summary>
+    private string? _openThreadChannelId;
 
     /// <summary>
     /// Raised after jumping to a specific message (from a search result) —
@@ -662,6 +713,14 @@ public partial class MainViewModel : ViewModelBase
     public event EventHandler? LoggedOut;
 
     /// <summary>
+    /// Raised — after the session has been ended, same as for a logout — when
+    /// the server refused the session token. MainWindow's code-behind goes back
+    /// to the sign-in screen and says why, rather than leaving a window that
+    /// shows its cache and quietly receives nothing.
+    /// </summary>
+    public event EventHandler? SessionExpired;
+
+    /// <summary>
     /// An emoji was picked for one of the composers. Carries what to type
     /// and which box to type it into; the code-behind does the inserting,
     /// because putting it at the caret (rather than tacked onto the end)
@@ -715,6 +774,7 @@ public partial class MainViewModel : ViewModelBase
     public MainViewModel(Session session)
     {
         _session = session;
+        MattermostService.SessionExpired += OnSessionExpired;
         try
         {
             CoreVersion = NativeCore.GetCoreVersion();
@@ -811,6 +871,16 @@ public partial class MainViewModel : ViewModelBase
             IsLoading = false;
         }
 
+        // The saved session may have been refused just now. The window is on its
+        // way back to the sign-in screen, and a connection or a polling loop
+        // started at this point would outlive it — running under a token the
+        // server has already turned down, and (the core keeps one connection
+        // per process) leaving nothing free for the next sign-in to start.
+        if (Volatile.Read(ref _sessionExpiryHandled) == 1)
+        {
+            return;
+        }
+
         _ = ResolveMyAvatarAsync();
 
         // A dropped connection just means the app keeps working off what's
@@ -905,25 +975,36 @@ public partial class MainViewModel : ViewModelBase
                     }
                 }
 
-                if (DateTime.UtcNow - _lastActivityReportAt >= ActivityReportInterval)
+                // Each of these three is guarded on its own: an exception nobody
+                // expected, escaping from here, would end this loop — and with
+                // it every repaint, every notification and every queued
+                // message, with nothing on screen to say so.
+                try
                 {
-                    _lastActivityReportAt = DateTime.UtcNow;
-                    await ReportActivityAsync();
-                }
+                    if (DateTime.UtcNow - _lastActivityReportAt >= ActivityReportInterval)
+                    {
+                        _lastActivityReportAt = DateTime.UtcNow;
+                        await ReportActivityAsync();
+                    }
 
-                if (DateTime.UtcNow - _lastPresenceRefreshAt >= PresenceRefreshInterval)
-                {
-                    _lastPresenceRefreshAt = DateTime.UtcNow;
-                    await RefreshPresenceAsync();
-                }
+                    if (DateTime.UtcNow - _lastPresenceRefreshAt >= PresenceRefreshInterval)
+                    {
+                        _lastPresenceRefreshAt = DateTime.UtcNow;
+                        await RefreshPresenceAsync();
+                    }
 
-                // Midnight passed with the app open: yesterday's separators
-                // still read "Aujourd'hui" and would keep doing so until the
-                // list happens to be rebuilt. Only the wording changes — never
-                // which messages carry a separator — so nothing moves.
-                if (DateTime.Today != _dateSeparatorDay)
+                    // Midnight passed with the app open: yesterday's separators
+                    // still read "Aujourd'hui" and would keep doing so until the
+                    // list happens to be rebuilt. Only the wording changes — never
+                    // which messages carry a separator — so nothing moves.
+                    if (DateTime.Today != _dateSeparatorDay)
+                    {
+                        await Dispatcher.UIThread.InvokeAsync(RefreshDateSeparatorLabels);
+                    }
+                }
+                catch (Exception ex)
                 {
-                    await Dispatcher.UIThread.InvokeAsync(RefreshDateSeparatorLabels);
+                    CrashLogger.Write("poll: a periodic task failed", ex);
                 }
 
                 try
@@ -979,140 +1060,190 @@ public partial class MainViewModel : ViewModelBase
                 }
 
                 var channelId = _activeChannelId;
-                if (channelId is null || IsViewingJumpedMessage)
+                if (channelId is not null && !IsViewingJumpedMessage)
                 {
-                    continue;
+                    await PollActiveChannelAsync(channelId, outbox);
                 }
 
-                try
+                // The open thread has its own turn rather than coming after the
+                // channel's: it used to be skipped whenever the channel itself
+                // had not changed, which is the normal state of a thread left
+                // open on a channel other than the selected one.
+                if (_openThreadRootId is { } openRootId)
                 {
-                    var typingUserIds = await _service.GetTypingUsersAsync(channelId);
-                    var typingNames = typingUserIds.Count > 0
-                        ? (await _service.GetCachedUsersAsync(typingUserIds)).Select(u => u.DisplayName).ToList()
-                        : [];
-                    var text = BuildTypingIndicatorText(typingNames);
-                    await Dispatcher.UIThread.InvokeAsync(() =>
-                    {
-                        if (channelId == _activeChannelId)
-                        {
-                            TypingIndicatorText = text;
-                        }
-                    });
-                }
-                catch
-                {
-                    // Transient cache read hiccup — try again next tick.
-                }
-
-                try
-                {
-                    var pendingIds = outbox
-                        .Where(o => o.ChannelId == channelId && o.RootId is null)
-                        .OrderBy(o => o.CreatedAt)
-                        .Select(o => o.LocalId)
-                        .ToList();
-
-                    // Ask what changed before asking for the content. On a
-                    // 455-message channel the probe is ~0.06 ms against
-                    // ~2.3 ms and 150 KB for the full read, and on a quiet
-                    // channel it is the only thing this tick does.
-                    var revision = await _service.GetChannelRevisionAsync(channelId);
-                    if (channelId == _activeChannelId
-                        && _lastChannelRevision is { } seen
-                        && seen.ChannelId == channelId
-                        && seen.Revision == revision
-                        && pendingIds.SequenceEqual(_lastRenderedOutboxIds))
-                    {
-                        continue;
-                    }
-                    _lastChannelRevision = (channelId, revision);
-
-                    var posts = await _service.GetCachedPostsAsync(channelId);
-                    var keys = posts.OrderBy(p => p.CreateAt).Select(p => $"{p.Id}:{p.EditAt}").ToList();
-
-                    if (channelId != _activeChannelId ||
-                        (keys.SequenceEqual(_lastRenderedPostKeys) && pendingIds.SequenceEqual(_lastRenderedOutboxIds)))
-                    {
-                        continue;
-                    }
-
-                    var authorIds = posts.Select(p => p.UserId).Distinct();
-                    var authors = (await _service.GetCachedUsersAsync(authorIds)).ToDictionary(u => u.Id);
-
-                    // ObservableCollection mutations must happen on the UI thread;
-                    // this loop runs on a background thread pool thread throughout.
-                    await Dispatcher.UIThread.InvokeAsync(async () =>
-                    {
-                        if (channelId == _activeChannelId)
-                        {
-                            await PopulateMessagesWithOutboxAsync(channelId, posts, authors);
-                            // A message arriving live while this channel is
-                            // already open has effectively been seen — without
-                            // this, the sidebar badge refresh above would show
-                            // it as unread until the channel is re-opened.
-                            MarkChannelViewed(channelId);
-                        }
-                    });
-                }
-                catch
-                {
-                    // Transient cache read hiccup — try again next tick.
-                }
-
-                var openRootId = _openThreadRootId;
-                if (openRootId is null)
-                {
-                    continue;
-                }
-                try
-                {
-                    // Same probe-before-read as the channel above.
-                    var threadRevision = await _service.GetThreadRevisionAsync(openRootId);
-                    var threadPendingUnchanged =
-                        outbox.Count(o => o.RootId == openRootId) == ThreadReplies.Count(r => r.IsPending);
-                    if (_lastThreadRevision is { } seenThread
-                        && seenThread.RootId == openRootId
-                        && seenThread.Revision == threadRevision
-                        && threadPendingUnchanged)
-                    {
-                        continue;
-                    }
-                    _lastThreadRevision = (openRootId, threadRevision);
-
-                    var threadPosts = await _service.GetCachedThreadAsync(openRootId);
-                    if (openRootId != _openThreadRootId || threadPosts.Count == 0)
-                    {
-                        continue;
-                    }
-                    var currentRealIds = new[] { ThreadRootMessage?.Id }
-                        .Concat(ThreadReplies.Where(r => !r.IsPending).Select(r => r.Id));
-                    var pendingReplyIds = outbox
-                        .Where(o => o.RootId == openRootId)
-                        .OrderBy(o => o.CreatedAt)
-                        .Select(o => o.LocalId)
-                        .ToList();
-                    var currentPendingIds = ThreadReplies.Where(r => r.IsPending).Select(r => r.Id).ToList();
-
-                    if (threadPosts.Select(p => p.Id).SequenceEqual(currentRealIds) &&
-                        pendingReplyIds.SequenceEqual(currentPendingIds))
-                    {
-                        continue;
-                    }
-                    await Dispatcher.UIThread.InvokeAsync(async () =>
-                    {
-                        if (openRootId == _openThreadRootId)
-                        {
-                            await PopulateThreadAsync(threadPosts);
-                            await AppendPendingOutboxAsync(ThreadReplies, threadPosts[0].ChannelId, openRootId);
-                        }
-                    });
-                }
-                catch
-                {
-                    // Transient cache read hiccup — try again next tick.
+                    await PollOpenThreadAsync(openRootId, outbox);
                 }
             }
         });
+    }
+
+    /// <summary>
+    /// One tick for the selected channel: who is typing, then whether anything
+    /// in it changed — a message, an edit, a reaction, a pin — in which case
+    /// the list is repainted from the cache.
+    /// </summary>
+    private async Task PollActiveChannelAsync(string channelId, List<OutboxItemDto> outbox)
+    {
+        try
+        {
+            var typingUserIds = await _service.GetTypingUsersAsync(channelId);
+            var typingNames = typingUserIds.Count > 0
+                ? (await _service.GetCachedUsersAsync(typingUserIds)).Select(u => u.DisplayName).ToList()
+                : [];
+            var text = BuildTypingIndicatorText(typingNames);
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                if (channelId == _activeChannelId)
+                {
+                    TypingIndicatorText = text;
+                }
+            });
+        }
+        catch
+        {
+            // Transient cache read hiccup — try again next tick.
+        }
+
+        try
+        {
+            var pendingIds = outbox
+                .Where(o => o.ChannelId == channelId && o.RootId is null)
+                .OrderBy(o => o.CreatedAt)
+                .Select(o => o.LocalId)
+                .ToList();
+
+            // Ask what changed before asking for the content. On a
+            // 455-message channel the probe is ~0.06 ms against
+            // ~2.3 ms and 150 KB for the full read, and on a quiet
+            // channel it is the only thing this tick does.
+            var revision = await _service.GetChannelRevisionAsync(channelId);
+            if (channelId == _activeChannelId
+                && _lastChannelRevision is { } seen
+                && seen.ChannelId == channelId
+                && seen.Revision == revision
+                && pendingIds.SequenceEqual(_lastRenderedOutboxIds))
+            {
+                return;
+            }
+
+            var posts = await _service.GetCachedPostsAsync(channelId);
+            // The very key the list is reconciled with (see RenderKey). This
+            // comparison used a shorter "id:edit stamp" key against the list's
+            // longer one, so the two could never be equal and the check never
+            // once saved a repaint.
+            var keys = posts.OrderBy(p => p.CreateAt).Select(RenderKey).ToList();
+
+            if (channelId != _activeChannelId)
+            {
+                return;
+            }
+            if (keys.SequenceEqual(_lastRenderedPostKeys) && pendingIds.SequenceEqual(_lastRenderedOutboxIds))
+            {
+                // Something moved that the screen doesn't show — a re-fetch
+                // rewriting the reaction stamps, say. Nothing to repaint.
+                _lastChannelRevision = (channelId, revision);
+                return;
+            }
+
+            var authorIds = posts.Select(p => p.UserId).Distinct();
+            var authors = (await _service.GetCachedUsersAsync(authorIds)).ToDictionary(u => u.Id);
+
+            // ObservableCollection mutations must happen on the UI thread;
+            // this loop runs on a background thread pool thread throughout.
+            await Dispatcher.UIThread.InvokeAsync(async () =>
+            {
+                if (channelId == _activeChannelId)
+                {
+                    await PopulateMessagesWithOutboxAsync(channelId, posts, authors);
+                    // A message arriving live while this channel is
+                    // already open has effectively been seen — without
+                    // this, the sidebar badge refresh above would show
+                    // it as unread until the channel is re-opened.
+                    // Only while the window is really in front of the
+                    // user, though: the selection survives minimising and
+                    // losing focus, and marking the channel read from a
+                    // window nobody is looking at (on the server too, where
+                    // the phone hears of it) made a message arriving in the
+                    // channel the app was left on unread for no one.
+                    // MarkActiveChannelSeen covers the way back.
+                    if (WindowIsInForeground)
+                    {
+                        MarkChannelViewed(channelId);
+                    }
+                }
+            });
+
+            // Only now: remembered before the repaint, a failure in it made
+            // every later tick see "nothing changed" and skip the retry.
+            _lastChannelRevision = (channelId, revision);
+        }
+        catch
+        {
+            // Transient cache read hiccup — try again next tick. The
+            // fingerprint is forgotten so that the retry actually happens.
+            _lastChannelRevision = null;
+        }
+    }
+
+    /// <summary>One tick for the open thread panel — the same probe-before-read as the channel.</summary>
+    private async Task PollOpenThreadAsync(string openRootId, List<OutboxItemDto> outbox)
+    {
+        try
+        {
+            var threadRevision = await _service.GetThreadRevisionAsync(openRootId);
+            var pendingReplyIds = outbox
+                .Where(o => o.RootId == openRootId)
+                .OrderBy(o => o.CreatedAt)
+                .Select(o => o.LocalId)
+                .ToList();
+
+            // The panel is rebuilt on the UI thread, so it is read there too.
+            var shownPendingIds = await Dispatcher.UIThread.InvokeAsync(
+                () => ThreadReplies.Where(r => r.IsPending).Select(r => r.Id).ToList());
+            if (_lastThreadRevision is { } seenThread
+                && seenThread.RootId == openRootId
+                && seenThread.Revision == threadRevision
+                && pendingReplyIds.SequenceEqual(shownPendingIds))
+            {
+                return;
+            }
+
+            var threadPosts = await _service.GetCachedThreadAsync(openRootId);
+            if (openRootId != _openThreadRootId || threadPosts.Count == 0)
+            {
+                return;
+            }
+
+            await Dispatcher.UIThread.InvokeAsync(async () =>
+            {
+                if (openRootId != _openThreadRootId)
+                {
+                    return;
+                }
+
+                // Compared by what the panel renders — the same key its rows are
+                // reconciled with — and not by ids alone: with ids alone, a reply
+                // edited or reacted to by someone else never showed in the panel
+                // until it was reopened, though the message list had it at once.
+                var unchanged = ThreadRootMessage?.Id == threadPosts[0].Id
+                    && RenderKey(threadPosts[0]) == _lastRenderedThreadRootKey
+                    && threadPosts.Skip(1).Select(RenderKey).SequenceEqual(_lastRenderedThreadKeys)
+                    && pendingReplyIds.SequenceEqual(ThreadReplies.Where(r => r.IsPending).Select(r => r.Id));
+                if (unchanged)
+                {
+                    return;
+                }
+                await PopulateThreadAsync(threadPosts);
+                await AppendPendingOutboxAsync(ThreadReplies, threadPosts[0].ChannelId, openRootId);
+            });
+
+            _lastThreadRevision = (openRootId, threadRevision);
+        }
+        catch
+        {
+            // Transient cache read hiccup — try again next tick.
+            _lastThreadRevision = null;
+        }
     }
 
     /// <summary>
@@ -1134,7 +1265,7 @@ public partial class MainViewModel : ViewModelBase
         var authorName = await NotificationDisplayNameAsync(mention.AuthorId);
         var title = NotificationTitle(authorName, mention.ChannelId);
         var plain = MessageTextParser.ToPlainText(mention.Message);
-        var text = plain.Length > 140 ? plain[..140] + "…" : plain;
+        var text = plain.Length > 140 ? TextTruncation.Head(plain, 140) + "…" : plain;
 
         // Every private conversation counts, group ones included. The core
         // flags mentions, replies in the user's threads and links to their
@@ -1173,7 +1304,7 @@ public partial class MainViewModel : ViewModelBase
         // notification area shows text only, so its image was never an option.
         var glyph = EmojiShortcodes.ToGlyph(reaction.EmojiName);
         var plain = MessageTextParser.ToPlainText(reaction.Message);
-        var excerpt = plain.Length > 100 ? plain[..100] + "…" : plain;
+        var excerpt = plain.Length > 100 ? TextTruncation.Head(plain, 100) + "…" : plain;
 
         // Nothing to quote when the message was only a file or an image.
         var text = excerpt.Length == 0
@@ -1376,11 +1507,15 @@ public partial class MainViewModel : ViewModelBase
         }
 
         _openThreadRootId = rootId;
+        // Opened from a message of the selected channel; PopulateThreadAsync
+        // confirms it from the thread's own posts once they are in.
+        _openThreadChannelId = _activeChannelId;
         IsThreadOpen = true;
         ThreadComposerFocusRequested?.Invoke(this, EventArgs.Empty);
         ThreadRootMessage = null;
         ThreadReplies.Clear();
         _lastRenderedThreadKeys = [];
+        _lastRenderedThreadRootKey = "";
 
         var paintedFromCache = await TryPaintThreadFromCacheAsync(rootId);
 
@@ -1454,17 +1589,48 @@ public partial class MainViewModel : ViewModelBase
             return;
         }
 
-        var fileIds = PendingAttachments.Select(a => a.FileId).ToList();
+        var attachments = PendingAttachments.ToList();
+        var fileIds = attachments.Select(a => a.FileId).ToList();
         ComposeText = "";
         PendingAttachments.Clear();
-        await SendAsync(channelId, rootId: null, text, fileIds);
+        if (!await SendAsync(channelId, rootId: null, text, fileIds))
+        {
+            ComposeText = TextBackInComposer(ComposeText, text);
+            RestoreAttachments(PendingAttachments, attachments);
+        }
+    }
+
+    /// <summary>
+    /// What a composer holds once a message the server refused is handed back
+    /// to it. The composer is emptied the moment Send is pressed, so without
+    /// this a refusal (too long, no permission to post there) cost the user
+    /// everything they had typed. Whatever was typed since goes after it, not
+    /// over it.
+    /// </summary>
+    private static string TextBackInComposer(string typedSince, string refused) =>
+        typedSince.Length == 0 ? refused : refused + "\n" + typedSince;
+
+    private static void RestoreAttachments(ObservableCollection<PendingAttachmentItem> target, List<PendingAttachmentItem> refused)
+    {
+        // The files are already uploaded and unattached, so they can simply go out with the next attempt.
+        foreach (var attachment in refused)
+        {
+            if (!target.Contains(attachment))
+            {
+                target.Add(attachment);
+            }
+        }
     }
 
     /// <summary>Bound to the thread panel's reply composer send button / Enter key.</summary>
     [RelayCommand]
     private async Task SendThreadReplyAsync()
     {
-        var channelId = _activeChannelId;
+        // The thread's own channel, not the selected one: the panel stays open
+        // when another channel is picked, and a reply sent with the wrong
+        // channel next to this thread's root is refused by the server
+        // ("invalid ChannelId for RootId") — after the text had been cleared.
+        var channelId = _openThreadChannelId ?? _activeChannelId;
         var rootId = _openThreadRootId;
         var text = ThreadComposeText.Trim();
         if (channelId is null || rootId is null || (text.Length == 0 && ThreadPendingAttachments.Count == 0))
@@ -1472,10 +1638,15 @@ public partial class MainViewModel : ViewModelBase
             return;
         }
 
-        var fileIds = ThreadPendingAttachments.Select(a => a.FileId).ToList();
+        var attachments = ThreadPendingAttachments.ToList();
+        var fileIds = attachments.Select(a => a.FileId).ToList();
         ThreadComposeText = "";
         ThreadPendingAttachments.Clear();
-        await SendAsync(channelId, rootId, text, fileIds);
+        if (!await SendAsync(channelId, rootId, text, fileIds))
+        {
+            ThreadComposeText = TextBackInComposer(ThreadComposeText, text);
+            RestoreAttachments(ThreadPendingAttachments, attachments);
+        }
     }
 
     /// <summary>Bound to the main composer's paperclip button.</summary>
@@ -1501,7 +1672,7 @@ public partial class MainViewModel : ViewModelBase
     /// </summary>
     private async Task AttachFilesAsync(ObservableCollection<PendingAttachmentItem> target)
     {
-        var channelId = _activeChannelId;
+        var channelId = ReferenceEquals(target, ThreadPendingAttachments) ? _openThreadChannelId ?? _activeChannelId : _activeChannelId;
         if (channelId is null || PickFilesAsync is null)
         {
             return;
@@ -1527,7 +1698,7 @@ public partial class MainViewModel : ViewModelBase
     /// </summary>
     public async Task AttachPastedFilesAsync(IReadOnlyList<string> paths, bool isThread)
     {
-        if (_activeChannelId is not { } channelId)
+        if ((isThread ? _openThreadChannelId ?? _activeChannelId : _activeChannelId) is not { } channelId)
         {
             return;
         }
@@ -1558,9 +1729,11 @@ public partial class MainViewModel : ViewModelBase
     /// shows up instantly. A genuine server-side rejection (not a
     /// connectivity failure) surfaces as a real error instead.
     /// </summary>
-    private async Task SendAsync(string channelId, string? rootId, string message, IReadOnlyList<string>? fileIds = null)
+    /// <returns>False when the server refused the message: the caller hands the text back to the composer.</returns>
+    private async Task<bool> SendAsync(string channelId, string? rootId, string message, IReadOnlyList<string>? fileIds = null)
     {
         var localId = "local-" + Guid.NewGuid().ToString("N");
+        var accepted = true;
         try
         {
             await _service.SendMessageAsync(_session.BaseUrl, _session.Token, channelId, rootId, localId, message, fileIds);
@@ -1568,6 +1741,7 @@ public partial class MainViewModel : ViewModelBase
         catch (MattermostServiceException ex)
         {
             ErrorMessage = ex.Message;
+            accepted = false;
         }
 
         if (rootId is null && channelId == _activeChannelId)
@@ -1579,6 +1753,7 @@ public partial class MainViewModel : ViewModelBase
         {
             await TryPaintThreadFromCacheAsync(rootId);
         }
+        return accepted;
     }
 
     /// <summary>
@@ -2046,6 +2221,21 @@ public partial class MainViewModel : ViewModelBase
     [RelayCommand]
     private async Task LogOutAsync()
     {
+        await EndSessionAsync();
+        LoggedOut?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// Stops everything a session leaves running and forgets the saved
+    /// sign-in: the polling loop (which would go on flushing the outbox and
+    /// drawing notifications with a token nobody owns any more), the live
+    /// connection, and the listener for a refused session — a static event
+    /// would otherwise keep this whole view model alive, with its image
+    /// caches, for as long as the app runs.
+    /// </summary>
+    private async Task EndSessionAsync()
+    {
+        MattermostService.SessionExpired -= OnSessionExpired;
         StopPollingLoop();
         try
         {
@@ -2057,7 +2247,34 @@ public partial class MainViewModel : ViewModelBase
             // drops on its own; nothing else depends on this succeeding.
         }
         SessionStore.Clear();
-        LoggedOut?.Invoke(this, EventArgs.Empty);
+    }
+
+    private int _sessionExpiryHandled;
+
+    /// <summary>
+    /// The server refused the session token. Raised on whichever thread made
+    /// the failing call — several calls in flight can all fail at once — so
+    /// only the first is acted on, and on the UI thread.
+    /// </summary>
+    private void OnSessionExpired()
+    {
+        if (Interlocked.Exchange(ref _sessionExpiryHandled, 1) == 1)
+        {
+            return;
+        }
+        _ = Dispatcher.UIThread.InvokeAsync(async () =>
+        {
+            try
+            {
+                CrashLogger.Write("session", "the server refused the session token; going back to the sign-in screen");
+                await EndSessionAsync();
+                SessionExpired?.Invoke(this, EventArgs.Empty);
+            }
+            catch (Exception ex)
+            {
+                CrashLogger.Write("session: handling an expired session failed", ex);
+            }
+        });
     }
 
     [RelayCommand]
@@ -2420,6 +2637,7 @@ public partial class MainViewModel : ViewModelBase
             return;
         }
 
+        var channelChanged = channelId != _activeChannelId;
         _activeChannelId = channelId;
         foreach (var item in Channels.Concat(FavoriteChannels))
         {
@@ -2434,6 +2652,20 @@ public partial class MainViewModel : ViewModelBase
         TypingIndicatorText = "";
         ErrorMessage = null;
         MarkChannelViewed(channelId);
+
+        if (channelChanged)
+        {
+            // Arriving in another channel by a search result, a link or a
+            // notification is a channel switch like any other: what belongs to
+            // the channel and not to the message list has to follow. The
+            // header's pin count and the pinned panel kept showing the channel
+            // that had just been left, and the next launch reopened that one.
+            Settings.LastChannelId = channelId;
+            IsPinnedPanelOpen = false;
+            PinnedMessages.Clear();
+            PinnedCount = 0;
+            _ = RefreshPinnedMessagesAsync(channelId);
+        }
 
         try
         {
@@ -2600,9 +2832,20 @@ public partial class MainViewModel : ViewModelBase
         return true;
     }
 
-    /// <summary>Opens a link in the user's default browser.</summary>
+    /// <summary>
+    /// Opens a link in the user's default browser. Web and mail addresses only:
+    /// the shell will open anything it is handed — a file, a program, a
+    /// "search-ms:" or "ms-msdt:" address — and a link is text somebody else
+    /// wrote, so the address has to be one that can only ever lead to a page.
+    /// </summary>
     private static void OpenInBrowser(string url)
     {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var address)
+            || address.Scheme is not ("http" or "https" or "mailto"))
+        {
+            return;
+        }
+
         try
         {
             Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
@@ -2610,6 +2853,44 @@ public partial class MainViewModel : ViewModelBase
         catch
         {
             // A malformed or unsupported URL just doesn't open — no crash.
+        }
+    }
+
+    /// <summary>
+    /// What runs code when opened. An attachment is a file any member of the
+    /// server chose to send, and it was fetched by this app rather than by a
+    /// browser, so it carries none of the marks ("downloaded from the
+    /// Internet") that make Windows ask before running it: opening one of
+    /// these from a click on a message would simply run it.
+    /// </summary>
+    private static readonly HashSet<string> ProgramFileExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".exe", ".com", ".scr", ".pif", ".bat", ".cmd", ".ps1", ".psm1", ".vbs", ".vbe", ".js", ".jse", ".wsf", ".wsh",
+        ".hta", ".msi", ".msp", ".msc", ".lnk", ".url", ".cpl", ".reg", ".jar", ".appx", ".msix", ".appinstaller",
+        ".application", ".gadget", ".sct", ".settingcontent-ms", ".library-ms", ".search-ms",
+        ".sh", ".command", ".desktop", ".app", ".appimage", ".run",
+    };
+
+    /// <summary>
+    /// Opens a downloaded attachment the way its type says — except a program,
+    /// which is shown in the file manager instead, where opening it is a
+    /// deliberate act rather than a click on a message.
+    /// </summary>
+    private static void OpenDownloadedFile(string path)
+    {
+        if (!ProgramFileExtensions.Contains(Path.GetExtension(path)))
+        {
+            Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
+            return;
+        }
+
+        if (OperatingSystem.IsWindows())
+        {
+            Process.Start(new ProcessStartInfo("explorer.exe") { Arguments = $"/select,\"{path}\"", UseShellExecute = true });
+        }
+        else if (Path.GetDirectoryName(path) is { } folder)
+        {
+            Process.Start(new ProcessStartInfo(folder) { UseShellExecute = true });
         }
     }
 
@@ -2626,7 +2907,7 @@ public partial class MainViewModel : ViewModelBase
         try
         {
             var path = await _service.GetFilePathAsync(_session.BaseUrl, _session.Token, attachment.Id, attachment.FileName);
-            Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
+            OpenDownloadedFile(path);
         }
         catch (MattermostServiceException ex)
         {
@@ -3475,12 +3756,44 @@ public partial class MainViewModel : ViewModelBase
         }
     }
 
+    /// <summary>
+    /// Link-preview pictures that could not be had, and when that was found out.
+    /// Every rebuild of the message list makes new cards that ask for their
+    /// picture again, and a picture the site refuses (hotlink protection, a
+    /// preview that has since gone) was requested from that site once per
+    /// rebuild — a dozen times in a session for the same one, in the log.
+    /// Remembered here so a failure is asked about again later, not at once.
+    /// </summary>
+    private readonly ConcurrentDictionary<string, DateTime> _linkPreviewImageFailures = new();
+
+    /// <summary>A site that answered "no" (a 4xx) is unlikely to change its mind soon; a connection that failed may well work in a minute.</summary>
+    private static readonly TimeSpan LinkPreviewRetryAfterRefusal = TimeSpan.FromMinutes(30);
+    private static readonly TimeSpan LinkPreviewRetryAfterFailure = TimeSpan.FromMinutes(1);
+
+    private bool LinkPreviewImageRecentlyFailed(string url) =>
+        _linkPreviewImageFailures.TryGetValue(url, out var retryNotBefore) && DateTime.UtcNow < retryNotBefore;
+
+    private void RememberLinkPreviewImageFailure(string url, Exception failure)
+    {
+        // The core words a refusal by a website "(HTTP 403)" — see fetch_external_bytes.
+        var refused = failure is MattermostServiceException && failure.Message.Contains("(HTTP 4", StringComparison.Ordinal);
+        if (_linkPreviewImageFailures.Count > 500)
+        {
+            _linkPreviewImageFailures.Clear();
+        }
+        _linkPreviewImageFailures[url] = DateTime.UtcNow + (refused ? LinkPreviewRetryAfterRefusal : LinkPreviewRetryAfterFailure);
+    }
+
     /// <summary>Same shape as GetAvatarBitmapAsync, for a link preview's og:image — cached per source URL rather than per user id.</summary>
     private async Task<Bitmap?> GetLinkPreviewImageBitmapAsync(string url)
     {
         if (_linkPreviewImageCache.TryGet(url, out var cached))
         {
             return cached;
+        }
+        if (LinkPreviewImageRecentlyFailed(url))
+        {
+            return null;
         }
         await _imageFetchThrottle.WaitAsync();
         try
@@ -3510,6 +3823,7 @@ public partial class MainViewModel : ViewModelBase
         {
             // That one preview just shows without an image.
             CrashLogger.Write($"link preview: gave up on {url}", ex);
+            RememberLinkPreviewImageFailure(url, ex);
             return null;
         }
         finally
@@ -3822,10 +4136,12 @@ public partial class MainViewModel : ViewModelBase
     private void CloseThread()
     {
         _openThreadRootId = null;
+        _openThreadChannelId = null;
         IsThreadOpen = false;
         ThreadRootMessage = null;
         ThreadReplies.Clear();
         _lastRenderedThreadKeys = [];
+        _lastRenderedThreadRootKey = "";
     }
 
     private async Task<bool> TryPaintThreadFromCacheAsync(string rootId)
@@ -3900,6 +4216,9 @@ public partial class MainViewModel : ViewModelBase
         // The root never counts as a continuation of anything — it's always
         // shown with its own full header, visually separate from the reply list.
         ThreadRootMessage = ToMessageItem(posts[0], previous: null, dayBefore: null);
+        _lastRenderedThreadRootKey = RenderKey(posts[0]);
+        // The thread's own posts say which channel it is in, whatever the sidebar points at.
+        _openThreadChannelId = posts[0].ChannelId;
 
         // Same reconciliation as the main message list, for the same two
         // reasons: not rebuilding every reply when one arrives, and being
@@ -3989,7 +4308,7 @@ public partial class MainViewModel : ViewModelBase
 
             try
             {
-                _channelAliases = await _service.GetCachedChannelAliasesAsync();
+                _channelAliases = new(await _service.GetCachedChannelAliasesAsync());
             }
             catch
             {
@@ -4087,7 +4406,7 @@ public partial class MainViewModel : ViewModelBase
 
         try
         {
-            _channelAliases = await _service.GetChannelAliasesAsync(_session.BaseUrl, _session.Token, _session.User.Id);
+            _channelAliases = new(await _service.GetChannelAliasesAsync(_session.BaseUrl, _session.Token, _session.User.Id));
         }
         catch
         {
@@ -4397,7 +4716,7 @@ public partial class MainViewModel : ViewModelBase
 
         if (alias.Length == 0)
         {
-            _channelAliases.Remove(channelId);
+            _channelAliases.TryRemove(channelId, out _);
         }
         else
         {
@@ -4986,6 +5305,27 @@ public partial class MainViewModel : ViewModelBase
                     Messages[i].IsPinned = ordered[i].IsPinned;
                 }
             }
+
+            // A thread that gained replies: someone answered a message already
+            // on screen, and its "N réponses" has to follow. Judged here rather
+            // than through the render key, and only ever upwards: the count the
+            // network gives and the count the cache derives (from the replies it
+            // happens to hold) can differ, and letting them overwrite one another
+            // would make the figure flip each time the list is repainted from
+            // the other source.
+            for (var i = 0; i < keptCount; i++)
+            {
+                var replies = (int)ordered[i].ReplyCount;
+                if (replies > Messages[i].ThreadReplyCount)
+                {
+                    if (!announced)
+                    {
+                        MessageRowsChanging?.Invoke(this, EventArgs.Empty);
+                        announced = true;
+                    }
+                    Messages[i].ThreadReplyCount = replies;
+                }
+            }
         }
         else
         {
@@ -5079,8 +5419,11 @@ public partial class MainViewModel : ViewModelBase
             post.Metadata.Reactions
                 .Select(r => $"{r.EmojiName}={r.UserId}")
                 .OrderBy(r => r, StringComparer.Ordinal));
-        return $"{post.Id}{post.EditAt}{reactions}{(post.IsPinned ? 1 : 0)}";
+        return string.Join(KeySeparator, post.Id, post.EditAt, reactions, post.IsPinned ? 1 : 0);
     }
+
+    /// <summary>The character the parts of a render key are joined with (a control character, which no id, emoji name or user id can hold).</summary>
+    private const char KeySeparator = '\u0001';
 
     private static string PostIdOfKey(string key) => PartOfKey(key, 0);
     private static string EditPartOfKey(string key) => PartOfKey(key, 1);
@@ -5089,7 +5432,7 @@ public partial class MainViewModel : ViewModelBase
 
     private static string PartOfKey(string key, int index)
     {
-        var parts = key.Split('');
+        var parts = key.Split(KeySeparator);
         return index < parts.Length ? parts[index] : "";
     }
 
@@ -5292,7 +5635,7 @@ public partial class MainViewModel : ViewModelBase
         const int maxLength = 120;
         var plain = MessageTextParser.ToPlainText(text);
         var singleLine = string.Join(' ', plain.Split('\n', StringSplitOptions.RemoveEmptyEntries)).Trim();
-        return singleLine.Length > maxLength ? singleLine[..maxLength].TrimEnd() + "…" : singleLine;
+        return singleLine.Length > maxLength ? TextTruncation.Head(singleLine, maxLength).TrimEnd() + "…" : singleLine;
     }
 
     private static string AvatarColorFor(string userId)
@@ -5300,8 +5643,11 @@ public partial class MainViewModel : ViewModelBase
         var hash = 0;
         foreach (var ch in userId)
         {
-            hash = hash * 31 + ch;
+            hash = unchecked(hash * 31 + ch);
         }
-        return AvatarPalette[Math.Abs(hash) % AvatarPalette.Length];
+        // Math.Abs throws on int.MinValue: an id that happened to hash to it
+        // would have crashed every screen showing that person. Everything else
+        // keeps the colour it has always had.
+        return AvatarPalette[hash == int.MinValue ? 0 : Math.Abs(hash) % AvatarPalette.Length];
     }
 }

@@ -278,7 +278,7 @@ internal sealed class WindowsTrayNotifier : IDesktopNotifier
 
     /// <summary>The struct's text fields have fixed capacities, terminator included.</summary>
     private static string Truncate(string value, int max) =>
-        value.Length <= max ? value : value[..(max - 1)] + "…";
+        value.Length <= max ? value : Models.TextTruncation.Head(value, max - 1) + "…";
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
     private struct NOTIFYICONDATAW

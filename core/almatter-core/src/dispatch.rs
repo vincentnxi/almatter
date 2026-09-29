@@ -444,6 +444,14 @@ async fn handle(request_json: &str, db: &'static Mutex<Database>) -> Value {
                     for post in &posts {
                         cache.upsert_post(post)?;
                     }
+                    // A message deleted while nothing was listening is still
+                    // in the cache; the page just fetched is the proof that
+                    // it is gone. See remove_posts_missing_from for how far
+                    // that proof reaches.
+                    let deleted = cache.remove_posts_missing_from(&channel_id, &posts)?;
+                    if deleted > 0 {
+                        crate::db::log("cache", &format!("dropped {deleted} message(s) deleted from channel {channel_id} in the meantime"));
+                    }
                     // Opportunistic, and here rather than on every single
                     // insert: opening a channel is already the moment the
                     // user waits for its contents, and it is the only point
@@ -468,27 +476,19 @@ async fn handle(request_json: &str, db: &'static Mutex<Database>) -> Value {
                 json!({ "users": users })
             })
             .map_err(|e| e.to_string()),
-        Request::GetCachedTeams => db
-            .lock()
-            .expect("cache db mutex poisoned")
+        Request::GetCachedTeams => crate::db::lock(db)
             .cached_teams()
             .map(|teams| json!({ "teams": teams }))
             .map_err(|e| e.to_string()),
-        Request::GetCachedChannels { team_id } => db
-            .lock()
-            .expect("cache db mutex poisoned")
+        Request::GetCachedChannels { team_id } => crate::db::lock(db)
             .cached_channels_for_team(&team_id)
             .map(|channels| json!({ "channels": channels }))
             .map_err(|e| e.to_string()),
-        Request::GetCachedPosts { channel_id } => db
-            .lock()
-            .expect("cache db mutex poisoned")
+        Request::GetCachedPosts { channel_id } => crate::db::lock(db)
             .cached_posts_for_channel(&channel_id)
             .map(|posts| json!({ "posts": posts }))
             .map_err(|e| e.to_string()),
-        Request::GetCachedUsers { user_ids } => db
-            .lock()
-            .expect("cache db mutex poisoned")
+        Request::GetCachedUsers { user_ids } => crate::db::lock(db)
             .cached_users(&user_ids)
             .map(|users| json!({ "users": users }))
             .map_err(|e| e.to_string()),
@@ -514,9 +514,7 @@ async fn handle(request_json: &str, db: &'static Mutex<Database>) -> Value {
                 json!({ "posts": posts })
             })
             .map_err(|e| e.to_string()),
-        Request::GetCachedThread { root_id } => db
-            .lock()
-            .expect("cache db mutex poisoned")
+        Request::GetCachedThread { root_id } => crate::db::lock(db)
             .cached_thread_posts(&root_id)
             .map(|posts| json!({ "posts": posts }))
             .map_err(|e| e.to_string()),
@@ -564,14 +562,12 @@ async fn handle(request_json: &str, db: &'static Mutex<Database>) -> Value {
                 json!({ "posts": posts })
             })
             .map_err(|e| e.to_string()),
-        Request::GetCachedPinnedPosts { channel_id } => db
-            .lock()
-            .expect("cache db mutex poisoned")
+        Request::GetCachedPinnedPosts { channel_id } => crate::db::lock(db)
             .cached_pinned_posts(&channel_id)
             .map(|posts| json!({ "posts": posts }))
             .map_err(|e| e.to_string()),
         Request::GetPost { base_url, token, post_id } => {
-            let cached = db.lock().expect("cache db mutex poisoned").cached_post(&post_id).ok().flatten();
+            let cached = crate::db::lock(db).cached_post(&post_id).ok().flatten();
             match cached {
                 Some(post) => Ok(json!({ "post": post })),
                 None => refetch_post_into_cache(&MattermostClient::new(base_url).with_token(token), db, &post_id).await,
@@ -605,9 +601,7 @@ async fn handle(request_json: &str, db: &'static Mutex<Database>) -> Value {
                 json!({ "emoji": emoji })
             })
             .map_err(|e| e.to_string()),
-        Request::GetCachedCustomEmoji => db
-            .lock()
-            .expect("cache db mutex poisoned")
+        Request::GetCachedCustomEmoji => crate::db::lock(db)
             .cached_custom_emoji()
             .map(|emoji| json!({ "emoji": emoji }))
             .map_err(|e| e.to_string()),
@@ -642,7 +636,7 @@ async fn handle(request_json: &str, db: &'static Mutex<Database>) -> Value {
                 // message for FlushOutbox to retry once connectivity returns.
                 Err(_) => {
                     let created_at = chrono::Utc::now().timestamp_millis();
-                    let cache = db.lock().expect("cache db mutex poisoned");
+                    let cache = crate::db::lock(db);
                     match SyncEngine::new(&cache).enqueue_outbox_message(
                         &local_id,
                         &channel_id,
@@ -695,7 +689,7 @@ async fn handle(request_json: &str, db: &'static Mutex<Database>) -> Value {
             }
         }
         Request::GetCachedOutbox => {
-            let cache = db.lock().expect("cache db mutex poisoned");
+            let cache = crate::db::lock(db);
             SyncEngine::new(&cache)
                 .pending_messages()
                 .map(|items| json!({ "items": items }))
@@ -703,13 +697,19 @@ async fn handle(request_json: &str, db: &'static Mutex<Database>) -> Value {
         }
         Request::FlushOutbox { base_url, token } => {
             let pending = {
-                let cache = db.lock().expect("cache db mutex poisoned");
+                let cache = crate::db::lock(db);
                 SyncEngine::new(&cache).pending_messages()
             };
             match pending {
                 Ok(pending) => {
                     let client = MattermostClient::new(base_url).with_token(token);
                     let mut flushed = 0;
+                    // Set when the queue stopped because the server refused the
+                    // session token. Everything stays queued for after the next
+                    // sign-in; it is reported below only so the app can hear of
+                    // it now — otherwise a message typed after the session died
+                    // would sit in the queue until the next presence check.
+                    let mut session_expired = false;
                     for item in pending {
                         // A send that timed out, or lost the connection
                         // before its answer arrived, may well have reached
@@ -731,7 +731,10 @@ async fn handle(request_json: &str, db: &'static Mutex<Database>) -> Value {
                             Err(e) if e.is_permanent_rejection() => {}
                             // Still offline — whether it landed can't be
                             // known yet, so it must not be sent blind.
-                            Err(_) => break,
+                            Err(e) => {
+                                session_expired = matches!(e, ApiError::SessionExpired);
+                                break;
+                            }
                         }
                         match client.create_post(&item.channel_id, &item.message, item.root_id.as_deref(), &[], &item.local_id).await {
                             Ok(post) => {
@@ -751,17 +754,22 @@ async fn handle(request_json: &str, db: &'static Mutex<Database>) -> Value {
                             // fault — stop here and give the whole queue another
                             // chance next tick instead of silently discarding
                             // messages the user actually typed.
-                            Err(_) => break,
+                            Err(e) => {
+                                session_expired = matches!(e, ApiError::SessionExpired);
+                                break;
+                            }
                         }
                     }
-                    Ok(json!({ "flushed": flushed }))
+                    if session_expired {
+                        Err(ApiError::SessionExpired.to_string())
+                    } else {
+                        Ok(json!({ "flushed": flushed }))
+                    }
                 }
                 Err(e) => Err(e.to_string()),
             }
         }
-        Request::SearchCachedMessages { query } => db
-            .lock()
-            .expect("cache db mutex poisoned")
+        Request::SearchCachedMessages { query } => crate::db::lock(db)
             .search_posts(&query, 50)
             .map(|posts| json!({ "posts": posts }))
             .map_err(|e| e.to_string()),
@@ -796,7 +804,7 @@ async fn handle(request_json: &str, db: &'static Mutex<Database>) -> Value {
         // Both queues in one answer: the UI drains them on the same tick, and
         // a second round trip per poll would buy nothing.
         Request::GetAndClearMentionEvents => {
-            let cache = db.lock().expect("cache db mutex poisoned");
+            let cache = crate::db::lock(db);
             cache
                 .drain_mention_events()
                 .and_then(|events| Ok((events, cache.drain_reaction_events()?)))
@@ -818,8 +826,7 @@ async fn handle(request_json: &str, db: &'static Mutex<Database>) -> Value {
             // linger well after someone's actually stopped.
             const TYPING_TTL_MILLIS: i64 = 6000;
             let now = chrono::Utc::now().timestamp_millis();
-            db.lock()
-                .expect("cache db mutex poisoned")
+            crate::db::lock(db)
                 .typing_users_for_channel(&channel_id, now, TYPING_TTL_MILLIS)
                 .map(|user_ids| json!({ "user_ids": user_ids }))
                 .map_err(|e| e.to_string())
@@ -854,9 +861,7 @@ async fn handle(request_json: &str, db: &'static Mutex<Database>) -> Value {
                 json!({ "channel_ids": ids })
             })
             .map_err(|e| e.to_string()),
-        Request::GetCachedFavorites => db
-            .lock()
-            .expect("cache db mutex poisoned")
+        Request::GetCachedFavorites => crate::db::lock(db)
             .cached_favorite_channel_ids()
             .map(|ids| json!({ "channel_ids": ids }))
             .map_err(|e| e.to_string()),
@@ -879,9 +884,7 @@ async fn handle(request_json: &str, db: &'static Mutex<Database>) -> Value {
                 json!({ "aliases": aliases_to_json(aliases) })
             })
             .map_err(|e| e.to_string()),
-        Request::GetCachedChannelAliases => db
-            .lock()
-            .expect("cache db mutex poisoned")
+        Request::GetCachedChannelAliases => crate::db::lock(db)
             .cached_channel_aliases()
             .map(|aliases| json!({ "aliases": aliases_to_json(aliases) }))
             .map_err(|e| e.to_string()),
@@ -927,9 +930,7 @@ async fn handle(request_json: &str, db: &'static Mutex<Database>) -> Value {
                 Err(e) => Err(e.to_string()),
             }
         }
-        Request::GetCachedChannelMembers { channel_id } => db
-            .lock()
-            .expect("cache db mutex poisoned")
+        Request::GetCachedChannelMembers { channel_id } => crate::db::lock(db)
             .cached_channel_participants(&channel_id)
             .map(|user_ids| json!({ "user_ids": user_ids }))
             .map_err(|e| e.to_string()),
@@ -959,33 +960,13 @@ async fn handle(request_json: &str, db: &'static Mutex<Database>) -> Value {
             .await
             .map(|()| json!({ "joined": true }))
             .map_err(|e| e.to_string()),
-        Request::GetChannelRevision { channel_id } => db
-            .lock()
-            .expect("cache db mutex poisoned")
+        Request::GetChannelRevision { channel_id } => crate::db::lock(db)
             .channel_revision(&channel_id)
-            .map(|r| {
-                json!({
-                    "count": r.posts,
-                    "last_create_at": r.last_create_at,
-                    "last_edit_at": r.last_edit_at,
-                    "reactions": r.reactions,
-                    "last_reaction_seq": r.last_reaction_seq
-                })
-            })
+            .map(|r| revision_json(&r))
             .map_err(|e| e.to_string()),
-        Request::GetThreadRevision { root_id } => db
-            .lock()
-            .expect("cache db mutex poisoned")
+        Request::GetThreadRevision { root_id } => crate::db::lock(db)
             .thread_revision(&root_id)
-            .map(|r| {
-                json!({
-                    "count": r.posts,
-                    "last_create_at": r.last_create_at,
-                    "last_edit_at": r.last_edit_at,
-                    "reactions": r.reactions,
-                    "last_reaction_seq": r.last_reaction_seq
-                })
-            })
+            .map(|r| revision_json(&r))
             .map_err(|e| e.to_string()),
         Request::SearchTeamUsers { base_url, token, team_id, term } => MattermostClient::new(base_url)
             .with_token(token)
@@ -1009,16 +990,34 @@ async fn handle(request_json: &str, db: &'static Mutex<Database>) -> Value {
     }
 }
 
+/// A channel's (or thread's) fingerprint as the app reads it. Every field of
+/// `ChannelRevision` has to be in here: the app compares them all, and one
+/// left out is a kind of change the poll can never see. `pinned` was — it was
+/// computed, tested and then never sent, so a colleague pinning or unpinning a
+/// message stayed invisible until the channel was reopened.
+fn revision_json(r: &crate::db::ChannelRevision) -> Value {
+    json!({
+        "count": r.posts,
+        "last_create_at": r.last_create_at,
+        "last_edit_at": r.last_edit_at,
+        "reactions": r.reactions,
+        "last_reaction_seq": r.last_reaction_seq,
+        "pinned": r.pinned,
+    })
+}
+
 /// Best-effort cache write: a failure here (disk full, odd permissions)
 /// should never take down a successful network response.
 fn cache_write(db: &Mutex<Database>, f: impl FnOnce(&Database) -> rusqlite::Result<()>) {
-    let cache = db.lock().expect("cache db mutex poisoned");
+    let cache = crate::db::lock(db);
     // One transaction for the whole write instead of one implicit,
     // separately-committed transaction per statement `f` issues (e.g. one
     // per post when caching a channel's worth of messages) — see
     // Database::in_transaction.
     if let Err(e) = cache.in_transaction(|| f(&cache)) {
-        eprintln!("almatter-core: failed to update local cache: {e}");
+        // Into core.log rather than stderr: a WinExe has no console, so a
+        // failed cache write printed there was seen by no one.
+        crate::db::log("cache", &format!("failed to update local cache: {e}"));
     }
 }
 
@@ -1068,9 +1067,7 @@ pub(crate) async fn refresh_team_channels(
     };
 
     if !merged {
-        let previously_cached: std::collections::HashMap<String, crate::models::Channel> = db
-            .lock()
-            .expect("cache db mutex poisoned")
+        let previously_cached: std::collections::HashMap<String, crate::models::Channel> = crate::db::lock(db)
             .cached_channels_for_team(team_id)
             .unwrap_or_default()
             .into_iter()
@@ -1088,6 +1085,16 @@ pub(crate) async fn refresh_team_channels(
     cache_write(db, |cache| {
         for channel in &channels {
             cache.upsert_channel(channel)?;
+        }
+        // The list is the server's whole answer, so a channel missing from it
+        // is one this user is no longer in. An empty answer is not trusted to
+        // mean that: it is far likelier a hiccup than a user with no channels.
+        if !channels.is_empty() {
+            let listed: Vec<String> = channels.iter().map(|c| c.id.clone()).collect();
+            let removed = cache.remove_channels_not_in(team_id, &listed)?;
+            if removed > 0 {
+                crate::db::log("cache", &format!("dropped {removed} channel(s) the server no longer lists for team {team_id}"));
+            }
         }
         Ok(())
     });
@@ -1278,7 +1285,25 @@ async fn write_atomically(path: std::path::PathBuf, bytes: Vec<u8>) -> Result<()
         let n = COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let tmp_path = path.with_extension(format!("tmp-{}-{n}", std::process::id()));
         std::fs::write(&tmp_path, &bytes).map_err(|e| e.to_string())?;
-        std::fs::rename(&tmp_path, &path).map_err(|e| e.to_string())
+        match std::fs::rename(&tmp_path, &path) {
+            Ok(()) => Ok(()),
+            Err(e) => {
+                // Nothing may be left behind either way.
+                let _ = std::fs::remove_file(&tmp_path);
+                // Windows refuses to rename over a file another handle has
+                // open — and the file at `path` is being decoded, by the app
+                // itself, the moment the first of two concurrent downloads of
+                // the same picture lands ("Accès refusé (os error 5)", seen
+                // in the log on a link preview). A complete file already
+                // being there is exactly what this call was after, so the
+                // loser of that race has nothing to report.
+                if path.exists() {
+                    Ok(())
+                } else {
+                    Err(e.to_string())
+                }
+            }
+        }
     })
     .await
     .map_err(|e| e.to_string())?
@@ -1298,12 +1323,44 @@ async fn write_atomically(path: std::path::PathBuf, bytes: Vec<u8>) -> Result<()
 /// to `fallback` (the file id, at the call site) for a name that's empty
 /// or made entirely of "." / ".." segments (`file_name()` returns `None`
 /// for those).
+///
+/// A name that is safe as a path segment can still be one Windows won't create
+/// a file under: another platform's users attach files called "Bilan: T3?.pdf"
+/// or "notes." freely, and then opening one here failed outright — "the
+/// filename, directory name, or volume label syntax is incorrect" — after the
+/// download had already succeeded. So the characters Windows refuses become
+/// underscores, trailing dots and spaces (which it silently strips) go, and
+/// the names it reserves for devices ("con", "nul.txt", "COM1") get an
+/// underscore in front. The message keeps showing the original name; only the
+/// file on disk is renamed.
 fn sanitize_file_name(file_name: &str, fallback: &str) -> String {
-    std::path::Path::new(file_name)
+    let Some(base) = std::path::Path::new(file_name)
         .file_name()
         .map(|n| n.to_string_lossy().to_string())
         .filter(|n| !n.is_empty())
-        .unwrap_or_else(|| fallback.to_string())
+    else {
+        return fallback.to_string();
+    };
+
+    let cleaned: String = base
+        .chars()
+        .map(|c| if c.is_control() || "<>:\"/\\|?*".contains(c) { '_' } else { c })
+        .collect();
+    let cleaned = cleaned.trim_end_matches(['.', ' ']);
+    if cleaned.is_empty() {
+        return fallback.to_string();
+    }
+
+    let stem = cleaned.split('.').next().unwrap_or(cleaned).to_ascii_uppercase();
+    let is_device_name = matches!(stem.as_str(), "CON" | "PRN" | "AUX" | "NUL")
+        || (stem.len() == 4
+            && (stem.starts_with("COM") || stem.starts_with("LPT"))
+            && stem.ends_with(|c: char| ('1'..='9').contains(&c)));
+    if is_device_name {
+        format!("_{cleaned}")
+    } else {
+        cleaned.to_string()
+    }
 }
 
 async fn ensure_file_cached(
@@ -2035,5 +2092,266 @@ mod tests {
         assert!(response.contains(r#""ok":true"#));
 
         assert!(db.lock().unwrap().cached_posts_for_channel("c1").unwrap().is_empty());
+    }
+
+    /// The fingerprint the poll compares has to carry the pin count — it was
+    /// computed and tested, then left out of the answer, so a colleague's pin
+    /// went unseen until the channel was reopened.
+    #[tokio::test]
+    async fn the_channel_and_thread_revisions_carry_the_pin_count() {
+        use crate::models::Post;
+
+        let db = test_db();
+        for (id, root_id, is_pinned) in [("p1", "", true), ("p2", "p1", false), ("p3", "", true)] {
+            db.lock().unwrap().upsert_post(&Post {
+                id: id.into(),
+                channel_id: "c1".into(),
+                root_id: root_id.into(),
+                user_id: "u1".into(),
+                message: "hello".into(),
+                create_at: 1000,
+                reply_count: 0,
+                edit_at: 0,
+                is_pinned,
+                metadata: Default::default(),
+            })
+            .unwrap();
+        }
+
+        let channel = dispatch(r#"{"command":"get_channel_revision","channel_id":"c1"}"#, db).await;
+        assert!(channel.contains(r#""pinned":2"#), "{channel}");
+
+        let thread = dispatch(r#"{"command":"get_thread_revision","root_id":"p1"}"#, db).await;
+        assert!(thread.contains(r#""pinned":1"#), "{thread}");
+    }
+
+    /// Opening a channel is the one moment the app learns what was deleted
+    /// while it wasn't listening: the message must leave the cache, or the
+    /// next poll paints it straight back.
+    #[tokio::test]
+    async fn get_posts_forgets_a_message_deleted_in_the_meantime() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let db = test_db();
+        let post = |id: &str, at: i64| serde_json::json!({
+            "id": id, "channel_id": "c1", "user_id": "u1", "message": id, "create_at": at
+        });
+
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/api/v4/channels/c1/posts"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "order": ["p3", "p2", "p1"],
+                "posts": { "p1": post("p1", 1_000), "p2": post("p2", 2_000), "p3": post("p3", 100_000) }
+            })))
+            .mount(&server)
+            .await;
+        let get_posts = format!(r#"{{"command":"get_posts","base_url":"{}","token":"tok","channel_id":"c1"}}"#, server.uri());
+
+        // The cache still holds a message someone deleted meanwhile.
+        db.lock()
+            .unwrap()
+            .upsert_post(&crate::models::Post {
+                id: "ghost".into(),
+                channel_id: "c1".into(),
+                root_id: "".into(),
+                user_id: "u1".into(),
+                message: "deleted on the server".into(),
+                create_at: 1_500,
+                reply_count: 0,
+                edit_at: 0,
+                is_pinned: false,
+                metadata: Default::default(),
+            })
+            .unwrap();
+
+        let response = dispatch(&get_posts, db).await;
+        assert!(response.contains(r#""ok":true"#), "{response}");
+
+        let cached: Vec<String> = db.lock().unwrap().cached_posts_for_channel("c1").unwrap().into_iter().map(|p| p.id).collect();
+        assert_eq!(cached, vec!["p1", "p2", "p3"], "the deleted message must be gone from the cache");
+    }
+
+    /// The sidebar repaints from the cache, so a channel the server stopped
+    /// listing has to leave the cache too, or it comes straight back.
+    #[tokio::test]
+    async fn get_channels_forgets_a_channel_the_user_has_left() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let db = test_db();
+        let both = serde_json::json!([
+            { "id": "c1", "team_id": "t1", "name": "general", "display_name": "General", "type": "O" },
+            { "id": "c2", "team_id": "t1", "name": "old-news", "display_name": "Old news", "type": "O" },
+            { "id": "dm1", "team_id": "", "name": "u1__u2", "display_name": "", "type": "D" }
+        ]);
+        let only_general_and_dm = serde_json::json!([
+            { "id": "c1", "team_id": "t1", "name": "general", "display_name": "General", "type": "O" },
+            { "id": "dm1", "team_id": "", "name": "u1__u2", "display_name": "", "type": "D" }
+        ]);
+
+        for (listing, expect_old_news) in [(both, true), (only_general_and_dm, false)] {
+            let server = MockServer::start().await;
+            Mock::given(method("GET"))
+                .and(path("/api/v4/users/me/teams/t1/channels"))
+                .respond_with(ResponseTemplate::new(200).set_body_json(&listing))
+                .mount(&server)
+                .await;
+            Mock::given(method("GET"))
+                .and(path("/api/v4/users/me/teams/t1/channels/members"))
+                .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
+                .mount(&server)
+                .await;
+
+            let response = dispatch(
+                &format!(r#"{{"command":"get_channels","base_url":"{}","token":"tok","team_id":"t1"}}"#, server.uri()),
+                db,
+            )
+            .await;
+            assert!(response.contains(r#""ok":true"#), "{response}");
+
+            let cached = dispatch(r#"{"command":"get_cached_channels","team_id":"t1"}"#, db).await;
+            assert_eq!(cached.contains("old-news"), expect_old_news, "{cached}");
+            assert!(cached.contains("general") && cached.contains("dm1"), "{cached}");
+        }
+    }
+
+    /// An empty list from the server is far likelier a hiccup than a user who
+    /// belongs to nothing: it must not empty the cache.
+    #[tokio::test]
+    async fn an_empty_channel_list_does_not_empty_the_cache() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let db = test_db();
+        db.lock()
+            .unwrap()
+            .upsert_channel(&crate::models::Channel {
+                id: "c1".into(),
+                team_id: "t1".into(),
+                name: "general".into(),
+                display_name: "General".into(),
+                channel_type: crate::models::ChannelType::Public,
+                total_msg_count: 0,
+                last_post_at: 0,
+                msg_count: 0,
+                mention_count: 0,
+                is_muted: false,
+            })
+            .unwrap();
+
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/api/v4/users/me/teams/t1/channels"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/api/v4/users/me/teams/t1/channels/members"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
+            .mount(&server)
+            .await;
+
+        dispatch(
+            &format!(r#"{{"command":"get_channels","base_url":"{}","token":"tok","team_id":"t1"}}"#, server.uri()),
+            db,
+        )
+        .await;
+
+        assert_eq!(db.lock().unwrap().cached_channels_for_team("t1").unwrap().len(), 1);
+    }
+
+    /// A dead session token stops the outbox — everything stays queued for
+    /// after the next sign-in — and the answer says so, so the app hears of it
+    /// at once instead of at the next presence check.
+    #[tokio::test]
+    async fn flush_outbox_keeps_everything_queued_and_reports_a_refused_session() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let db = test_db();
+        dispatch(
+            r#"{"command":"send_message","base_url":"http://127.0.0.1:1","token":"x",
+                "channel_id":"c1","root_id":null,"local_id":"local-1","message":"hello"}"#,
+            db,
+        )
+        .await;
+
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/api/v4/channels/c1/posts"))
+            .respond_with(ResponseTemplate::new(401).set_body_json(serde_json::json!({ "message": "Invalid or expired session" })))
+            .mount(&server)
+            .await;
+
+        let response = dispatch(
+            &format!(r#"{{"command":"flush_outbox","base_url":"{}","token":"stale"}}"#, server.uri()),
+            db,
+        )
+        .await;
+        assert!(response.contains(r#""ok":false"#), "{response}");
+        assert!(response.contains("Your session has expired"), "{response}");
+
+        let outbox = dispatch(r#"{"command":"get_cached_outbox"}"#, db).await;
+        assert!(outbox.contains("local-1"), "a refused session must not drop what the user typed: {outbox}");
+    }
+
+    /// Names other platforms allow and Windows refuses: opening such an
+    /// attachment failed after it had downloaded.
+    #[test]
+    fn sanitize_file_name_makes_names_windows_will_create() {
+        assert_eq!(sanitize_file_name("Bilan: T3?.pdf", "f1"), "Bilan_ T3_.pdf");
+        assert_eq!(sanitize_file_name("a<b>c|d\"e*f.txt", "f1"), "a_b_c_d_e_f.txt");
+        assert_eq!(sanitize_file_name("notes.", "f1"), "notes");
+        assert_eq!(sanitize_file_name("rapport   ", "f1"), "rapport");
+        assert_eq!(sanitize_file_name("tab\there.txt", "f1"), "tab_here.txt");
+        assert_eq!(sanitize_file_name("...", "f1"), "f1", "nothing usable left: fall back to the id");
+        assert_eq!(sanitize_file_name("???", "f1"), "___", "question marks are only replaced");
+        // Names Windows keeps for devices, with or without an extension.
+        assert_eq!(sanitize_file_name("con", "f1"), "_con");
+        assert_eq!(sanitize_file_name("NUL.txt", "f1"), "_NUL.txt");
+        assert_eq!(sanitize_file_name("com1.log", "f1"), "_com1.log");
+        assert_eq!(sanitize_file_name("LPT9", "f1"), "_LPT9");
+        // …but only those: near misses are ordinary names.
+        assert_eq!(sanitize_file_name("console.log", "f1"), "console.log");
+        assert_eq!(sanitize_file_name("com10.txt", "f1"), "com10.txt");
+        assert_eq!(sanitize_file_name("com0.txt", "f1"), "com0.txt");
+        // Accents, spaces and dots inside a name are untouched.
+        assert_eq!(sanitize_file_name("Réunion été 2026.v2.pptx", "f1"), "Réunion été 2026.v2.pptx");
+        // A backslash is a separator on Windows and a plain character elsewhere:
+        // either way, no separator may survive into the name.
+        let name = sanitize_file_name("a\\b.txt", "f1");
+        assert!(!name.contains('\\') && !name.contains('/'), "{name}");
+    }
+
+    /// Two downloads of the same picture at once: the loser must not fail
+    /// because the winner's file is already there — and, on Windows, already
+    /// open, which is what made the rename over it fail with "access denied".
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn writing_over_a_file_that_is_open_elsewhere_is_not_an_error() {
+        use std::os::windows::fs::OpenOptionsExt;
+
+        let dir = std::env::temp_dir().join(format!("almatter-write-test-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let target = dir.join("picture");
+        std::fs::write(&target, b"first").unwrap();
+
+        // Open the way .NET's File.OpenRead does: others may read, none may delete or rename.
+        let holder = std::fs::OpenOptions::new().read(true).share_mode(1 /* FILE_SHARE_READ */).open(&target).unwrap();
+
+        write_atomically(target.clone(), b"second".to_vec())
+            .await
+            .expect("a complete file already being there is not a failure");
+        drop(holder);
+
+        let leftovers: Vec<_> = std::fs::read_dir(&dir)
+            .unwrap()
+            .flatten()
+            .filter(|e| e.file_name().to_string_lossy().contains("tmp-"))
+            .collect();
+        assert!(leftovers.is_empty(), "no temporary file may be left behind: {leftovers:?}");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

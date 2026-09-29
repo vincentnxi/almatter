@@ -98,6 +98,27 @@ static GENERATION: AtomicU64 = AtomicU64::new(0);
 const RECONNECT_MIN: Duration = Duration::from_secs(1);
 const RECONNECT_MAX: Duration = Duration::from_secs(60);
 
+/// How long a connection has to have stayed up for its dropping to count as
+/// "it was working, and something happened" rather than "the server takes us
+/// and hangs up". A server refusing the session token (revoked, expired)
+/// accepts the socket, reads the authentication challenge and closes it: the
+/// connection *opens*, so that alone proves nothing about the credentials.
+const HEALTHY_CONNECTION: Duration = Duration::from_secs(20);
+
+/// The delay before reconnecting after a connection that opened and then
+/// ended. Restarts from the short delay only when it had lived long enough to
+/// have been a real one; otherwise the backoff carries on climbing. Resetting
+/// it every time made a refused token reconnect once a second for as long as
+/// the app stayed open — each attempt with its own round of channel requests,
+/// all refused as well.
+fn backoff_after_drop(current: Duration, lived: Duration) -> Duration {
+    if lived >= HEALTHY_CONNECTION {
+        RECONNECT_MIN
+    } else {
+        current
+    }
+}
+
 /// Mattermost's own clients ping on this cadence, and for the same reason:
 /// servers and the proxies in front of them close connections that look
 /// idle. Without it the socket dies quietly after a few minutes of silence —
@@ -198,14 +219,16 @@ pub fn start(base_url: String, token: String, user_id: String, db: &'static Mute
         // fetch; only a reconnection has a gap of missed events to make up.
         let mut is_reconnect = false;
         loop {
+            let attempt_started = std::time::Instant::now();
             let outcome = run(base_url.clone(), token.clone(), user_id.clone(), db, is_reconnect).await;
             is_reconnect = true;
             match outcome {
                 Ok(Ended::ByRequest) => break,
                 Ok(Ended::Dropped) => {
-                    // It connected and ran, so the server is reachable and
-                    // the credentials work: start over from the short delay.
-                    backoff = RECONNECT_MIN;
+                    // It connected, so the server is reachable — but whether
+                    // the credentials work is only shown by the connection
+                    // staying up. See `backoff_after_drop`.
+                    backoff = backoff_after_drop(backoff, attempt_started.elapsed());
                 }
                 Err(e) => crate::db::log("ws", &format!("connection ended: {e}")),
             }
@@ -292,7 +315,7 @@ async fn run(
     if is_reconnect {
         let client = client.clone();
         tokio::spawn(async move {
-            let teams = db.lock().expect("cache db mutex poisoned").cached_teams().unwrap_or_default();
+            let teams = crate::db::lock(db).cached_teams().unwrap_or_default();
             for team in teams {
                 if let Err(e) = crate::dispatch::refresh_team_channels(&client, db, &team.id).await {
                     crate::db::log("ws", &format!("read-state resync failed for team {}: {e}", team.id));
@@ -391,13 +414,16 @@ async fn handle_event(text: &str, user_id: &str, client: &MattermostClient, db: 
             return;
         }
         // Someone else corrected a message. Without this the old text sat
-        // there, "(modifié)" and all, until the channel was reopened.
+        // there, "(modifié)" and all, until the channel was reopened. Pinning
+        // and unpinning a message go through this same event — the server
+        // treats them as an update of the post — so its pin flag is applied
+        // too, which is what makes a colleague's pin show up live.
         Some("post_edited") => {
             if let Some(post) = envelope.data.as_ref().and_then(|d| d.post.as_deref())
                 .and_then(|json| serde_json::from_str::<Post>(json).ok())
             {
-                let cache = db.lock().expect("cache db mutex poisoned");
-                if let Err(e) = cache.update_post_text(&post.id, &post.message, post.edit_at) {
+                let cache = crate::db::lock(db);
+                if let Err(e) = cache.update_post_text(&post.id, &post.message, post.edit_at, post.is_pinned) {
                     crate::db::log("ws", &format!("failed to apply an edit: {e}"));
                 }
             }
@@ -408,7 +434,7 @@ async fn handle_event(text: &str, user_id: &str, client: &MattermostClient, db: 
             if let Some(post) = envelope.data.as_ref().and_then(|d| d.post.as_deref())
                 .and_then(|json| serde_json::from_str::<Post>(json).ok())
             {
-                let cache = db.lock().expect("cache db mutex poisoned");
+                let cache = crate::db::lock(db);
                 if let Err(e) = cache.delete_post(&post.id) {
                     crate::db::log("ws", &format!("failed to apply a deletion: {e}"));
                 }
@@ -424,7 +450,7 @@ async fn handle_event(text: &str, user_id: &str, client: &MattermostClient, db: 
                 .and_then(|json| serde_json::from_str::<ReactionEvent>(json).ok())
             {
                 {
-                    let cache = db.lock().expect("cache db mutex poisoned");
+                    let cache = crate::db::lock(db);
                     let result = if added {
                         cache.add_cached_reaction(&reaction.post_id, &reaction.emoji_name, &reaction.user_id)
                     } else {
@@ -437,7 +463,7 @@ async fn handle_event(text: &str, user_id: &str, client: &MattermostClient, db: 
                 if added {
                     queue_reaction_notification(&reaction, user_id, client, db).await;
                 } else {
-                    let cache = db.lock().expect("cache db mutex poisoned");
+                    let cache = crate::db::lock(db);
                     if let Err(e) =
                         cache.cancel_reaction_event(&reaction.post_id, &reaction.user_id, &reaction.emoji_name)
                     {
@@ -461,7 +487,7 @@ async fn handle_event(text: &str, user_id: &str, client: &MattermostClient, db: 
                 .into_iter()
                 .chain(data.channel_times.iter().flat_map(|times| times.keys().map(String::as_str)))
                 .collect();
-            let cache = db.lock().expect("cache db mutex poisoned");
+            let cache = crate::db::lock(db);
             for channel_id in viewed {
                 if let Err(e) = cache.mark_channel_read(channel_id) {
                     crate::db::log("ws", &format!("failed to apply a channel view: {e}"));
@@ -476,7 +502,7 @@ async fn handle_event(text: &str, user_id: &str, client: &MattermostClient, db: 
             let data = envelope.data.as_ref();
             if let (Some(channel_id), Some(msg_count)) = (channel_id, data.and_then(|d| d.msg_count)) {
                 let mention_count = data.and_then(|d| d.mention_count).unwrap_or(0);
-                let cache = db.lock().expect("cache db mutex poisoned");
+                let cache = crate::db::lock(db);
                 if let Err(e) = cache.set_channel_read_state(channel_id, msg_count, mention_count) {
                     crate::db::log("ws", &format!("failed to apply a mark-unread: {e}"));
                 }
@@ -503,9 +529,9 @@ async fn handle_event(text: &str, user_id: &str, client: &MattermostClient, db: 
     };
 
     let author_already_cached = {
-        let cache = db.lock().expect("cache db mutex poisoned");
+        let cache = crate::db::lock(db);
         if let Err(e) = cache.upsert_post(&post) {
-            eprintln!("almatter-core: failed to cache a live post: {e}");
+            crate::db::log("ws", &format!("failed to cache a live post: {e}"));
         }
         // Reply counts are computed live from the posts table on every read
         // (see Database::cached_posts_for_channel), so a newly-cached reply
@@ -515,7 +541,7 @@ async fn handle_event(text: &str, user_id: &str, client: &MattermostClient, db: 
 
     if !author_already_cached {
         if let Ok(users) = client.get_users_by_ids(std::slice::from_ref(&post.user_id)).await {
-            let cache = db.lock().expect("cache db mutex poisoned");
+            let cache = crate::db::lock(db);
             for user in &users {
                 let _ = cache.upsert_user(user);
             }
@@ -534,7 +560,7 @@ async fn handle_event(text: &str, user_id: &str, client: &MattermostClient, db: 
     // (from here or another device) moves the conversation up too, just
     // without making it unread.
     {
-        let cache = db.lock().expect("cache db mutex poisoned");
+        let cache = crate::db::lock(db);
         let own_post = post.user_id == user_id;
         if let Err(e) = cache.bump_channel_activity(&post.channel_id, post.create_at, own_post, mentioned && !own_post) {
             crate::db::log("ws", &format!("failed to bump channel activity: {e}"));
@@ -550,7 +576,7 @@ async fn handle_event(text: &str, user_id: &str, client: &MattermostClient, db: 
         if personal {
             crate::db::log("ws", &format!("personal message detected in channel {}", post.channel_id));
         }
-        let cache = db.lock().expect("cache db mutex poisoned");
+        let cache = crate::db::lock(db);
         match cache.enqueue_mention_event(&post.id, &post.channel_id, &post.user_id, &post.message, post.create_at, personal) {
             Ok(()) => {}
             Err(e) => crate::db::log("ws", &format!("failed to queue notification: {e}")),
@@ -578,7 +604,7 @@ async fn addresses_user(post: &Post, user_id: &str, client: &MattermostClient, d
 
 async fn author_of(post_id: &str, client: &MattermostClient, db: &'static Mutex<Database>) -> Option<String> {
     let cached = {
-        let cache = db.lock().expect("cache db mutex poisoned");
+        let cache = crate::db::lock(db);
         cache.cached_post(post_id).ok().flatten()
     };
     match cached {
@@ -625,7 +651,7 @@ async fn queue_reaction_notification(
     }
 
     let cached = {
-        let cache = db.lock().expect("cache db mutex poisoned");
+        let cache = crate::db::lock(db);
         cache.cached_post(&reaction.post_id).ok().flatten()
     };
     let post = match cached {
@@ -646,19 +672,19 @@ async fn queue_reaction_notification(
     // from the cache — so someone never seen here before has to be fetched,
     // exactly as a live post's unknown author is.
     let reactor_cached = {
-        let cache = db.lock().expect("cache db mutex poisoned");
+        let cache = crate::db::lock(db);
         cache.cached_user(&reaction.user_id).ok().flatten().is_some()
     };
     if !reactor_cached {
         if let Ok(users) = client.get_users_by_ids(std::slice::from_ref(&reaction.user_id)).await {
-            let cache = db.lock().expect("cache db mutex poisoned");
+            let cache = crate::db::lock(db);
             for user in &users {
                 let _ = cache.upsert_user(user);
             }
         }
     }
 
-    let cache = db.lock().expect("cache db mutex poisoned");
+    let cache = crate::db::lock(db);
     let queued = cache.enqueue_reaction_event(
         &reaction.post_id,
         &post.channel_id,
@@ -690,7 +716,7 @@ fn handle_typing_event(envelope: &EventEnvelope, user_id: &str, db: &'static Mut
     };
 
     let now = chrono::Utc::now().timestamp_millis();
-    let cache = db.lock().expect("cache db mutex poisoned");
+    let cache = crate::db::lock(db);
     if let Err(e) = cache.record_typing(channel_id, typing_user_id, now) {
         crate::db::log("ws", &format!("failed to record typing: {e}"));
     }
@@ -1207,5 +1233,70 @@ mod tests {
         handle_event(&own_event.to_string(), "me", &client, db).await;
         let typing = db.lock().unwrap().typing_users_for_channel("c1", 9_999_999_999_999, i64::MAX).unwrap();
         assert_eq!(typing, vec!["someone-else".to_string()]);
+    }
+
+    /// Mattermost announces a pin — and an unpin — as a `post_edited` event
+    /// whose only difference is the flag. It has to reach the cache, or a
+    /// colleague pinning a message never shows up until the channel is reopened.
+    #[tokio::test]
+    async fn handle_event_applies_a_pin_and_an_unpin_from_someone_else() {
+        let db: &'static Mutex<Database> =
+            Box::leak(Box::new(Mutex::new(Database::open_in_memory().unwrap())));
+        let client = MattermostClient::new("http://127.0.0.1:1");
+
+        db.lock()
+            .unwrap()
+            .upsert_post(&Post {
+                id: "p1".into(),
+                channel_id: "c1".into(),
+                root_id: "".into(),
+                user_id: "u1".into(),
+                message: "worth keeping".into(),
+                create_at: 1000,
+                reply_count: 0,
+                edit_at: 0,
+                is_pinned: false,
+                metadata: Default::default(),
+            })
+            .unwrap();
+
+        let pinned = json!({
+            "id": "p1", "channel_id": "c1", "user_id": "u1",
+            "message": "worth keeping", "create_at": 1000, "is_pinned": true
+        });
+        handle_event(
+            &json!({ "event": "post_edited", "data": { "post": pinned.to_string() } }).to_string(),
+            "me",
+            &client,
+            db,
+        )
+        .await;
+        assert_eq!(db.lock().unwrap().cached_pinned_posts("c1").unwrap().len(), 1, "the pin must reach the cache");
+
+        // An unpin arrives with the flag simply absent — the server omits a false one.
+        let unpinned = json!({
+            "id": "p1", "channel_id": "c1", "user_id": "u1", "message": "worth keeping", "create_at": 1000
+        });
+        handle_event(
+            &json!({ "event": "post_edited", "data": { "post": unpinned.to_string() } }).to_string(),
+            "me",
+            &client,
+            db,
+        )
+        .await;
+        assert!(db.lock().unwrap().cached_pinned_posts("c1").unwrap().is_empty(), "and so must the unpin");
+    }
+
+    /// A connection that opens and is closed straight away is what a refused
+    /// session token looks like. It must not send the backoff back to one
+    /// second each time; one that ran for a while is a real connection that
+    /// dropped, and gets the quick retry.
+    #[test]
+    fn a_connection_that_is_closed_at_once_does_not_reset_the_reconnect_delay() {
+        let long_delay = Duration::from_secs(16);
+        assert_eq!(backoff_after_drop(long_delay, Duration::from_millis(300)), long_delay);
+        assert_eq!(backoff_after_drop(long_delay, HEALTHY_CONNECTION - Duration::from_secs(1)), long_delay);
+        assert_eq!(backoff_after_drop(long_delay, HEALTHY_CONNECTION), RECONNECT_MIN);
+        assert_eq!(backoff_after_drop(long_delay, Duration::from_secs(3600)), RECONNECT_MIN);
     }
 }

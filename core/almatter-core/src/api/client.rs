@@ -29,10 +29,22 @@ const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 /// file that keeps arriving is never cut off, however long it takes.
 const READ_TIMEOUT: Duration = Duration::from_secs(30);
 
+/// Who this app says it is. reqwest sends no User-Agent at all by default,
+/// and a good many servers answer a request without one with a flat 403 — the
+/// link-preview pictures of Wikimedia and Politico, among others, never once
+/// loaded for that reason. Wikimedia's rules ask for exactly this: a name and
+/// a version, and where to find whoever is behind it.
+const USER_AGENT: &str = concat!(
+    "Almatter/",
+    env!("CARGO_PKG_VERSION"),
+    " (+https://github.com/vincentnxi/almatter)"
+);
+
 fn shared_http_client() -> reqwest::Client {
     HTTP_CLIENT
         .get_or_init(|| {
             reqwest::Client::builder()
+                .user_agent(USER_AGENT)
                 .connect_timeout(CONNECT_TIMEOUT)
                 .read_timeout(READ_TIMEOUT)
                 .build()
@@ -49,6 +61,7 @@ fn upload_http_client() -> reqwest::Client {
     UPLOAD_HTTP_CLIENT
         .get_or_init(|| {
             reqwest::Client::builder()
+                .user_agent(USER_AGENT)
                 .connect_timeout(CONNECT_TIMEOUT)
                 .build()
                 .unwrap_or_else(|_| reqwest::Client::new())
@@ -82,6 +95,22 @@ pub enum ApiError {
     /// message goes to core.log rather than on screen.
     #[error("The server sent a response this app cannot read ({path}).")]
     UnexpectedResponse { path: String },
+    /// The server refused the session token: it expired, was revoked, or the
+    /// password changed since. Nothing short of signing in again helps, and
+    /// until then every call fails the same way while the app carries on
+    /// showing what it had cached — which looks exactly like a working app
+    /// that has stopped receiving anything.
+    ///
+    /// The wording is matched word for word by the app (CoreErrors.cs), like
+    /// the two above: it answers this one by going back to the sign-in
+    /// screen. Change one, change the other.
+    #[error("Your session has expired. Please sign in again.")]
+    SessionExpired,
+    /// A download that would have been bigger than this app is willing to
+    /// hold in memory — only ever raised for pictures fetched from other
+    /// people's websites, whose size nobody vouches for.
+    #[error("The file is larger than this app will download ({limit_mb} MB).")]
+    TooLarge { limit_mb: usize },
     #[error("{message}")]
     Server { status: u16, message: String },
     #[error("login response did not include a session token")]
@@ -97,6 +126,18 @@ impl ApiError {
             .and_then(|v| v.get("message").and_then(|m| m.as_str()).map(str::to_string))
             .unwrap_or_else(|| format!("The server responded with an unexpected error (HTTP {status})."));
         ApiError::Server { status, message }
+    }
+
+    /// The same for a call made with the session token: a 401 there is the
+    /// server saying the token is no good, not a failed sign-in. `login` and
+    /// downloads from other websites keep `from_response` — a wrong password
+    /// is also a 401, and it has to keep the server's own explanation.
+    fn from_authenticated_response(status: u16, body: String) -> Self {
+        if status == 401 {
+            ApiError::SessionExpired
+        } else {
+            Self::from_response(status, body)
+        }
     }
 
     /// True for a status where retrying the exact same request will never
@@ -436,7 +477,7 @@ impl MattermostClient {
         if !resp.status().is_success() {
             let status = resp.status().as_u16();
             let body = resp.text().await.unwrap_or_default();
-            return Err(ApiError::from_response(status, body));
+            return Err(ApiError::from_authenticated_response(status, body));
         }
         Ok(())
     }
@@ -460,7 +501,7 @@ impl MattermostClient {
         if !resp.status().is_success() {
             let status = resp.status().as_u16();
             let body = resp.text().await.unwrap_or_default();
-            return Err(ApiError::from_response(status, body));
+            return Err(ApiError::from_authenticated_response(status, body));
         }
 
         #[derive(serde::Deserialize)]
@@ -535,7 +576,7 @@ impl MattermostClient {
         if !resp.status().is_success() {
             let status = resp.status().as_u16();
             let body = resp.text().await.unwrap_or_default();
-            return Err(ApiError::from_response(status, body));
+            return Err(ApiError::from_authenticated_response(status, body));
         }
         Ok(())
     }
@@ -579,7 +620,7 @@ impl MattermostClient {
         if !resp.status().is_success() {
             let status = resp.status().as_u16();
             let body = resp.text().await.unwrap_or_default();
-            return Err(ApiError::from_response(status, body));
+            return Err(ApiError::from_authenticated_response(status, body));
         }
         body_bytes(resp).await
     }
@@ -595,7 +636,7 @@ impl MattermostClient {
         if !resp.status().is_success() {
             let status = resp.status().as_u16();
             let body = resp.text().await.unwrap_or_default();
-            return Err(ApiError::from_response(status, body));
+            return Err(ApiError::from_authenticated_response(status, body));
         }
         body_bytes(resp).await
     }
@@ -612,7 +653,7 @@ impl MattermostClient {
         if !resp.status().is_success() {
             let status = resp.status().as_u16();
             let body = resp.text().await.unwrap_or_default();
-            return Err(ApiError::from_response(status, body));
+            return Err(ApiError::from_authenticated_response(status, body));
         }
         body_bytes(resp).await
     }
@@ -730,7 +771,7 @@ impl MattermostClient {
         if !resp.status().is_success() {
             let status = resp.status().as_u16();
             let body = resp.text().await.unwrap_or_default();
-            return Err(ApiError::from_response(status, body));
+            return Err(ApiError::from_authenticated_response(status, body));
         }
         Self::decode_json(path, resp).await
     }
@@ -771,18 +812,50 @@ fn excerpt_around(body: &[u8], line: usize, column: usize) -> String {
     String::from_utf8_lossy(&body[start..end]).into_owned()
 }
 
+/// The most a picture from another website may weigh. Nobody vouches for
+/// what a link's page declares as its image, and the whole body is held in
+/// memory (then decoded, which is heavier still) — a real preview picture is a
+/// few hundred kilobytes, and one past this is not a picture worth showing.
+const MAX_EXTERNAL_BYTES: usize = 12 * 1024 * 1024;
+
+/// The most time such a download may take from start to finish. The read
+/// timeout only measures silence between two pieces, so a server that hands
+/// over one byte every twenty seconds was never cut off — and each such
+/// download holds one of the few image-fetching slots the app has, so three of
+/// them would have stopped every avatar and emoji from loading.
+const EXTERNAL_FETCH_TIMEOUT: Duration = Duration::from_secs(25);
+
 /// Raw bytes from an arbitrary external URL — a link preview's `og:image`,
 /// say. Deliberately a free function rather than a `MattermostClient`
 /// method: the target here is some third-party site, not this Mattermost
 /// server, so it must never carry the session's bearer token.
 pub async fn fetch_external_bytes(url: &str) -> Result<Vec<u8>, ApiError> {
-    let resp = shared_http_client().get(url).send().await?;
+    let mut resp = shared_http_client()
+        .get(url)
+        .header(reqwest::header::ACCEPT, "image/*,*/*;q=0.8")
+        .timeout(EXTERNAL_FETCH_TIMEOUT)
+        .send()
+        .await?;
     if !resp.status().is_success() {
-        let status = resp.status().as_u16();
-        let body = resp.text().await.unwrap_or_default();
-        return Err(ApiError::from_response(status, body));
+        // What a stranger's server sends along with an error is neither worth
+        // reading nor worth holding in memory.
+        return Err(ApiError::from_response(resp.status().as_u16(), String::new()));
     }
-    body_bytes(resp).await
+
+    let limit_mb = MAX_EXTERNAL_BYTES / (1024 * 1024);
+    if resp.content_length().is_some_and(|len| len > MAX_EXTERNAL_BYTES as u64) {
+        return Err(ApiError::TooLarge { limit_mb });
+    }
+    // Piece by piece rather than `bytes()`: the declared length can be absent
+    // or wrong, so the count has to be kept as the body actually arrives.
+    let mut bytes = Vec::new();
+    while let Some(chunk) = resp.chunk().await.map_err(ApiError::Interrupted)? {
+        if bytes.len() + chunk.len() > MAX_EXTERNAL_BYTES {
+            return Err(ApiError::TooLarge { limit_mb });
+        }
+        bytes.extend_from_slice(&chunk);
+    }
+    Ok(bytes)
 }
 
 /// Reads a whole response body. A failure at this point can only be the
@@ -1556,6 +1629,109 @@ mod tests {
         let post = client.get_post("p1").await.expect("post should fetch");
 
         assert_eq!(post.message, "hi");
+    }
+
+    /// A 401 on a call made with the session token means the token is dead —
+    /// but a 401 from `login` is just a wrong password, and keeps the server's
+    /// own explanation. The two must not be mixed up: one sends the user back
+    /// to the sign-in screen, the other must not.
+    #[tokio::test]
+    async fn a_refused_session_token_is_told_apart_from_a_failed_login() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/api/v4/users/me/teams"))
+            .respond_with(ResponseTemplate::new(401).set_body_json(serde_json::json!({
+                "id": "api.context.session_expired.app_error",
+                "message": "Invalid or expired session, please login again."
+            })))
+            .mount(&server)
+            .await;
+        Mock::given(method("DELETE"))
+            .and(path("/api/v4/posts/p1"))
+            .respond_with(ResponseTemplate::new(401))
+            .mount(&server)
+            .await;
+
+        let client = MattermostClient::new(server.uri()).with_token("stale");
+        let err = client.get_teams().await.expect_err("a refused token must fail");
+        assert!(matches!(err, ApiError::SessionExpired), "got {err:?}");
+        assert!(!err.is_permanent_rejection(), "queued messages must survive until the next sign-in");
+        assert_eq!(err.to_string(), "Your session has expired. Please sign in again.");
+
+        let err = client.delete_post("p1").await.expect_err("the other request kinds map it too");
+        assert!(matches!(err, ApiError::SessionExpired), "got {err:?}");
+    }
+
+    /// What a link preview's picture is fetched with: an honest User-Agent —
+    /// Wikimedia and others answer 403 to a request that has none.
+    #[tokio::test]
+    async fn requests_identify_the_app_with_a_user_agent() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/thumb.png"))
+            .and(wiremock::matchers::header_regex("user-agent", r"^Almatter/\d+\.\d+\.\d+ "))
+            .respond_with(ResponseTemplate::new(200).set_body_bytes(vec![1, 2, 3]))
+            .expect(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/api/v4/users/me/teams"))
+            .and(wiremock::matchers::header_regex("user-agent", r"^Almatter/"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let bytes = fetch_external_bytes(&format!("{}/thumb.png", server.uri()))
+            .await
+            .expect("a request with the User-Agent must be answered");
+        assert_eq!(bytes, vec![1, 2, 3]);
+        MattermostClient::new(server.uri()).with_token("t").get_teams().await.unwrap();
+    }
+
+    /// The link's page decides what its picture weighs, and the whole body
+    /// ends up in memory — so past a limit, it is refused, whether or not
+    /// the server was honest about the length up front.
+    #[tokio::test]
+    async fn an_oversized_external_picture_is_refused() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/huge.png"))
+            .respond_with(ResponseTemplate::new(200).set_body_bytes(vec![0u8; MAX_EXTERNAL_BYTES + 1]))
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/exactly-at-the-limit.png"))
+            .respond_with(ResponseTemplate::new(200).set_body_bytes(vec![0u8; MAX_EXTERNAL_BYTES]))
+            .mount(&server)
+            .await;
+
+        let err = fetch_external_bytes(&format!("{}/huge.png", server.uri()))
+            .await
+            .expect_err("a picture over the limit must not be downloaded");
+        assert!(matches!(err, ApiError::TooLarge { .. }), "got {err:?}");
+
+        let bytes = fetch_external_bytes(&format!("{}/exactly-at-the-limit.png", server.uri()))
+            .await
+            .expect("one exactly at the limit is fine");
+        assert_eq!(bytes.len(), MAX_EXTERNAL_BYTES);
+    }
+
+    /// A stranger's server answering with an error keeps its status, and its
+    /// (possibly enormous) error page is never read.
+    #[tokio::test]
+    async fn an_external_error_keeps_its_status_without_reading_the_page() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/blocked.png"))
+            .respond_with(ResponseTemplate::new(403).set_body_string("<html>go away</html>"))
+            .mount(&server)
+            .await;
+
+        let err = fetch_external_bytes(&format!("{}/blocked.png", server.uri()))
+            .await
+            .expect_err("a 403 is a failure");
+        assert!(matches!(err, ApiError::Server { status: 403, .. }), "got {err:?}");
     }
 
     /// Hits a real, live third-party Mattermost server — not run by default.

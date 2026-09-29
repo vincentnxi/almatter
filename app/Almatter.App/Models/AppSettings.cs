@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
 using Almatter.App.Localization;
 using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -51,6 +52,10 @@ public sealed partial class AppSettings : ObservableObject
     [ObservableProperty]
     public partial bool ReducedContrast { get; set; }
 
+    // The three "…CheckBrush" properties are drawing state for the settings
+    // panel, computed from the switches next to them. Without [JsonIgnore]
+    // each was written into settings.json as a serialized brush.
+    [JsonIgnore]
     public IBrush ReducedContrastCheckBrush => ReducedContrast ? ColorTokens.Accent : Brushes.Transparent;
 
     partial void OnReducedContrastChanged(bool value) => OnPropertyChanged(nameof(ReducedContrastCheckBrush));
@@ -81,6 +86,7 @@ public sealed partial class AppSettings : ObservableObject
     [ObservableProperty]
     public partial bool ShowLinkPreviews { get; set; } = true;
 
+    [JsonIgnore]
     public IBrush LinkPreviewsCheckBrush => ShowLinkPreviews ? ColorTokens.Accent : Brushes.Transparent;
 
     partial void OnShowLinkPreviewsChanged(bool value) => OnPropertyChanged(nameof(LinkPreviewsCheckBrush));
@@ -94,6 +100,7 @@ public sealed partial class AppSettings : ObservableObject
     [ObservableProperty]
     public partial bool SoundForAllMessages { get; set; }
 
+    [JsonIgnore]
     public IBrush SoundForAllMessagesCheckBrush => SoundForAllMessages ? ColorTokens.Accent : Brushes.Transparent;
 
     partial void OnSoundForAllMessagesChanged(bool value) => OnPropertyChanged(nameof(SoundForAllMessagesCheckBrush));

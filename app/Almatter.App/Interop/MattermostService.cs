@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
@@ -705,6 +706,17 @@ public sealed class MattermostService
         return data.Posts;
     }
 
+    /// <summary>
+    /// Raised — on whichever thread the call was made — when the server
+    /// refuses the session token: it expired, was revoked, or the password
+    /// changed. Nothing but signing in again helps, and until then every call
+    /// fails while the app shows what it had cached, which looks like a
+    /// working app that has stopped receiving anything. Static because every
+    /// call in the app goes through a service of its own; the one open window
+    /// listens for all of them.
+    /// </summary>
+    public static event Action? SessionExpired;
+
     private static async Task<TData> CallAsync<TData>(JsonObject request)
     {
         var requestJson = request.ToJsonString();
@@ -715,7 +727,12 @@ public sealed class MattermostService
 
         if (!envelope.Ok || envelope.Data is null)
         {
-            throw new MattermostServiceException(CoreErrors.Translate(envelope.Error ?? "Unknown error from the core."));
+            var error = envelope.Error ?? "Unknown error from the core.";
+            if (CoreErrors.IsSessionExpired(error))
+            {
+                SessionExpired?.Invoke();
+            }
+            throw new MattermostServiceException(CoreErrors.Translate(error));
         }
 
         return envelope.Data;

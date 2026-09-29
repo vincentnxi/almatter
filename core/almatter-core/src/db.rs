@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicI64, Ordering};
+use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use rusqlite::{params, Connection, OptionalExtension};
 
@@ -8,6 +9,16 @@ use crate::models::{
     AuthenticatedUser, Channel, ChannelType, CustomEmoji, FileInfo, MentionEvent, Post, PostMetadata, Reaction,
     ReactionNotice, Team,
 };
+
+/// Locks the cache database. A lock is "poisoned" once a thread has panicked
+/// while holding it, and the standard library then refuses every later one —
+/// which here would have every request failing until the app was restarted,
+/// over what was one failed request. Nothing about the database itself is in
+/// doubt after that (SQLite keeps its own integrity, and `in_transaction`
+/// rolls back whatever a panic interrupted), so the lock is taken regardless.
+pub fn lock(db: &Mutex<Database>) -> MutexGuard<'_, Database> {
+    db.lock().unwrap_or_else(PoisonError::into_inner)
+}
 
 /// Local SQLite cache: the source of truth the UI reads from, kept warm by
 /// API responses (and, later, the WebSocket event stream) and readable in
@@ -61,18 +72,28 @@ impl Database {
     /// of milliseconds instead of hundreds. `&self` is enough (no `&mut`
     /// needed for rusqlite's own `Connection::transaction`) since this whole
     /// database is already behind a `Mutex` guarding against concurrent use.
+    ///
+    /// Whatever ends the closure without a commit — an error, or a panic
+    /// unwinding through it — rolls the transaction back. A panic used to leave
+    /// it open, and every later `BEGIN` on this connection then failed with
+    /// "cannot start a transaction within a transaction": the cache silently
+    /// stopped being written for the rest of the session.
     pub fn in_transaction<T>(&self, f: impl FnOnce() -> rusqlite::Result<T>) -> rusqlite::Result<T> {
-        self.conn.execute_batch("BEGIN")?;
-        match f() {
-            Ok(value) => {
-                self.conn.execute_batch("COMMIT")?;
-                Ok(value)
-            }
-            Err(e) => {
-                let _ = self.conn.execute_batch("ROLLBACK");
-                Err(e)
+        struct RollbackUnlessCommitted<'a>(Option<&'a Connection>);
+        impl Drop for RollbackUnlessCommitted<'_> {
+            fn drop(&mut self) {
+                if let Some(conn) = self.0 {
+                    let _ = conn.execute_batch("ROLLBACK");
+                }
             }
         }
+
+        self.conn.execute_batch("BEGIN")?;
+        let mut open = RollbackUnlessCommitted(Some(&self.conn));
+        let value = f()?;
+        self.conn.execute_batch("COMMIT")?;
+        open.0 = None;
+        Ok(value)
     }
 
     /// The cache file used by the app: `<platform data dir>/Almatter/cache.sqlite3`,
@@ -408,10 +429,6 @@ impl Database {
         Ok(())
     }
 
-    /// Removes a deleted message (and its reactions/files, since foreign
-    /// keys aren't enforced — see `open`) from the cache, so it actually
-    /// disappears from an already-painted channel/thread instead of lingering
-    /// until the next full re-fetch overwrites it.
     /// Hands out the next write stamp for a reaction row. Seeded once per
     /// process from what the database already holds (see `open`), so a
     /// restart can never hand out a stamp that was used before; after that
@@ -441,21 +458,32 @@ impl Database {
         Ok(())
     }
 
-    /// Applies an edit to an already-cached post, touching only the text and
-    /// the edit stamp. Deliberately NOT `upsert_post`: that one replaces a
-    /// post's reactions and files wholesale from what it is handed, and a
-    /// live `post_edited` event carries no metadata — so reusing it would
+    /// Applies an edit to an already-cached post, touching only the text, the
+    /// edit stamp and the pin flag. Deliberately NOT `upsert_post`: that one
+    /// replaces a post's reactions and files wholesale from what it is handed,
+    /// and a live `post_edited` event carries no metadata — so reusing it would
     /// silently wipe every reaction on the edited message.
+    ///
+    /// The pin flag is part of it because Mattermost pins and unpins a post by
+    /// updating it, and announces that with the same `post_edited` event: the
+    /// text and stamp come back unchanged, and only this flag says what
+    /// happened. The event always carries the whole post, so absent means
+    /// "not pinned", exactly as `Post` reads it.
+    ///
     /// A no-op when the post isn't cached, which is the normal case for a
     /// channel this user has never opened.
-    pub fn update_post_text(&self, post_id: &str, message: &str, edit_at: i64) -> rusqlite::Result<()> {
+    pub fn update_post_text(&self, post_id: &str, message: &str, edit_at: i64, is_pinned: bool) -> rusqlite::Result<()> {
         self.conn.execute(
-            "UPDATE posts SET message = ?2, edit_at = ?3 WHERE id = ?1",
-            params![post_id, message, edit_at],
+            "UPDATE posts SET message = ?2, edit_at = ?3, is_pinned = ?4 WHERE id = ?1",
+            params![post_id, message, edit_at, is_pinned],
         )?;
         Ok(())
     }
 
+    /// Removes a deleted message (and its reactions/files, since foreign
+    /// keys aren't enforced — see `open`) from the cache, so it actually
+    /// disappears from an already-painted channel/thread instead of lingering
+    /// until the next full re-fetch overwrites it.
     pub fn delete_post(&self, post_id: &str) -> rusqlite::Result<()> {
         self.conn.execute("DELETE FROM reactions WHERE post_id = ?1", params![post_id])?;
         self.conn.execute("DELETE FROM files WHERE post_id = ?1", params![post_id])?;
@@ -853,6 +881,102 @@ impl Database {
         Ok(())
     }
 
+    /// Forgets the cached channels of one team (and the team-less direct and
+    /// group conversations, which every team's list carries) that the server
+    /// no longer lists for this user — a channel left, archived, or a
+    /// conversation that went away — along with their messages. Returns how
+    /// many channels went.
+    ///
+    /// `upsert_channel` only ever adds. Without this, a channel that had
+    /// disappeared stayed in the cache for good, and since the sidebar is
+    /// repainted from the cache whenever a badge moves, it came back a moment
+    /// after the network refresh had (rightly) taken it out — a channel the
+    /// user had left, listed again and failing to open.
+    ///
+    /// `keep_ids` must be the server's complete list for the team: the caller
+    /// is the one place that knows the fetch succeeded and came back whole.
+    pub fn remove_channels_not_in(&self, team_id: &str, keep_ids: &[String]) -> rusqlite::Result<usize> {
+        let keep: std::collections::HashSet<&str> = keep_ids.iter().map(String::as_str).collect();
+        let cached: Vec<String> = {
+            let mut stmt = self
+                .conn
+                .prepare("SELECT id FROM channels WHERE team_id = ?1 OR team_id = ''")?;
+            let rows = stmt.query_map(params![team_id], |row| row.get(0))?;
+            rows.collect::<rusqlite::Result<_>>()?
+        };
+
+        let gone: Vec<&String> = cached.iter().filter(|id| !keep.contains(id.as_str())).collect();
+        for id in &gone {
+            // Foreign keys aren't enforced (see `open`), so what hangs off the
+            // channel is removed by hand.
+            self.conn.execute(
+                "DELETE FROM reactions WHERE post_id IN (SELECT id FROM posts WHERE channel_id = ?1)",
+                params![id],
+            )?;
+            self.conn.execute(
+                "DELETE FROM files WHERE post_id IN (SELECT id FROM posts WHERE channel_id = ?1)",
+                params![id],
+            )?;
+            self.conn.execute("DELETE FROM posts WHERE channel_id = ?1", params![id])?;
+            self.conn.execute("DELETE FROM channel_participants WHERE channel_id = ?1", params![id])?;
+            self.conn.execute("DELETE FROM channels WHERE id = ?1", params![id])?;
+        }
+        Ok(gone.len())
+    }
+
+    /// Forgets the cached messages of one channel that the server no longer
+    /// has, judged against a freshly fetched page of its newest messages.
+    /// Returns how many went.
+    ///
+    /// A deletion made while the app was closed, asleep or disconnected sends
+    /// no event this app will ever see, and `upsert_post` only adds: the
+    /// message stayed in the cache, painted again by the very next poll after
+    /// the network fetch had (rightly) left it out, until it was a thousand
+    /// messages old.
+    ///
+    /// What a page proves is limited to the span it covers. A cached message
+    /// dated between the page's oldest and newest is either in it or gone;
+    /// one older was simply not asked for, and one newer arrived after the
+    /// page was cut — so both are left alone. The newest ten seconds of the
+    /// span are left alone too: the server's clocks are not all the same one,
+    /// and a message that has just arrived live must never be mistaken for a
+    /// deleted one and vanish from the screen.
+    ///
+    /// Replies are only judged when the page itself holds some. A server that
+    /// leaves them out of a channel's page would otherwise have every cached
+    /// reply "deleted" each time the channel opened.
+    pub fn remove_posts_missing_from(&self, channel_id: &str, fetched: &[Post]) -> rusqlite::Result<usize> {
+        let (Some(oldest), Some(newest)) = (
+            fetched.iter().map(|p| p.create_at).min(),
+            fetched.iter().map(|p| p.create_at).max(),
+        ) else {
+            return Ok(0);
+        };
+        // Saturating: the stamps come from the server, and an absurd one must
+        // not become an overflow panic while the database lock is held.
+        let upper = newest.saturating_sub(RECENT_POST_MARGIN_MS);
+        if upper < oldest {
+            return Ok(0);
+        }
+
+        let replies_included = fetched.iter().any(Post::is_thread_reply);
+        let listed: std::collections::HashSet<&str> = fetched.iter().map(|p| p.id.as_str()).collect();
+        let cached: Vec<String> = {
+            let mut stmt = self.conn.prepare(
+                "SELECT id FROM posts
+                 WHERE channel_id = ?1 AND create_at >= ?2 AND create_at <= ?3 AND (root_id = '' OR ?4)",
+            )?;
+            let rows = stmt.query_map(params![channel_id, oldest, upper, replies_included], |row| row.get(0))?;
+            rows.collect::<rusqlite::Result<_>>()?
+        };
+
+        let gone: Vec<&String> = cached.iter().filter(|id| !listed.contains(id.as_str())).collect();
+        for id in &gone {
+            self.delete_post(id)?;
+        }
+        Ok(gone.len())
+    }
+
     /// Keeps a channel's cached history bounded. Without this the posts
     /// table only ever grows: every read of a channel, every poll tick and
     /// every channel switch then costs a little more than the day before,
@@ -1085,6 +1209,10 @@ impl Database {
             .optional()
     }
 }
+
+/// How much of the newest end of a fetched page `remove_posts_missing_from`
+/// leaves alone, in milliseconds.
+const RECENT_POST_MARGIN_MS: i64 = 10_000;
 
 /// Hands out strictly increasing stamps for reaction rows — see the
 /// `write_seq` column. Process-wide rather than per-connection: there is one
@@ -2115,5 +2243,195 @@ mod tests {
         let user = db.cached_user("u1").unwrap().expect("user should be cached");
         assert_eq!(user.display_name(), "Jean Dupont");
         assert!(db.cached_user("missing").unwrap().is_none());
+    }
+
+    /// A panic while the lock is held poisons it, and the standard library
+    /// then refuses every later lock. One failed request must not brick the
+    /// cache for the rest of the session.
+    #[test]
+    fn a_lock_poisoned_by_a_panic_is_still_usable() {
+        use std::panic::{catch_unwind, AssertUnwindSafe};
+
+        let db = Mutex::new(Database::open_in_memory().unwrap());
+        let outcome = catch_unwind(AssertUnwindSafe(|| {
+            let _guard = db.lock().unwrap();
+            panic!("a request panicked while holding the database");
+        }));
+        assert!(outcome.is_err());
+        assert!(db.is_poisoned(), "the premise of this test");
+
+        let cache = lock(&db);
+        cache.upsert_team(&Team { id: "t1".into(), name: "acme".into(), display_name: "Acme".into() }).unwrap();
+        assert_eq!(cache.cached_teams().unwrap().len(), 1);
+    }
+
+    /// A panic in the middle of a transaction used to leave it open, and every
+    /// later `BEGIN` then failed: the cache silently stopped being written.
+    #[test]
+    fn a_panic_inside_a_transaction_rolls_it_back_and_leaves_the_connection_usable() {
+        use std::panic::{catch_unwind, AssertUnwindSafe};
+
+        let db = Database::open_in_memory().unwrap();
+        let team = Team { id: "t1".into(), name: "acme".into(), display_name: "Acme".into() };
+
+        let outcome = catch_unwind(AssertUnwindSafe(|| {
+            let _ = db.in_transaction(|| {
+                db.upsert_team(&team)?;
+                panic!("something went wrong half-way through a write");
+                #[allow(unreachable_code)]
+                Ok(())
+            });
+        }));
+        assert!(outcome.is_err());
+        assert!(db.cached_teams().unwrap().is_empty(), "what the interrupted write had done is rolled back");
+
+        db.in_transaction(|| db.upsert_team(&team)).expect("a new transaction can start again");
+        assert_eq!(db.cached_teams().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn a_transaction_that_fails_rolls_back_and_one_that_succeeds_commits() {
+        let db = Database::open_in_memory().unwrap();
+        let team = Team { id: "t1".into(), name: "acme".into(), display_name: "Acme".into() };
+
+        let failed: rusqlite::Result<()> = db.in_transaction(|| {
+            db.upsert_team(&team)?;
+            Err(rusqlite::Error::QueryReturnedNoRows)
+        });
+        assert!(failed.is_err());
+        assert!(db.cached_teams().unwrap().is_empty());
+
+        db.in_transaction(|| db.upsert_team(&team)).unwrap();
+        assert_eq!(db.cached_teams().unwrap().len(), 1);
+    }
+
+    fn reply_fixture(id: &str, root_id: &str, create_at: i64) -> Post {
+        Post { root_id: root_id.into(), ..pinned_fixture(id, "c1", create_at, false) }
+    }
+
+    /// A message deleted while the app wasn't listening must leave the cache
+    /// when the channel is next fetched — but only what the page proves.
+    #[test]
+    fn a_message_missing_from_a_fetched_page_is_forgotten_within_the_span_it_covers() {
+        let db = Database::open_in_memory().unwrap();
+        for (id, at) in [
+            ("older-than-the-page", 500),
+            ("kept-1", 1_000),
+            ("deleted", 2_000),
+            ("kept-2", 3_000),
+            ("just-arrived", 99_500),
+            ("newest", 100_000),
+            ("after-the-page", 200_000),
+        ] {
+            db.upsert_post(&pinned_fixture(id, "c1", at, false)).unwrap();
+        }
+        db.upsert_post(&pinned_fixture("other-channel", "c2", 2_000, false)).unwrap();
+
+        // The server's page: three of the cached messages.
+        let page = vec![
+            pinned_fixture("newest", "c1", 100_000, false),
+            pinned_fixture("kept-2", "c1", 3_000, false),
+            pinned_fixture("kept-1", "c1", 1_000, false),
+        ];
+        assert_eq!(db.remove_posts_missing_from("c1", &page).unwrap(), 1);
+
+        let mut ids: Vec<String> = db.cached_posts_for_channel("c1").unwrap().into_iter().map(|p| p.id).collect();
+        ids.sort();
+        assert_eq!(
+            ids,
+            vec!["after-the-page", "just-arrived", "kept-1", "kept-2", "newest", "older-than-the-page"],
+            "only the message inside the span and absent from the page goes: nothing older, nothing in the last ten seconds, nothing newer"
+        );
+        assert_eq!(db.cached_posts_for_channel("c2").unwrap().len(), 1, "another channel is none of this page's business");
+        assert_eq!(db.remove_posts_missing_from("c1", &[]).unwrap(), 0, "an empty page proves nothing");
+    }
+
+    /// A server whose channel page leaves replies out must not have every
+    /// cached reply "deleted" each time the channel opens.
+    #[test]
+    fn replies_are_only_judged_by_a_page_that_carries_replies() {
+        let db = Database::open_in_memory().unwrap();
+        db.upsert_post(&pinned_fixture("root", "c1", 1_000, false)).unwrap();
+        db.upsert_post(&reply_fixture("reply-a", "root", 2_000)).unwrap();
+        db.upsert_post(&pinned_fixture("newer-root", "c1", 3_000, false)).unwrap();
+        db.upsert_post(&pinned_fixture("newest-root", "c1", 100_000, false)).unwrap();
+
+        // A page of top-level posts only: the cached reply is not judged.
+        let roots_only = vec![
+            pinned_fixture("newest-root", "c1", 100_000, false),
+            pinned_fixture("newer-root", "c1", 3_000, false),
+            pinned_fixture("root", "c1", 1_000, false),
+        ];
+        assert_eq!(db.remove_posts_missing_from("c1", &roots_only).unwrap(), 0);
+        assert_eq!(db.cached_posts_for_channel("c1").unwrap().len(), 4);
+
+        // A page that carries a reply shows replies are part of it, so a
+        // cached reply it does not list is gone.
+        db.upsert_post(&reply_fixture("reply-b", "root", 2_500)).unwrap();
+        let with_replies = vec![
+            pinned_fixture("newest-root", "c1", 100_000, false),
+            pinned_fixture("newer-root", "c1", 3_000, false),
+            reply_fixture("reply-b", "root", 2_500),
+            pinned_fixture("root", "c1", 1_000, false),
+        ];
+        assert_eq!(db.remove_posts_missing_from("c1", &with_replies).unwrap(), 1);
+        let ids: Vec<String> = db.cached_posts_for_channel("c1").unwrap().into_iter().map(|p| p.id).collect();
+        assert!(!ids.contains(&"reply-a".to_string()) && ids.contains(&"reply-b".to_string()), "{ids:?}");
+    }
+
+    fn channel_fixture(id: &str, team_id: &str, channel_type: ChannelType) -> Channel {
+        Channel {
+            id: id.into(),
+            team_id: team_id.into(),
+            name: id.into(),
+            display_name: id.into(),
+            channel_type,
+            total_msg_count: 1,
+            last_post_at: 1000,
+            msg_count: 1,
+            mention_count: 0,
+            is_muted: false,
+        }
+    }
+
+    /// A channel the user left must leave the cache too, with its messages —
+    /// otherwise the sidebar, which repaints from the cache, brings it back.
+    /// Direct conversations (no team) are judged by the same list; another
+    /// team's channels are none of this list's business.
+    #[test]
+    fn channels_the_server_no_longer_lists_are_dropped_with_their_messages() {
+        let db = Database::open_in_memory().unwrap();
+        db.upsert_channel(&channel_fixture("kept", "t1", ChannelType::Public)).unwrap();
+        db.upsert_channel(&channel_fixture("left", "t1", ChannelType::Public)).unwrap();
+        db.upsert_channel(&channel_fixture("dm-kept", "", ChannelType::Direct)).unwrap();
+        db.upsert_channel(&channel_fixture("dm-gone", "", ChannelType::Direct)).unwrap();
+        db.upsert_channel(&channel_fixture("elsewhere", "t2", ChannelType::Public)).unwrap();
+
+        db.upsert_post(&pinned_fixture("in-left", "left", 1000, false)).unwrap();
+        db.add_cached_reaction("in-left", "+1", "u2").unwrap();
+        db.upsert_post(&pinned_fixture("in-kept", "kept", 1000, false)).unwrap();
+        db.replace_channel_participants("dm-gone", &["u1".into()]).unwrap();
+
+        let removed = db
+            .remove_channels_not_in("t1", &["kept".to_string(), "dm-kept".to_string()])
+            .unwrap();
+        assert_eq!(removed, 2);
+
+        let mut ids: Vec<String> = db.cached_channels_for_team("t1").unwrap().into_iter().map(|c| c.id).collect();
+        ids.sort();
+        assert_eq!(ids, vec!["dm-kept".to_string(), "kept".to_string()]);
+
+        assert!(db.cached_posts_for_channel("left").unwrap().is_empty(), "its messages go with it");
+        assert!(db.search_posts("hello", 10).unwrap().iter().all(|p| p.channel_id != "left"));
+        let reactions_left: i64 = db
+            .connection()
+            .query_row("SELECT COUNT(*) FROM reactions WHERE post_id = 'in-left'", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(reactions_left, 0);
+        assert!(db.cached_channel_participants("dm-gone").unwrap().is_empty());
+
+        assert_eq!(db.cached_posts_for_channel("kept").unwrap().len(), 1, "a kept channel keeps its messages");
+        let other_team: Vec<String> = db.cached_channels_for_team("t2").unwrap().into_iter().map(|c| c.id).collect();
+        assert!(other_team.contains(&"elsewhere".to_string()), "another team's channel is untouched");
     }
 }

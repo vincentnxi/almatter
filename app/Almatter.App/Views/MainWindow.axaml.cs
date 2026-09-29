@@ -143,10 +143,16 @@ public partial class MainWindow : Window
             // the title bar); under an explicit choice it does nothing.
             if (Avalonia.Application.Current?.PlatformSettings is { } platformSettings)
             {
-                platformSettings.ColorValuesChanged += (_, _) => vm.RefreshSystemTheme();
+                EventHandler<Avalonia.Platform.PlatformColorValues> onColorValuesChanged = (_, _) => vm.RefreshSystemTheme();
+                platformSettings.ColorValuesChanged += onColorValuesChanged;
+                // The platform settings outlive this window. A handler left on
+                // them keeps the window and its view model — image caches
+                // and all — alive after a logout, once per sign-in.
+                Closed += (_, _) => platformSettings.ColorValuesChanged -= onColorValuesChanged;
             }
 
             vm.LoggedOut += (_, _) => PerformLogout();
+            vm.SessionExpired += (_, _) => PerformLogout(sessionExpired: true);
 
             // Posted rather than called inline: the message list has just
             // been rebuilt when this fires, and the ScrollViewer's content
@@ -1306,12 +1312,22 @@ public partial class MainWindow : Window
         Dispatcher.UIThread.Post(() => scroller.ScrollToEnd(), DispatcherPriority.Background);
     }
 
-    /// <summary>Reopens a fresh login screen (the remembered session is already cleared by the time this fires) and closes this window.</summary>
-    private void PerformLogout()
+    /// <summary>
+    /// Reopens a fresh login screen (the remembered session is already cleared by the time this fires) and closes this window.
+    /// After a session that ran out, the screen comes back with the server and account filled in and the reason stated.
+    /// </summary>
+    private void PerformLogout(bool sessionExpired = false)
     {
         if (Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop)
         {
-            App.ShowLoginWindow(desktop);
+            if (sessionExpired && DataContext is MainViewModel vm)
+            {
+                App.ShowLoginWindow(desktop, Loc.S.ErrorSessionExpired, vm.SessionServerUrl, vm.SessionLoginId);
+            }
+            else
+            {
+                App.ShowLoginWindow(desktop);
+            }
         }
         Close();
     }

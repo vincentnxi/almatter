@@ -21,6 +21,24 @@ namespace Almatter.App.ViewModels;
 /// </summary>
 internal static class CardImageDecoder
 {
+    /// <summary>
+    /// The most pixels a picture may have and still be decoded. Some formats
+    /// (PNG, notably) can't be decoded at a smaller size — the whole picture is
+    /// built first — and a picture's dimensions are whatever the file declares:
+    /// a small file can describe 30,000 × 30,000 pixels, which is 3.6 GB of
+    /// native memory that no garbage collector will hear about. A real preview
+    /// is a few megapixels; this leaves room for a 24-megapixel photo.
+    /// </summary>
+    private const long MaxDecodedPixels = 25_000_000;
+
+    private static void RefuseIfAbsurd(int width, int height)
+    {
+        if ((long)width * height > MaxDecodedPixels)
+        {
+            throw new InvalidDataException($"The picture is {width} × {height} pixels, more than this app will decode.");
+        }
+    }
+
     /// <param name="scaling">The display's scale factor — a 420-pixel box on a 150 % screen is 630 physical pixels wide.</param>
     public static Bitmap DecodeToCover(string path, double boxWidth, double boxHeight, double scaling)
     {
@@ -39,6 +57,7 @@ internal static class CardImageDecoder
             sourceWidth = codec.Info.Width;
             sourceHeight = codec.Info.Height;
         }
+        RefuseIfAbsurd(sourceWidth, sourceHeight);
 
         // "Cover": the image fills the box in both directions and the excess
         // is cropped, so the larger of the two ratios decides.
@@ -79,6 +98,7 @@ internal static class CardImageDecoder
                 return new Bitmap(path);
             }
             sourceWidth = codec.Info.Width;
+            RefuseIfAbsurd(sourceWidth, codec.Info.Height);
         }
 
         // Already smaller than the box — blowing it up would cost memory and

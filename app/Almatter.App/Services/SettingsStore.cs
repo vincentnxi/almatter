@@ -40,7 +40,7 @@ internal static class SettingsStore
             {
                 Directory.CreateDirectory(dir);
             }
-            File.WriteAllText(FilePath, JsonSerializer.Serialize(settings));
+            AtomicFile.WriteAllText(FilePath, JsonSerializer.Serialize(settings));
         }
         catch
         {

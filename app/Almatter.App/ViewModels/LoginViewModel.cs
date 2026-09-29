@@ -33,6 +33,18 @@ public partial class LoginViewModel : ViewModelBase
     public string ButtonLabel => IsBusy ? Loc.S.LoginBusy : Loc.S.LoginButton;
 
     /// <summary>
+    /// For someone sent back to sign in because their session ran out: the
+    /// server and the account are already known, so only the password is left
+    /// to type, and the reason is said in the box where errors go.
+    /// </summary>
+    public void ShowSessionNotice(string notice, string serverUrl, string loginId)
+    {
+        ServerUrl = serverUrl;
+        LoginId = loginId;
+        ErrorMessage = notice;
+    }
+
+    /// <summary>
     /// The login screen comes before the settings panel, so it carries its
     /// own small language switch: someone handed the app on a Windows in the
     /// other language shouldn't have to sign in blind first. Saved like any
@@ -58,6 +70,13 @@ public partial class LoginViewModel : ViewModelBase
         try
         {
             var baseUrl = ServerUrl.Trim().TrimEnd('/');
+            // "chat.example.com" is how people write a server's address; without a
+            // scheme the core cannot even build the request, and what came back was
+            // a builder error about "relative URL without a base".
+            if (!baseUrl.Contains("://", StringComparison.Ordinal))
+            {
+                baseUrl = "https://" + baseUrl;
+            }
             var (token, user) = await _service.LoginAsync(baseUrl, LoginId.Trim(), Password);
             LoggedIn?.Invoke(this, new Session(baseUrl, token, user));
         }

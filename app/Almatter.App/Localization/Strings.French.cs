@@ -176,5 +176,6 @@ public sealed partial class Strings
         UnknownUser = "Utilisateur inconnu",
         ErrorConnectionInterrupted = "La connexion au serveur a été coupée pendant la réception de la réponse. Réessayez.",
         ErrorUnreadableResponse = path => $"Le serveur a renvoyé une réponse que l'app ne sait pas lire ({path}).",
+        ErrorSessionExpired = "Votre session a expiré. Reconnectez-vous pour continuer.",
     };
 }

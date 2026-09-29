@@ -26,7 +26,14 @@ public static partial class MessageTextParser
     /// mention's negative lookbehind keeps an email address's "@domain" part
     /// from being mistaken for one.
     /// </summary>
-    [GeneratedRegex(@"\G(?:\[((?:\\.|[^\[\]])+)\]\((https?://[^\s()]+)\)|(https?://[^\s<>""]+)|(?<![\w.])@([A-Za-z][A-Za-z0-9_.-]*))", RegexOptions.IgnoreCase)]
+    /// <remarks>
+    /// The address of a Markdown link may hold one level of balanced parentheses,
+    /// as CommonMark allows and as Wikipedia's addresses need —
+    /// "[Foo](https://en.wikipedia.org/wiki/Foo_(bar))". Read as "no parentheses
+    /// at all", such a link was left as raw text, and every link pasted from a
+    /// web page passes through here as Markdown.
+    /// </remarks>
+    [GeneratedRegex(@"\G(?:\[((?:\\.|[^\[\]])+)\]\((https?://(?:[^\s()]|\([^\s()]*\))+)\)|(https?://[^\s<>""]+)|(?<![\w.])@([A-Za-z][A-Za-z0-9_.-]*))", RegexOptions.IgnoreCase)]
     private static partial Regex LinkAtPattern();
 
     /// <summary>
@@ -307,13 +314,15 @@ public static partial class MessageTextParser
                 }
                 else if (match.Groups[4].Success)
                 {
-                    segments.Add(new MentionSegment { Text = "@" + match.Groups[4].Value, Style = style });
-                    i += match.Length;
+                    // "Hi @marie." — the dot closes the sentence, it isn't part of the name.
+                    var name = match.Groups[4].Value.TrimEnd('.');
+                    segments.Add(new MentionSegment { Text = "@" + name, Style = style });
+                    i += 1 + name.Length;
                 }
                 else
                 {
                     // Trailing punctuation is usually sentence punctuation, not part of the URL itself.
-                    var url = match.Groups[3].Value.TrimEnd('.', ',', ')', ']', '>', '!', '?', ';', ':', '*', '~');
+                    var url = TrimUrlEnd(match.Groups[3].Value);
                     segments.Add(new LinkSegment { Text = url, LinkUrl = url, Style = style });
                     i += url.Length;
                 }
@@ -461,6 +470,50 @@ public static partial class MessageTextParser
             end++;
         }
         return end - start;
+    }
+
+    /// <summary>
+    /// A bare address without the punctuation that ends the sentence around it.
+    /// A closing parenthesis goes only when the address has no opening one to
+    /// pair it with — "(see https://example.com/page)" loses it, while
+    /// "https://en.wikipedia.org/wiki/Foo_(bar)" keeps the one that is part of it.
+    /// </summary>
+    private static string TrimUrlEnd(string url)
+    {
+        // Counted once and kept up to date as characters go, so a line of
+        // closing parentheses can't turn this into a quadratic loop.
+        var opening = 0;
+        var closing = 0;
+        foreach (var c in url)
+        {
+            if (c == '(')
+            {
+                opening++;
+            }
+            else if (c == ')')
+            {
+                closing++;
+            }
+        }
+
+        var end = url.Length;
+        while (end > 0)
+        {
+            var last = url[end - 1];
+            if (last is '.' or ',' or ']' or '>' or '!' or '?' or ';' or ':' or '*' or '~')
+            {
+                end--;
+                continue;
+            }
+            if (last == ')' && closing > opening)
+            {
+                closing--;
+                end--;
+                continue;
+            }
+            break;
+        }
+        return url[..end];
     }
 
     /// <summary>A link label with its own emphasis markers taken out — a link is drawn as one piece.</summary>

@@ -107,7 +107,17 @@ public sealed partial class MessageItem : ObservableObject
 
     public ObservableCollection<ReactionItem> Reactions { get; init; } = [];
     public ObservableCollection<AttachmentItem> Attachments { get; init; } = [];
-    public int ThreadReplyCount { get; init; }
+
+    /// <summary>
+    /// How many replies the thread has. Changes while the message is on screen —
+    /// someone answers — and used to be fixed at the moment the row was built,
+    /// so "2 réponses" stayed as it was until the channel was reopened.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasThreadReplies))]
+    [NotifyPropertyChangedFor(nameof(ThreadReplyLabel))]
+    public partial int ThreadReplyCount { get; set; }
+
     public bool HasThreadReplies => ThreadReplyCount > 0;
     public string ThreadReplyLabel => Loc.S.ReplyCount(ThreadReplyCount);
     public bool HasAttachments => Attachments.Count > 0;

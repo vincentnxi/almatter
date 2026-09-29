@@ -40,7 +40,7 @@ internal static class SessionStore
             }
             var json = JsonSerializer.SerializeToUtf8Bytes(session);
             var encrypted = ProtectedData.Protect(json, Entropy, DataProtectionScope.CurrentUser);
-            File.WriteAllBytes(FilePath, encrypted);
+            AtomicFile.WriteAllBytes(FilePath, encrypted);
         }
         catch
         {

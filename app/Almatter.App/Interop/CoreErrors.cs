@@ -18,14 +18,28 @@ internal static partial class CoreErrors
 {
     private const string Interrupted = "The connection to the server dropped while the response was arriving.";
 
+    /// <summary>The server refused the session token (ApiError::SessionExpired).</summary>
+    private const string SessionExpired = "Your session has expired. Please sign in again.";
+
     [GeneratedRegex(@"^The server sent a response this app cannot read \((?<path>.*)\)\.$")]
     private static partial Regex UnexpectedResponse();
+
+    /// <summary>
+    /// Whether the core is saying the session token is no good. Unlike the
+    /// two other wordings, this one is more than a sentence to translate: the
+    /// app answers it by going back to the sign-in screen.
+    /// </summary>
+    public static bool IsSessionExpired(string message) => message == SessionExpired;
 
     public static string Translate(string message)
     {
         if (message == Interrupted)
         {
             return Loc.S.ErrorConnectionInterrupted;
+        }
+        if (message == SessionExpired)
+        {
+            return Loc.S.ErrorSessionExpired;
         }
         var unexpected = UnexpectedResponse().Match(message);
         if (unexpected.Success)

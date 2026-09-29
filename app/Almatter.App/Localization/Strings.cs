@@ -203,4 +203,7 @@ public sealed partial class Strings
     public required string UnknownUser { get; init; }
     public required string ErrorConnectionInterrupted { get; init; }
     public required Func<string, string> ErrorUnreadableResponse { get; init; }
+
+    /// <summary>The server refused the saved sign-in (expired, revoked, password changed) — shown on the login screen the app goes back to.</summary>
+    public required string ErrorSessionExpired { get; init; }
 }
