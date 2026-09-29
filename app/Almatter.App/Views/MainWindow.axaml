@@ -715,6 +715,29 @@
                                                     CornerRadius="8" DataContext="{Binding LinkPreview}">
                                                 <StackPanel>
                                                     <Button Classes="row-button" ToolTip.Tip="{Binding Url}"
+                                        <!-- A link to another message ("Copier le lien vers ce message"): the
+                                             original, quoted, one click away. Not tied to the link-preview
+                                             setting — it's the message being shared, not a web page. -->
+                                        <Button IsVisible="{Binding HasLinkedMessage}" Classes="row-button" Margin="0,6,0,0" MaxWidth="420" HorizontalAlignment="Left"
+                                                ToolTip.Tip="{Binding T.GoToMessage, Source={x:Static loc:Loc.Instance}}"
+                                                Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).OpenLinkedMessageCommand}"
+                                                CommandParameter="{Binding LinkedMessage}">
+                                            <Border Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1" CornerRadius="8"
+                                                    DataContext="{Binding LinkedMessage}">
+                                                <Border BorderBrush="{DynamicResource AccentBrush}" BorderThickness="3,0,0,0" CornerRadius="8,0,0,8" Padding="10,7,10,8">
+                                                    <StackPanel Spacing="3">
+                                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                                            <TextBlock Text="{Binding AuthorName}" FontWeight="SemiBold" FontSize="12.5" />
+                                                            <TextBlock Text="{Binding ChannelLabel, StringFormat='· {0}'}" FontSize="11.5" Foreground="{DynamicResource TextTertiaryBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                                            <TextBlock Text="{Binding TimeLabel, StringFormat='· {0}'}" FontSize="11.5" Foreground="{DynamicResource TextTertiaryBrush}" VerticalAlignment="Center" />
+                                                        </StackPanel>
+                                                        <TextBlock Text="{Binding Text}" FontSize="12.5" Foreground="{DynamicResource TextSecondaryBrush}"
+                                                                   TextWrapping="Wrap" MaxLines="3" TextTrimming="CharacterEllipsis" />
+                                                    </StackPanel>
+                                                </Border>
+                                            </Border>
+                                        </Button>
+
                                                             Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).OpenLinkCommand}"
                                                             CommandParameter="{Binding Url}">
                                                         <StackPanel Margin="10,8,10,8" Spacing="2">
@@ -829,6 +852,22 @@
                                             CommandParameter="{Binding}">
                                         <Border CornerRadius="13" Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1" BoxShadow="{DynamicResource CardShadow}">
                                             <Path Data="M12 17v5 M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"
+                                    <Button Classes="row-button hover-reveal-btn" IsVisible="{Binding !IsPending}"
+                                            Width="26" Height="26" ToolTip.Tip="{Binding CopyLinkTip}"
+                                            Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).CopyMessageLinkCommand}"
+                                            CommandParameter="{Binding}">
+                                        <Border CornerRadius="13" Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1" BoxShadow="{DynamicResource CardShadow}">
+                                            <Panel>
+                                                <Path IsVisible="{Binding !IsLinkJustCopied}"
+                                                      Data="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71 M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"
+                                                      Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.5" StrokeLineCap="Round" StrokeJoin="Round"
+                                                      Width="14" Height="14" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                <Path IsVisible="{Binding IsLinkJustCopied}" Data="M20 6 9 17l-5-5"
+                                                      Stroke="{DynamicResource AccentBrush}" StrokeThickness="2" StrokeLineCap="Round" StrokeJoin="Round"
+                                                      Width="13" Height="13" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                            </Panel>
+                                        </Border>
+                                    </Button>
                                                   Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.5" StrokeLineCap="Round" StrokeJoin="Round"
                                                   Width="14" Height="14" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center" />
                                         </Border>
@@ -1104,6 +1143,29 @@
                                                     CornerRadius="8" DataContext="{Binding LinkPreview}">
                                                 <StackPanel>
                                                     <Button Classes="row-button" ToolTip.Tip="{Binding Url}"
+                                        <!-- A link to another message ("Copier le lien vers ce message"): the
+                                             original, quoted, one click away. Not tied to the link-preview
+                                             setting — it's the message being shared, not a web page. -->
+                                        <Button IsVisible="{Binding HasLinkedMessage}" Classes="row-button" Margin="0,6,0,0" MaxWidth="420" HorizontalAlignment="Left"
+                                                ToolTip.Tip="{Binding T.GoToMessage, Source={x:Static loc:Loc.Instance}}"
+                                                Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).OpenLinkedMessageCommand}"
+                                                CommandParameter="{Binding LinkedMessage}">
+                                            <Border Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1" CornerRadius="8"
+                                                    DataContext="{Binding LinkedMessage}">
+                                                <Border BorderBrush="{DynamicResource AccentBrush}" BorderThickness="3,0,0,0" CornerRadius="8,0,0,8" Padding="10,7,10,8">
+                                                    <StackPanel Spacing="3">
+                                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                                            <TextBlock Text="{Binding AuthorName}" FontWeight="SemiBold" FontSize="12.5" />
+                                                            <TextBlock Text="{Binding ChannelLabel, StringFormat='· {0}'}" FontSize="11.5" Foreground="{DynamicResource TextTertiaryBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                                            <TextBlock Text="{Binding TimeLabel, StringFormat='· {0}'}" FontSize="11.5" Foreground="{DynamicResource TextTertiaryBrush}" VerticalAlignment="Center" />
+                                                        </StackPanel>
+                                                        <TextBlock Text="{Binding Text}" FontSize="12.5" Foreground="{DynamicResource TextSecondaryBrush}"
+                                                                   TextWrapping="Wrap" MaxLines="3" TextTrimming="CharacterEllipsis" />
+                                                    </StackPanel>
+                                                </Border>
+                                            </Border>
+                                        </Button>
+
                                                             Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).OpenLinkCommand}"
                                                             CommandParameter="{Binding Url}">
                                                         <StackPanel Margin="10,8,10,8" Spacing="2">
@@ -1204,6 +1266,29 @@
                                                             CornerRadius="8" DataContext="{Binding LinkPreview}">
                                                         <StackPanel>
                                                             <Button Classes="row-button" ToolTip.Tip="{Binding Url}"
+                                                <!-- A link to another message ("Copier le lien vers ce message"): the
+                                                     original, quoted, one click away. Not tied to the link-preview
+                                                     setting — it's the message being shared, not a web page. -->
+                                                <Button IsVisible="{Binding HasLinkedMessage}" Classes="row-button" Margin="0,6,0,0" MaxWidth="420" HorizontalAlignment="Left"
+                                                        ToolTip.Tip="{Binding T.GoToMessage, Source={x:Static loc:Loc.Instance}}"
+                                                        Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).OpenLinkedMessageCommand}"
+                                                        CommandParameter="{Binding LinkedMessage}">
+                                                    <Border Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1" CornerRadius="8"
+                                                            DataContext="{Binding LinkedMessage}">
+                                                        <Border BorderBrush="{DynamicResource AccentBrush}" BorderThickness="3,0,0,0" CornerRadius="8,0,0,8" Padding="10,7,10,8">
+                                                            <StackPanel Spacing="3">
+                                                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                                                    <TextBlock Text="{Binding AuthorName}" FontWeight="SemiBold" FontSize="12.5" />
+                                                                    <TextBlock Text="{Binding ChannelLabel, StringFormat='· {0}'}" FontSize="11.5" Foreground="{DynamicResource TextTertiaryBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                                                    <TextBlock Text="{Binding TimeLabel, StringFormat='· {0}'}" FontSize="11.5" Foreground="{DynamicResource TextTertiaryBrush}" VerticalAlignment="Center" />
+                                                                </StackPanel>
+                                                                <TextBlock Text="{Binding Text}" FontSize="12.5" Foreground="{DynamicResource TextSecondaryBrush}"
+                                                                           TextWrapping="Wrap" MaxLines="3" TextTrimming="CharacterEllipsis" />
+                                                            </StackPanel>
+                                                        </Border>
+                                                    </Border>
+                                                </Button>
+
                                                                     Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).OpenLinkCommand}"
                                                                     CommandParameter="{Binding Url}">
                                                                 <StackPanel Margin="10,8,10,8" Spacing="2">

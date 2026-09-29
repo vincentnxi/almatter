@@ -46,6 +46,17 @@ public sealed partial class MessageItem : ObservableObject
     public LinkPreviewItem? LinkPreview { get; init; }
     public bool HasLinkPreview => LinkPreview is not null;
 
+    /// <summary>The message this one links to, when it holds a link to another message — see LinkedMessageItem. Set once when the row is built, for the same row-height reason as the quote above.</summary>
+    public LinkedMessageItem? LinkedMessage { get; init; }
+    public bool HasLinkedMessage => LinkedMessage is not null;
+
+    /// <summary>Flips on for a moment after "Copier le lien", so the chain button shows a check mark as confirmation.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CopyLinkTip))]
+    public partial bool IsLinkJustCopied { get; set; }
+
+    public string CopyLinkTip => IsLinkJustCopied ? Loc.S.MessageLinkCopied : Loc.S.CopyMessageLink;
+
     /// <summary>True once this message has been edited (Mattermost's own edit_at &gt; 0) — shown as a small "(modifié)" tag after the text.</summary>
     [ObservableProperty]
     public partial bool IsEdited { get; set; }

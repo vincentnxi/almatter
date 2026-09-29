@@ -119,6 +119,14 @@ enum Request {
     GetCachedPinnedPosts {
         channel_id: String,
     },
+    /// One message by id — what following a link to a message needs, to
+    /// learn which channel it lives in. Answered from the cache when it's
+    /// there, fetched (and cached) otherwise.
+    GetPost {
+        base_url: String,
+        token: String,
+        post_id: String,
+    },
     PinPost {
         base_url: String,
         token: String,
@@ -562,6 +570,13 @@ async fn handle(request_json: &str, db: &'static Mutex<Database>) -> Value {
             .cached_pinned_posts(&channel_id)
             .map(|posts| json!({ "posts": posts }))
             .map_err(|e| e.to_string()),
+        Request::GetPost { base_url, token, post_id } => {
+            let cached = db.lock().expect("cache db mutex poisoned").cached_post(&post_id).ok().flatten();
+            match cached {
+                Some(post) => Ok(json!({ "post": post })),
+                None => refetch_post_into_cache(&MattermostClient::new(base_url).with_token(token), db, &post_id).await,
+            }
+        }
         Request::PinPost { base_url, token, post_id } => {
             let client = MattermostClient::new(base_url).with_token(token);
             match client.pin_post(&post_id).await {

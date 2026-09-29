@@ -159,6 +159,21 @@ public partial class MainWindow : Window
 
             vm.MessagesAppended += (_, _) => FollowIfAtBottom(MessagesScroller);
 
+            vm.CopyTextRequested += async (_, text) =>
+            {
+                try
+                {
+                    if (Clipboard is { } clipboard)
+                    {
+                        await clipboard.SetTextAsync(text);
+                    }
+                }
+                catch
+                {
+                    // Another app holding the clipboard for a moment — the copy just doesn't happen.
+                }
+            };
+
             // Drives the floating "back to the latest message" button. Also
             // covers the content growing underneath a reader who has scrolled
             // up, since that changes the extent and raises this too.

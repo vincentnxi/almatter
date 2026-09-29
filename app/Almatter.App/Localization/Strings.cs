@@ -81,6 +81,8 @@ public sealed partial class Strings
     public required string ConnectingToServer { get; init; }
     public required string LoadingTeamsAndChannels { get; init; }
     public required string CopyLink { get; init; }
+    public required string CopyMessageLink { get; init; }
+    public required string MessageLinkCopied { get; init; }
     public required string DeleteMessageQuestion { get; init; }
     public required string Today { get; init; }
     public required string Yesterday { get; init; }

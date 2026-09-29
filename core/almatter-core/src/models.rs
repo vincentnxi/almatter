@@ -342,6 +342,32 @@ pub struct OpenGraphData {
     /// helper exists.
     #[serde(default, deserialize_with = "null_as_default")]
     pub images: Vec<OpenGraphImage>,
+    /// Only on a "permalink" embed, which Mattermost sends in this same
+    /// `data` slot when a message links to another one: the linked message,
+    /// already filtered by the server to what this user may read. Sharing
+    /// the struct keeps one `data` type for every embed; each kind simply
+    /// leaves the other's fields at their defaults.
+    #[serde(default, deserialize_with = "null_as_default", skip_serializing_if = "Option::is_none")]
+    pub post: Option<PreviewPost>,
+    /// The linked message's channel — permalink embeds only, like `post`.
+    #[serde(default, deserialize_with = "null_as_default", skip_serializing_if = "String::is_empty")]
+    pub channel_id: String,
+    #[serde(default, deserialize_with = "null_as_default", skip_serializing_if = "String::is_empty")]
+    pub channel_display_name: String,
+}
+
+/// The linked message inside a permalink embed. The server sends a whole
+/// post; only what the preview card shows is kept, so the cache stays small.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct PreviewPost {
+    #[serde(default, deserialize_with = "null_as_default")]
+    pub id: String,
+    #[serde(default, deserialize_with = "null_as_default")]
+    pub user_id: String,
+    #[serde(default, deserialize_with = "null_as_default")]
+    pub message: String,
+    #[serde(default, deserialize_with = "null_as_default")]
+    pub create_at: i64,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -457,6 +483,44 @@ mod tests {
         assert_eq!(parsed.metadata.embeds.len(), 1);
         assert!(parsed.metadata.embeds[0].data.as_ref().unwrap().images.is_empty());
         assert_eq!(parsed.metadata.embeds[0].data.as_ref().unwrap().site_name, "Eldritch Café");
+    }
+
+    /// Mattermost's `PreviewPost`, as it rides in a message that links to
+    /// another one: no url, and the linked post nested whole in `data`.
+    #[test]
+    fn a_link_to_another_message_keeps_its_preview() {
+        let post = serde_json::json!({
+            "id": "p2", "channel_id": "c2", "user_id": "u2",
+            "message": "vu ici https://chat.example/equipe/pl/p1", "create_at": 2000,
+            "metadata": {
+                "embeds": [{
+                    "type": "permalink",
+                    "data": {
+                        "post_id": "p1",
+                        "post": {
+                            "id": "p1", "channel_id": "c1", "user_id": "u1",
+                            "message": "le message d'origine", "create_at": 1000,
+                            "metadata": { "embeds": null, "files": null }
+                        },
+                        "team_name": "equipe", "channel_display_name": "Général",
+                        "channel_type": "O", "channel_id": "c1"
+                    }
+                }]
+            }
+        });
+
+        let parsed: Post = serde_json::from_value(post).expect("a permalink embed must parse");
+        let data = parsed.metadata.embeds[0].data.as_ref().unwrap();
+        let linked = data.post.as_ref().unwrap();
+        assert_eq!(linked.id, "p1");
+        assert_eq!(linked.user_id, "u1");
+        assert_eq!(linked.message, "le message d'origine");
+        assert_eq!(data.channel_id, "c1");
+        assert_eq!(data.channel_display_name, "Général");
+
+        // And it survives the trip through the cache's JSON column.
+        let round_trip: PostEmbed = serde_json::from_str(&serde_json::to_string(&parsed.metadata.embeds[0]).unwrap()).unwrap();
+        assert_eq!(round_trip.data.unwrap().post.unwrap().message, "le message d'origine");
     }
 
     /// Nulls anywhere else in a post's metadata are the same story, and cost

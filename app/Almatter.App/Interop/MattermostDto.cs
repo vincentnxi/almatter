@@ -101,6 +101,20 @@ public sealed class OpenGraphDataDto
     [JsonPropertyName("description")] public string Description { get; set; } = "";
     [JsonPropertyName("site_name")] public string SiteName { get; set; } = "";
     [JsonPropertyName("images")] public List<OpenGraphImageDto> Images { get; set; } = [];
+
+    // A "permalink" embed (a message linking to another one) uses this same
+    // data slot for the linked message; an opengraph embed leaves these empty.
+    [JsonPropertyName("post")] public PreviewPostDto? Post { get; set; }
+    [JsonPropertyName("channel_id")] public string ChannelId { get; set; } = "";
+    [JsonPropertyName("channel_display_name")] public string ChannelDisplayName { get; set; } = "";
+}
+
+public sealed class PreviewPostDto
+{
+    [JsonPropertyName("id")] public string Id { get; set; } = "";
+    [JsonPropertyName("user_id")] public string UserId { get; set; } = "";
+    [JsonPropertyName("message")] public string Message { get; set; } = "";
+    [JsonPropertyName("create_at")] public long CreateAt { get; set; }
 }
 
 public sealed class OpenGraphImageDto

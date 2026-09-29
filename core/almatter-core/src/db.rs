@@ -1624,6 +1624,7 @@ mod tests {
                     description: "An example page".into(),
                     site_name: "Example.com".into(),
                     images: vec![OpenGraphImage { url: "https://example.com/img.png".into(), secure_url: "".into() }],
+                    ..Default::default()
                 }),
             }],
             ..Default::default()

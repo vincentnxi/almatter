@@ -241,6 +241,20 @@ public sealed class MattermostService
         return data.Post;
     }
 
+    /// <summary>One message by id — from the cache when it's there, from the server otherwise. Following a link to a message uses it to learn which channel to open.</summary>
+    public async Task<PostDto> GetPostAsync(string baseUrl, string token, string postId)
+    {
+        var request = new JsonObject
+        {
+            ["command"] = "get_post",
+            ["base_url"] = baseUrl,
+            ["token"] = token,
+            ["post_id"] = postId,
+        };
+        var data = await CallAsync<PostData>(request);
+        return data.Post;
+    }
+
     public async Task<PostDto> AddReactionAsync(string baseUrl, string token, string userId, string postId, string emojiName)
     {
         var request = new JsonObject

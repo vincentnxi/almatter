@@ -39,6 +39,8 @@ public partial class MainViewModel : ViewModelBase
     private string? _activeChannelId;
     /// <summary>Set once the team is known (cache or network) — search needs it, since Mattermost search is scoped per team.</summary>
     private string? _teamId;
+    /// <summary>The team's URL name ("mon-equipe", not its display name) — the middle part of a link to a message.</summary>
+    private string? _teamUrlName;
     /// <summary>
     /// What the message list currently shows, as "id:edit_at" per message.
     /// The edit stamp is part of the key on purpose: keyed on id alone, a
@@ -2477,9 +2479,108 @@ public partial class MainViewModel : ViewModelBase
     [RelayCommand]
     private void ToggleThreadFormattingToolbar() => Settings.ShowThreadFormattingToolbar = !Settings.ShowThreadFormattingToolbar;
 
-    /// <summary>Opens a clicked message link in the user's default browser.</summary>
-    [RelayCommand]
-    private void OpenLink(string url)
+    /// <summary>
+    /// A clicked link in a message. A link to another message on this same
+    /// server jumps to it inside the app, like the official client does;
+    /// anything else — or a message this user can't open here — goes to the
+    /// default browser.
+    /// </summary>
+    [RelayCommand(AllowConcurrentExecutions = true)]
+    private async Task OpenLinkAsync(string url)
+    {
+        if (PostIdFromMessageLink(url) is { } postId && await TryJumpToLinkedMessageAsync(postId, channelId: null))
+        {
+            return;
+        }
+        OpenInBrowser(url);
+    }
+
+    /// <summary>Bound to the card under a message that links to another one.</summary>
+    [RelayCommand(AllowConcurrentExecutions = true)]
+    private async Task OpenLinkedMessageAsync(LinkedMessageItem linked)
+    {
+        if (!await TryJumpToLinkedMessageAsync(linked.PostId, linked.ChannelId) && _teamUrlName is not null)
+        {
+            OpenInBrowser(MessageLink(linked.PostId));
+        }
+    }
+
+    /// <summary>
+    /// The chain button: puts this message's link on the clipboard, in the
+    /// exact form Mattermost's own "Copy link" gives, so it works pasted in
+    /// this app, in the official client, or in a browser alike.
+    /// </summary>
+    [RelayCommand(AllowConcurrentExecutions = true)]
+    private async Task CopyMessageLinkAsync(MessageItem item)
+    {
+        if (item.IsPending || _teamUrlName is null)
+        {
+            return;
+        }
+        CopyTextRequested?.Invoke(this, MessageLink(item.Id));
+        item.IsLinkJustCopied = true;
+        await Task.Delay(TimeSpan.FromSeconds(1.5));
+        item.IsLinkJustCopied = false;
+    }
+
+    /// <summary>Raised to put text on the clipboard, which only the window can reach.</summary>
+    public event EventHandler<string>? CopyTextRequested;
+
+    private string MessageLink(string postId) => $"{_session.BaseUrl.TrimEnd('/')}/{_teamUrlName}/pl/{postId}";
+
+    /// <summary>
+    /// The message id in a link to a message on this server —
+    /// "https://server/team/pl/&lt;id&gt;" — or null for any other link. A
+    /// link to another server's message is left to the browser: this
+    /// session couldn't open it anyway.
+    /// </summary>
+    private string? PostIdFromMessageLink(string url)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var link)
+            || !Uri.TryCreate(_session.BaseUrl, UriKind.Absolute, out var server)
+            || !string.Equals(link.Host, server.Host, StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+        var segments = link.AbsolutePath.Trim('/').Split('/');
+        // Mattermost ids are always 26 letters and digits.
+        return segments.Length >= 3 && segments[^2] == "pl" && segments[^1].Length == 26 && segments[^1].All(char.IsAsciiLetterOrDigit)
+            ? segments[^1]
+            : null;
+    }
+
+    /// <summary>
+    /// Opens the linked message's channel on that message. False when it
+    /// can't be done here: the message is gone, out of reach, or sits in a
+    /// channel this user isn't a member of (the browser can still offer to
+    /// join it). The channel is looked up only when the caller doesn't
+    /// already know it — from the cache first, the server otherwise.
+    /// </summary>
+    private async Task<bool> TryJumpToLinkedMessageAsync(string postId, string? channelId)
+    {
+        if (channelId is null)
+        {
+            try
+            {
+                channelId = (await _service.GetPostAsync(_session.BaseUrl, _session.Token, postId)).ChannelId;
+            }
+            catch (MattermostServiceException)
+            {
+                return false;
+            }
+        }
+        if (_loadedChannels.All(c => c.Id != channelId))
+        {
+            return false;
+        }
+        IsSearchOpen = false;
+        IsPinnedPanelOpen = false;
+        await JumpToMessageAsync(channelId, postId);
+        return true;
+    }
+
+    /// <summary>Opens a link in the user's default browser.</summary>
+    private static void OpenInBrowser(string url)
     {
         try
         {
@@ -3739,6 +3840,7 @@ public partial class MainViewModel : ViewModelBase
                 authors[user.Id] = user;
             }
         }
+        await AddLinkedMessageAuthorsAsync(posts, authors);
 
         // `dayBefore` is kept separate from `previous` because the two answer
         // different questions: `previous` drives grouping and deliberately
@@ -3761,6 +3863,7 @@ public partial class MainViewModel : ViewModelBase
                 IsMine = post.UserId == _session.User.Id,
                 IsEdited = post.EditAt > 0,
                 LinkPreview = BuildLinkPreview(post),
+                LinkedMessage = BuildLinkedMessage(post, authors),
                 IsContinuation = IsContinuationOf(previous, post.UserId, post.CreateAt),
                 DateSeparatorLabel = DateSeparatorFor(dayBefore, post.CreateAt),
                 Reactions = BuildReactions(post),
@@ -3852,6 +3955,7 @@ public partial class MainViewModel : ViewModelBase
                 return false;
             }
             _teamId = team.Id;
+            _teamUrlName = team.Name;
 
             try
             {
@@ -3948,6 +4052,7 @@ public partial class MainViewModel : ViewModelBase
             throw new MattermostServiceException(Loc.S.NoTeamFound);
         }
         _teamId = team.Id;
+        _teamUrlName = team.Name;
         TeamName = team.DisplayName;
 
         try
@@ -4910,6 +5015,7 @@ public partial class MainViewModel : ViewModelBase
                 QuotedAuthorName = quotedAuthorName,
                 QuotedText = quotedText,
                 LinkPreview = BuildLinkPreview(post),
+                LinkedMessage = BuildLinkedMessage(post, authors),
                 IsContinuation = IsContinuationOf(previous, post.UserId, post.CreateAt),
                 DateSeparatorLabel = DateSeparatorFor(previous?.CreateAtMillis, post.CreateAt),
                 Reactions = BuildReactions(post),
@@ -4985,9 +5091,84 @@ public partial class MainViewModel : ViewModelBase
     /// <summary>Paints the confirmed posts, then appends any still-queued outbox messages for this channel so a pending send doesn't vanish until it's actually flushed.</summary>
     private async Task PopulateMessagesWithOutboxAsync(string channelId, List<PostDto> posts, Dictionary<string, UserDto> authors, List<OutboxItemDto>? prefetchedOutbox = null)
     {
+        await AddLinkedMessageAuthorsAsync(posts, authors);
+        if (channelId != _activeChannelId)
+        {
+            return;
+        }
         PopulateMessages(posts, authors);
         await AppendPendingOutboxAsync(Messages, channelId, rootId: null, prefetchedOutbox);
         _lastRenderedOutboxIds = Messages.Where(m => m.IsPending).Select(m => m.Id).ToList();
+    }
+
+    /// <summary>
+    /// Adds the authors of linked messages (see BuildLinkedMessage) that
+    /// aren't already in `authors` — the original may come from a channel
+    /// whose people this one never shows. The cache almost always has them;
+    /// the server is asked only for the rest. Costs nothing, and doesn't
+    /// even yield, when no message in the batch links to another.
+    /// </summary>
+    private async Task AddLinkedMessageAuthorsAsync(List<PostDto> posts, Dictionary<string, UserDto> authors)
+    {
+        var missing = posts
+            .SelectMany(p => p.Metadata.Embeds)
+            .Where(e => e.Type == "permalink" && e.Data?.Post is not null)
+            .Select(e => e.Data!.Post!.UserId)
+            .Where(id => id.Length > 0 && !authors.ContainsKey(id))
+            .Distinct()
+            .ToList();
+        if (missing.Count == 0)
+        {
+            return;
+        }
+        try
+        {
+            foreach (var user in await _service.GetCachedUsersAsync(missing))
+            {
+                authors[user.Id] = user;
+            }
+            missing.RemoveAll(authors.ContainsKey);
+            if (missing.Count > 0)
+            {
+                foreach (var user in await _service.GetUsersAsync(_session.BaseUrl, _session.Token, missing))
+                {
+                    authors[user.Id] = user;
+                }
+            }
+        }
+        catch (MattermostServiceException)
+        {
+            // Offline: the card shows "unknown user" rather than holding up the repaint.
+        }
+    }
+
+    /// <summary>
+    /// The card for a message that links to another one, from the preview
+    /// the server attached to it — null when there's no such link, or the
+    /// server left the preview out (previews turned off, or the original is
+    /// somewhere this user can't read). The link itself stays clickable
+    /// either way.
+    /// </summary>
+    private LinkedMessageItem? BuildLinkedMessage(PostDto post, Dictionary<string, UserDto> authors)
+    {
+        var embed = post.Metadata.Embeds.FirstOrDefault(e => e.Type == "permalink" && e.Data?.Post is not null);
+        if (embed?.Data is not { Post: { } linked } data)
+        {
+            return null;
+        }
+        authors.TryGetValue(linked.UserId, out var author);
+        var channel = _loadedChannels.FirstOrDefault(c => c.Id == data.ChannelId);
+        return new LinkedMessageItem
+        {
+            PostId = linked.Id,
+            ChannelId = data.ChannelId,
+            AuthorName = author?.DisplayName ?? Loc.S.UnknownUser,
+            ChannelLabel = channel is not null ? ChannelDisplayName(channel)
+                : data.ChannelDisplayName.Length > 0 ? data.ChannelDisplayName
+                : Loc.S.UnknownChannel,
+            TimeLabel = FormatSearchResultTime(linked.CreateAt),
+            Text = TruncateQuote(linked.Message),
+        };
     }
 
     /// <summary>Appends queued-but-not-yet-sent outbox messages (oldest first) to an already-painted message list, as pending bubbles. Pass a prefetchedOutbox when the caller already has it, to avoid a redundant round trip.</summary>

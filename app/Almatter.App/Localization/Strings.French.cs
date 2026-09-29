@@ -68,6 +68,8 @@ public sealed partial class Strings
         ConnectingToServer = "Connexion au serveur…",
         LoadingTeamsAndChannels = "Récupération des équipes et des canaux",
         CopyLink = "Copier le lien",
+        CopyMessageLink = "Copier le lien vers ce message",
+        MessageLinkCopied = "Lien copié",
         DeleteMessageQuestion = "Supprimer ce message ?",
         Today = "Aujourd'hui",
         Yesterday = "Hier",
