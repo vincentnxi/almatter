@@ -930,7 +930,7 @@ public partial class MainWindow : Window
             return;
         }
         _pendingNotificationTarget = (notification.ChannelId, notification.PostId);
-        _notifier.Show(notification.Title, notification.Text, notification.IsPersonal, notification.PlaysSound);
+        _notifier.Show(notification.Title, notification.Text, notification.IsPersonal, notification.PlaysSound, notification.AvatarPath);
     }
 
     /// <summary>Clicking the notification brings the window to front and jumps straight to the mentioned message.</summary>

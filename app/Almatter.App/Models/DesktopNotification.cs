@@ -18,4 +18,7 @@ public sealed class DesktopNotification
 
     /// <summary>Always for a personal one; for the rest, only when the user asked for a sound on every message.</summary>
     public bool PlaysSound { get; init; }
+
+    /// <summary>The cached profile picture of whoever wrote or reacted; null when it couldn't be had in time.</summary>
+    public string? AvatarPath { get; init; }
 }

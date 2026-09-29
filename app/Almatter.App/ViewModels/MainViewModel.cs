@@ -1151,6 +1151,7 @@ public partial class MainViewModel : ViewModelBase
             PostId = mention.PostId,
             IsPersonal = isPersonal,
             PlaysSound = isPersonal || Settings.SoundForAllMessages,
+            AvatarPath = await NotificationAvatarPathAsync(mention.AuthorId),
         };
 
         CrashLogger.Write("mentions", $"raising NotificationReceived: title='{title}', hasSubscribers={NotificationReceived is not null}");
@@ -1187,6 +1188,7 @@ public partial class MainViewModel : ViewModelBase
             PostId = reaction.PostId,
             IsPersonal = true,
             PlaysSound = true,
+            AvatarPath = await NotificationAvatarPathAsync(reaction.UserId),
         };
 
         CrashLogger.Write("mentions", $"raising a reaction notification: title='{title}', emoji={reaction.EmojiName}");
@@ -1204,6 +1206,25 @@ public partial class MainViewModel : ViewModelBase
         catch
         {
             return Loc.S.Someone;
+        }
+    }
+
+    /// <summary>
+    /// The person's profile picture on disk. Usually already cached from
+    /// showing their messages; a first download gets a couple of seconds and
+    /// no more — a notification without a face beats a late one.
+    /// </summary>
+    private async Task<string?> NotificationAvatarPathAsync(string userId)
+    {
+        try
+        {
+            return await _service.GetUserAvatarPathAsync(_session.BaseUrl, _session.Token, userId)
+                .WaitAsync(TimeSpan.FromSeconds(2));
+        }
+        catch (Exception ex)
+        {
+            CrashLogger.Write($"notifications: no avatar for {userId}", ex);
+            return null;
         }
     }
 

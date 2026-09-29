@@ -26,8 +26,11 @@ internal interface IDesktopNotifier : IDisposable
     /// a 🔔 in front of its title (emoji are drawn in colour). Whether it
     /// makes a sound is the caller's call: by default only personal ones do,
     /// unless the user asked for a sound on every message.
+    ///
+    /// <paramref name="avatarPath"/> is the person's cached profile picture,
+    /// shown beside the text; null (or unreadable) keeps the plain look.
     /// </summary>
-    void Show(string title, string text, bool personal, bool sound);
+    void Show(string title, string text, bool personal, bool sound, string? avatarPath);
 }
 
 internal static class DesktopNotifier
@@ -51,7 +54,7 @@ internal static class DesktopNotifier
     private sealed class NoDesktopNotifier : IDesktopNotifier
     {
         public event EventHandler? Clicked { add { } remove { } }
-        public void Show(string title, string text, bool personal, bool sound) { }
+        public void Show(string title, string text, bool personal, bool sound, string? avatarPath) { }
         public void Dispose() { }
     }
 }
@@ -83,7 +86,15 @@ internal sealed class WindowsTrayNotifier : IDesktopNotifier
     private const int NIF_TIP = 0x04;
     private const int NIF_INFO = 0x10;
     private const int NIIF_INFO = 0x01;
+    private const int NIIF_USER = 0x04;
     private const int NIIF_NOSOUND = 0x10;
+    private const int NIIF_LARGE_ICON = 0x20;
+
+    /// <summary>Pixels on a side for the avatar: enough for a 300 % screen, where the toast draws it at about 96.</summary>
+    private const int AvatarIconSize = 96;
+
+    /// <summary>The icon-format version CreateIconFromResourceEx expects; any other value is refused.</summary>
+    private const int IconFormatVersion = 0x00030000;
     private const int NIN_BALLOONUSERCLICK = 0x0400 + 5;   // WM_USER + 5
 
     private readonly Window _window;
@@ -102,6 +113,9 @@ internal sealed class WindowsTrayNotifier : IDesktopNotifier
 
     /// <summary>Held in a field: the native side keeps calling this delegate, and a delegate only reachable from native code would be garbage-collected out from under it.</summary>
     private readonly Win32Properties.CustomWndProcHookCallback _hook;
+
+    /// <summary>The picture on the notification currently showing, kept alive until the next one replaces it.</summary>
+    private IntPtr _balloonIcon;
 
     private bool _disposed;
 
@@ -139,22 +153,66 @@ internal sealed class WindowsTrayNotifier : IDesktopNotifier
         }
     }
 
-    public void Show(string title, string text, bool personal, bool sound)
+    public void Show(string title, string text, bool personal, bool sound, string? avatarPath)
     {
         if (_disposed)
         {
             return;
         }
 
+        // The previous notification's picture can only go once the shell has
+        // moved on to this one.
+        var previousAvatar = _balloonIcon;
+        _balloonIcon = CreateAvatarIcon(avatarPath);
+
         var data = NewData();
         data.uFlags = NIF_INFO;
         data.szInfoTitle = Truncate(personal ? "🔔 " + title : title, 63);
         data.szInfo = Truncate(text, 255);
-        data.dwInfoFlags = sound ? NIIF_INFO : NIIF_INFO | NIIF_NOSOUND;
+        data.dwInfoFlags = _balloonIcon != IntPtr.Zero ? NIIF_USER | NIIF_LARGE_ICON : NIIF_INFO;
+        if (!sound)
+        {
+            data.dwInfoFlags |= NIIF_NOSOUND;
+        }
+        data.hBalloonIcon = _balloonIcon;
         data.uTimeoutOrVersion = 6000;
         if (!Shell_NotifyIconW(NIM_MODIFY, ref data))
         {
             Diagnostics.CrashLogger.Write("notifications", $"Shell_NotifyIconW refused the notification (error {Marshal.GetLastPInvokeError()})");
+        }
+
+        if (previousAvatar != IntPtr.Zero)
+        {
+            DestroyIcon(previousAvatar);
+        }
+    }
+
+    /// <summary>
+    /// The avatar as a Windows icon, cut into a circle like everywhere else in
+    /// the app. Windows builds an icon straight from PNG bytes, so the round
+    /// picture Skia draws needs no pixel copying of our own. Zero when there
+    /// is no picture or it can't be read — the notification then goes out
+    /// without one rather than not at all.
+    /// </summary>
+    private static IntPtr CreateAvatarIcon(string? avatarPath)
+    {
+        if (avatarPath is null)
+        {
+            return IntPtr.Zero;
+        }
+        try
+        {
+            var png = RoundAvatar.ToPng(avatarPath, AvatarIconSize);
+            if (png is null)
+            {
+                return IntPtr.Zero;
+            }
+            return CreateIconFromResourceEx(png, png.Length, true, IconFormatVersion, AvatarIconSize, AvatarIconSize, 0);
+        }
+        catch (Exception ex)
+        {
+            Diagnostics.CrashLogger.Write("notifications: avatar icon", ex);
+            return IntPtr.Zero;
         }
     }
 
@@ -200,6 +258,11 @@ internal sealed class WindowsTrayNotifier : IDesktopNotifier
         if (_ownsIcon)
         {
             DestroyIcon(_icon);
+        }
+        if (_balloonIcon != IntPtr.Zero)
+        {
+            DestroyIcon(_balloonIcon);
+            _balloonIcon = IntPtr.Zero;
         }
     }
 
@@ -247,6 +310,9 @@ internal sealed class WindowsTrayNotifier : IDesktopNotifier
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool DestroyIcon(IntPtr icon);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern IntPtr CreateIconFromResourceEx(byte[] iconBits, int size, [MarshalAs(UnmanagedType.Bool)] bool isIcon, int version, int width, int height, int flags);
 
     private static readonly IntPtr IdiApplication = new(32512);
 
