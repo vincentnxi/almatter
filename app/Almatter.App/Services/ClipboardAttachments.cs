@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
+using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
 
 namespace Almatter.App.Services;
@@ -54,7 +55,7 @@ internal static class ClipboardAttachments
         DeleteLeftoversFromEarlierSessions();
         var folder = Directory.CreateDirectory(Path.Combine(TemporaryRoot, Guid.NewGuid().ToString("N")));
         var path = Path.Combine(folder.FullName, $"image-{DateTime.Now:yyyy-MM-dd-HHmmss}.png");
-        bitmap.Save(path);
+        bitmap.Save(path, PngBitmapEncoderOptions.Default);
         return [path];
     }
 

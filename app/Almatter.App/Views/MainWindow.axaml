@@ -290,6 +290,12 @@
             <Setter Property="Background" Value="{DynamicResource BgHoverBrush}" />
         </Style>
 
+        <!-- Rows sit a step to the right of their section header, so the
+             header reads as a heading and the rows as its content. -->
+        <Style Selector="ItemsControl.section-list">
+            <Setter Property="Margin" Value="12,0,0,0" />
+        </Style>
+
         <!-- Invisible until pointed at, then a soft accent line — the same
              "only show the affordance when it's reachable" idea as the
              message rows' hover actions. -->
@@ -431,16 +437,16 @@
                             <Button Classes="row-button" Command="{Binding ToggleFavoritesSectionCommand}" Margin="0,10,0,4">
                                 <StackPanel Orientation="Horizontal" Spacing="4" Margin="8,0">
                                     <Path IsVisible="{Binding IsFavoritesSectionExpanded}" Data="M6 9l6 6 6-6"
-                                          Stroke="{DynamicResource TextTertiaryBrush}" StrokeThickness="2.4" StrokeLineCap="Round" StrokeJoin="Round"
-                                          Width="9" Height="9" Stretch="Uniform" VerticalAlignment="Center" />
+                                          Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="2.4" StrokeLineCap="Round" StrokeJoin="Round"
+                                          Width="10" Height="10" Stretch="Uniform" VerticalAlignment="Center" />
                                     <Path IsVisible="{Binding !IsFavoritesSectionExpanded}" Data="M9 6l6 6-6 6"
-                                          Stroke="{DynamicResource TextTertiaryBrush}" StrokeThickness="2.4" StrokeLineCap="Round" StrokeJoin="Round"
-                                          Width="9" Height="9" Stretch="Uniform" VerticalAlignment="Center" />
-                                    <TextBlock Text="{Binding T.FavoritesHeader, Source={x:Static loc:Loc.Instance}}" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource TextTertiaryBrush}" />
+                                          Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="2.4" StrokeLineCap="Round" StrokeJoin="Round"
+                                          Width="10" Height="10" Stretch="Uniform" VerticalAlignment="Center" />
+                                    <TextBlock Text="{Binding T.FavoritesHeader, Source={x:Static loc:Loc.Instance}}" FontSize="12.5" FontWeight="Bold" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
                                 </StackPanel>
                             </Button>
 
-                            <ItemsControl ItemsSource="{Binding FavoriteChannels}" IsVisible="{Binding IsFavoritesSectionExpanded}" ItemTemplate="{StaticResource ChannelRowTemplate}">
+                            <ItemsControl ItemsSource="{Binding FavoriteChannels}" Classes="section-list" IsVisible="{Binding IsFavoritesSectionExpanded}" ItemTemplate="{StaticResource ChannelRowTemplate}">
                                 <ItemsControl.ItemsPanel>
                                     <ItemsPanelTemplate>
                                         <StackPanel />
@@ -448,7 +454,7 @@
                                 </ItemsControl.ItemsPanel>
                             </ItemsControl>
 
-                            <ItemsControl ItemsSource="{Binding FavoriteDirectMessages}" IsVisible="{Binding IsFavoritesSectionExpanded}" ItemTemplate="{StaticResource DirectMessageRowTemplate}">
+                            <ItemsControl ItemsSource="{Binding FavoriteDirectMessages}" Classes="section-list" IsVisible="{Binding IsFavoritesSectionExpanded}" ItemTemplate="{StaticResource DirectMessageRowTemplate}">
                                 <ItemsControl.ItemsPanel>
                                     <ItemsPanelTemplate>
                                         <StackPanel Spacing="3" />
@@ -459,7 +465,7 @@
                             <!-- Empty-state hint — otherwise an empty Favoris zone has no drop target visible at all. -->
                             <TextBlock IsVisible="{Binding !HasFavorites}" Text="{Binding T.FavoritesEmptyHint, Source={x:Static loc:Loc.Instance}}"
                                        IsHitTestVisible="False" FontSize="11" FontStyle="Italic" Foreground="{DynamicResource TextTertiaryBrush}"
-                                       Margin="10,2,10,8" TextWrapping="Wrap" />
+                                       Margin="22,2,10,8" TextWrapping="Wrap" />
                         </StackPanel>
 
                         <StackPanel x:Name="RegularDropZone" DragDrop.AllowDrop="True" Spacing="1">
@@ -467,12 +473,12 @@
                                 <Button Grid.Column="0" Classes="row-button" Command="{Binding ToggleChannelsSectionCommand}">
                                     <StackPanel Orientation="Horizontal" Spacing="4" Margin="8,0">
                                         <Path IsVisible="{Binding IsChannelsSectionExpanded}" Data="M6 9l6 6 6-6"
-                                              Stroke="{DynamicResource TextTertiaryBrush}" StrokeThickness="2.4" StrokeLineCap="Round" StrokeJoin="Round"
-                                              Width="9" Height="9" Stretch="Uniform" VerticalAlignment="Center" />
+                                              Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="2.4" StrokeLineCap="Round" StrokeJoin="Round"
+                                              Width="10" Height="10" Stretch="Uniform" VerticalAlignment="Center" />
                                         <Path IsVisible="{Binding !IsChannelsSectionExpanded}" Data="M9 6l6 6-6 6"
-                                              Stroke="{DynamicResource TextTertiaryBrush}" StrokeThickness="2.4" StrokeLineCap="Round" StrokeJoin="Round"
-                                              Width="9" Height="9" Stretch="Uniform" VerticalAlignment="Center" />
-                                        <TextBlock Text="{Binding T.ChannelsHeader, Source={x:Static loc:Loc.Instance}}" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource TextTertiaryBrush}" />
+                                              Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="2.4" StrokeLineCap="Round" StrokeJoin="Round"
+                                              Width="10" Height="10" Stretch="Uniform" VerticalAlignment="Center" />
+                                        <TextBlock Text="{Binding T.ChannelsHeader, Source={x:Static loc:Loc.Instance}}" FontSize="12.5" FontWeight="Bold" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
                                     </StackPanel>
                                 </Button>
                                 <Button Grid.Column="1" Classes="row-button" Width="20" Height="20" Margin="0,0,8,0"
@@ -484,7 +490,7 @@
                                 </Button>
                             </Grid>
 
-                            <ItemsControl ItemsSource="{Binding Channels}" IsVisible="{Binding IsChannelsSectionExpanded}" ItemTemplate="{StaticResource ChannelRowTemplate}">
+                            <ItemsControl ItemsSource="{Binding Channels}" Classes="section-list" IsVisible="{Binding IsChannelsSectionExpanded}" ItemTemplate="{StaticResource ChannelRowTemplate}">
                                 <ItemsControl.ItemsPanel>
                                     <ItemsPanelTemplate>
                                         <StackPanel />
@@ -496,12 +502,12 @@
                                 <Button Grid.Column="0" Classes="row-button" Command="{Binding ToggleDirectMessagesSectionCommand}">
                                     <StackPanel Orientation="Horizontal" Spacing="4" Margin="8,0">
                                         <Path IsVisible="{Binding IsDirectMessagesSectionExpanded}" Data="M6 9l6 6 6-6"
-                                              Stroke="{DynamicResource TextTertiaryBrush}" StrokeThickness="2.4" StrokeLineCap="Round" StrokeJoin="Round"
-                                              Width="9" Height="9" Stretch="Uniform" VerticalAlignment="Center" />
+                                              Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="2.4" StrokeLineCap="Round" StrokeJoin="Round"
+                                              Width="10" Height="10" Stretch="Uniform" VerticalAlignment="Center" />
                                         <Path IsVisible="{Binding !IsDirectMessagesSectionExpanded}" Data="M9 6l6 6-6 6"
-                                              Stroke="{DynamicResource TextTertiaryBrush}" StrokeThickness="2.4" StrokeLineCap="Round" StrokeJoin="Round"
-                                              Width="9" Height="9" Stretch="Uniform" VerticalAlignment="Center" />
-                                        <TextBlock Text="{Binding T.DirectMessagesHeader, Source={x:Static loc:Loc.Instance}}" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource TextTertiaryBrush}" />
+                                              Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="2.4" StrokeLineCap="Round" StrokeJoin="Round"
+                                              Width="10" Height="10" Stretch="Uniform" VerticalAlignment="Center" />
+                                        <TextBlock Text="{Binding T.DirectMessagesHeader, Source={x:Static loc:Loc.Instance}}" FontSize="12.5" FontWeight="Bold" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
                                     </StackPanel>
                                 </Button>
                                 <Button Grid.Column="1" Classes="row-button" Width="20" Height="20" Margin="0,0,8,0"
@@ -513,7 +519,7 @@
                                 </Button>
                             </Grid>
 
-                            <ItemsControl ItemsSource="{Binding DirectMessages}" IsVisible="{Binding IsDirectMessagesSectionExpanded}" ItemTemplate="{StaticResource DirectMessageRowTemplate}">
+                            <ItemsControl ItemsSource="{Binding DirectMessages}" Classes="section-list" IsVisible="{Binding IsDirectMessagesSectionExpanded}" ItemTemplate="{StaticResource DirectMessageRowTemplate}">
                                 <ItemsControl.ItemsPanel>
                                     <ItemsPanelTemplate>
                                         <StackPanel Spacing="3" />
@@ -709,12 +715,6 @@
                                         <!-- The message's Markdown blocks; their templates are in Window.DataTemplates. -->
                                         <ItemsControl ItemsSource="{Binding Blocks}" />
 
-                                        <Border IsVisible="{Binding HasLinkPreview}" Margin="0,6,0,0" MaxWidth="420" HorizontalAlignment="Left">
-                                            <Border IsVisible="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.ShowLinkPreviews}"
-                                                    Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1"
-                                                    CornerRadius="8" DataContext="{Binding LinkPreview}">
-                                                <StackPanel>
-                                                    <Button Classes="row-button" ToolTip.Tip="{Binding Url}"
                                         <!-- A link to another message ("Copier le lien vers ce message"): the
                                              original, quoted, one click away. Not tied to the link-preview
                                              setting — it's the message being shared, not a web page. -->
@@ -738,6 +738,12 @@
                                             </Border>
                                         </Button>
 
+                                        <Border IsVisible="{Binding HasLinkPreview}" Margin="0,6,0,0" MaxWidth="420" HorizontalAlignment="Left">
+                                            <Border IsVisible="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.ShowLinkPreviews}"
+                                                    Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1"
+                                                    CornerRadius="8" DataContext="{Binding LinkPreview}">
+                                                <StackPanel>
+                                                    <Button Classes="row-button" ToolTip.Tip="{Binding Url}"
                                                             Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).OpenLinkCommand}"
                                                             CommandParameter="{Binding Url}">
                                                         <StackPanel Margin="10,8,10,8" Spacing="2">
@@ -846,12 +852,6 @@
                                                   Width="14" Height="14" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center" />
                                         </Border>
                                     </Button>
-                                    <Button Classes="row-button hover-reveal-btn" Width="26" Height="26"
-                                            ToolTip.Tip="{Binding PinActionLabel}"
-                                            Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).TogglePinCommand}"
-                                            CommandParameter="{Binding}">
-                                        <Border CornerRadius="13" Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1" BoxShadow="{DynamicResource CardShadow}">
-                                            <Path Data="M12 17v5 M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"
                                     <Button Classes="row-button hover-reveal-btn" IsVisible="{Binding !IsPending}"
                                             Width="26" Height="26" ToolTip.Tip="{Binding CopyLinkTip}"
                                             Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).CopyMessageLinkCommand}"
@@ -868,6 +868,12 @@
                                             </Panel>
                                         </Border>
                                     </Button>
+                                    <Button Classes="row-button hover-reveal-btn" Width="26" Height="26"
+                                            ToolTip.Tip="{Binding PinActionLabel}"
+                                            Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).TogglePinCommand}"
+                                            CommandParameter="{Binding}">
+                                        <Border CornerRadius="13" Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1" BoxShadow="{DynamicResource CardShadow}">
+                                            <Path Data="M12 17v5 M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"
                                                   Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.5" StrokeLineCap="Round" StrokeJoin="Round"
                                                   Width="14" Height="14" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center" />
                                         </Border>
@@ -1137,12 +1143,6 @@
                                         </StackPanel>
                                         <ItemsControl ItemsSource="{Binding Blocks}" />
 
-                                        <Border IsVisible="{Binding HasLinkPreview}" Margin="0,6,0,0" MaxWidth="380" HorizontalAlignment="Left">
-                                            <Border IsVisible="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.ShowLinkPreviews}"
-                                                    Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1"
-                                                    CornerRadius="8" DataContext="{Binding LinkPreview}">
-                                                <StackPanel>
-                                                    <Button Classes="row-button" ToolTip.Tip="{Binding Url}"
                                         <!-- A link to another message ("Copier le lien vers ce message"): the
                                              original, quoted, one click away. Not tied to the link-preview
                                              setting — it's the message being shared, not a web page. -->
@@ -1166,6 +1166,12 @@
                                             </Border>
                                         </Button>
 
+                                        <Border IsVisible="{Binding HasLinkPreview}" Margin="0,6,0,0" MaxWidth="380" HorizontalAlignment="Left">
+                                            <Border IsVisible="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.ShowLinkPreviews}"
+                                                    Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1"
+                                                    CornerRadius="8" DataContext="{Binding LinkPreview}">
+                                                <StackPanel>
+                                                    <Button Classes="row-button" ToolTip.Tip="{Binding Url}"
                                                             Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).OpenLinkCommand}"
                                                             CommandParameter="{Binding Url}">
                                                         <StackPanel Margin="10,8,10,8" Spacing="2">
@@ -1260,12 +1266,6 @@
                                                 </StackPanel>
                                                 <ItemsControl ItemsSource="{Binding Blocks}" />
 
-                                                <Border IsVisible="{Binding HasLinkPreview}" Margin="0,6,0,0" MaxWidth="340" HorizontalAlignment="Left">
-                                                    <Border IsVisible="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.ShowLinkPreviews}"
-                                                            Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1"
-                                                            CornerRadius="8" DataContext="{Binding LinkPreview}">
-                                                        <StackPanel>
-                                                            <Button Classes="row-button" ToolTip.Tip="{Binding Url}"
                                                 <!-- A link to another message ("Copier le lien vers ce message"): the
                                                      original, quoted, one click away. Not tied to the link-preview
                                                      setting — it's the message being shared, not a web page. -->
@@ -1289,6 +1289,12 @@
                                                     </Border>
                                                 </Button>
 
+                                                <Border IsVisible="{Binding HasLinkPreview}" Margin="0,6,0,0" MaxWidth="340" HorizontalAlignment="Left">
+                                                    <Border IsVisible="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.ShowLinkPreviews}"
+                                                            Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1"
+                                                            CornerRadius="8" DataContext="{Binding LinkPreview}">
+                                                        <StackPanel>
+                                                            <Button Classes="row-button" ToolTip.Tip="{Binding Url}"
                                                                     Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).OpenLinkCommand}"
                                                                     CommandParameter="{Binding Url}">
                                                                 <StackPanel Margin="10,8,10,8" Spacing="2">

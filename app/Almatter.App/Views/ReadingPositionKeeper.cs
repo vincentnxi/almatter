@@ -42,6 +42,7 @@ internal sealed class ReadingPositionKeeper
     private bool _stickToBottom;
     private int _correctionsLeft;
     private bool _pending;
+    private bool _correcting;
 
     public ReadingPositionKeeper(ScrollViewer scroller, ItemsControl items, double stickToBottomSlack)
     {
@@ -82,9 +83,36 @@ internal sealed class ReadingPositionKeeper
 
     private void OnLayoutUpdated(object? sender, EventArgs e)
     {
+        // ScrollIntoView runs a whole layout pass on the spot, which raises
+        // LayoutUpdated again while this handler is still on the stack. Left
+        // unguarded that nested call corrected again, and again — the count
+        // below was only decremented once a call returned, so it never ran
+        // out — until the stack overflowed and took the app down (reacting
+        // to a message, 797 levels deep). The pass that arrives here nested
+        // is ignored; the next ordinary one carries on the correction.
+        if (_correcting)
+        {
+            return;
+        }
+
         // Each correction triggers another layout pass, which lands back
-        // here; stop as soon as a pass finds nothing left to fix.
-        if (!CorrectOnce() || --_correctionsLeft <= 0)
+        // here; stop as soon as a pass finds nothing left to fix. Counted
+        // before correcting, so the limit holds whatever the correction does.
+        var moved = false;
+        if (--_correctionsLeft >= 0)
+        {
+            _correcting = true;
+            try
+            {
+                moved = CorrectOnce();
+            }
+            finally
+            {
+                _correcting = false;
+            }
+        }
+
+        if (!moved || _correctionsLeft <= 0)
         {
             _scroller.LayoutUpdated -= OnLayoutUpdated;
             _pending = false;
