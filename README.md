@@ -177,6 +177,23 @@ is much slower in the Sandbox than on a real PC.
 
 <a id="other-platforms-en"></a>
 
+## Code signing policy
+
+Free code signing provided by [SignPath.io](https://about.signpath.io/), certificate by
+[SignPath Foundation](https://signpath.org/).
+
+Starting with the first signed release, the Windows installer and Almatter's own program
+files are signed. Only files built by the
+[public build workflow](.github/workflows/build-installer.yml) from this repository's
+source are signed, and each signing request is approved by hand.
+
+- Committers and reviewers: [vincentnxi](https://github.com/vincentnxi)
+- Approvers: [vincentnxi](https://github.com/vincentnxi)
+
+Privacy: this program will not transfer any information to other networked systems
+unless specifically requested by the user or the person installing or operating it —
+see [Privacy and security](#privacy-and-security).
+
 ## Other platforms
 
 Almatter targets Windows only for now, but it was built to be portable: the Rust core and
@@ -379,6 +396,24 @@ vierge et vérifie que l'application démarre. Comptez environ six minutes : l'i
 de .NET y est beaucoup plus lente que sur un vrai PC.
 
 <a id="autres-plateformes"></a>
+
+## Politique de signature du code
+
+Free code signing provided by [SignPath.io](https://about.signpath.io/), certificate by
+[SignPath Foundation](https://signpath.org/). (Signature de code gratuite fournie par
+SignPath.io, certificat délivré par la SignPath Foundation.)
+
+À partir de la première version signée, l'installeur Windows et les fichiers propres à
+Almatter sont signés. Seuls les fichiers produits par le
+[processus de fabrication public](.github/workflows/build-installer.yml) à partir des
+sources de ce dépôt sont signés, et chaque demande de signature est approuvée à la main.
+
+- Contributeurs et relecteurs : [vincentnxi](https://github.com/vincentnxi)
+- Approbateurs : [vincentnxi](https://github.com/vincentnxi)
+
+Confidentialité : ce programme ne transmet aucune information à d'autres systèmes en
+réseau, sauf à la demande expresse de l'utilisateur ou de la personne qui l'installe ou
+l'exploite — voir [Confidentialité et sécurité](#confidentialité-et-sécurité).
 
 ## Autres plateformes
 
