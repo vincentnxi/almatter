@@ -13,6 +13,8 @@ using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
+using Almatter.App.Diagnostics;
 using Almatter.App.Localization;
 using Almatter.App.Models;
 using Almatter.App.Services;
@@ -64,8 +66,17 @@ public partial class MainWindow : Window
         // while the window is really in front of the user. Activated and
         // Deactivated cover focus; the WindowState watch covers minimising,
         // which on some setups doesn't come with a focus change of its own.
-        Activated += (_, _) => RefreshForegroundState();
-        Deactivated += (_, _) => RefreshForegroundState();
+        // The event itself is the truth: IsActive is still false while
+        // Activated is being raised, so reading it there (as this used to)
+        // reported "background" at the very moment the window came to front.
+        Activated += (_, _) => RefreshForegroundState(isActive: true);
+        Deactivated += (_, _) => RefreshForegroundState(isActive: false);
+        // Belt and braces: a click or a key press in the window is proof
+        // enough that someone is looking at it, whatever IsActive reports.
+        // Without this, a window whose activation event never reached us
+        // stayed "in the background" for good and never marked anything read.
+        AddHandler(PointerPressedEvent, (_, _) => AssumeForegroundOnInput(), RoutingStrategies.Tunnel, handledEventsToo: true);
+        AddHandler(KeyDownEvent, (_, _) => AssumeForegroundOnInput(), RoutingStrategies.Tunnel, handledEventsToo: true);
         PropertyChanged += (_, e) =>
         {
             if (e.Property == WindowStateProperty)
@@ -405,6 +416,21 @@ public partial class MainWindow : Window
         _isReorderDragging = true;
         _reorderItem = item;
         _reorderTargetItem = null;
+    }
+
+    /// <summary>
+    /// A most-used emoji on a message's hover bar. The button sits inside a
+    /// per-message list, so the message is found by walking up to it rather
+    /// than passing it through a command parameter (which holds only one value).
+    /// </summary>
+    private async void OnQuickReactClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Control { DataContext: EmojiPickerItem emoji } button
+            && button.FindAncestorOfType<ItemsControl>()?.DataContext is MessageItem message
+            && DataContext is MainViewModel vm)
+        {
+            await vm.QuickReactAsync(message, emoji);
+        }
     }
 
     /// <summary>Starts looking up who reacted as soon as the pointer reaches a reaction pill, so the names are usually ready by the time its tooltip appears.</summary>
@@ -828,12 +854,22 @@ public partial class MainWindow : Window
         textBox.SelectionEnd = textBox.CaretIndex;
     }
 
+    /// <summary>A click or key press while flagged as background — see the note where it's wired up.</summary>
+    private void AssumeForegroundOnInput()
+    {
+        if (DataContext is MainViewModel { WindowIsInForeground: false } vm && WindowState != WindowState.Minimized)
+        {
+            CrashLogger.Write("badges", $"input in the window while it was flagged as background (IsActive={IsActive}) — treating it as foreground");
+            vm.WindowIsInForeground = true;
+        }
+    }
+
     /// <summary>Tells the ViewModel whether the user can actually see the window right now — see MainViewModel.WindowIsInForeground.</summary>
-    private void RefreshForegroundState()
+    private void RefreshForegroundState(bool? isActive = null)
     {
         if (DataContext is MainViewModel vm)
         {
-            var inForeground = IsActive && WindowState != WindowState.Minimized;
+            var inForeground = (isActive ?? IsActive) && WindowState != WindowState.Minimized;
             vm.WindowIsInForeground = inForeground;
             if (inForeground)
             {

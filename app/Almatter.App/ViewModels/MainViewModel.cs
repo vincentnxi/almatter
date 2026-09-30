@@ -761,6 +761,9 @@ public partial class MainViewModel : ViewModelBase
     /// <summary>The ten emoji picked most often, most-used first — the row at the top of the picker.</summary>
     public ObservableCollection<EmojiPickerItem> FrequentEmojiOptions { get; } = [];
 
+    /// <summary>The most-used few, offered directly on a message's hover bar so a common reaction doesn't need the full picker.</summary>
+    public ObservableCollection<EmojiPickerItem> HoverEmojiOptions { get; } = [];
+
     public ObservableCollection<SkinToneOption> SkinToneOptions { get; } = [];
 
     /// <summary>
@@ -1104,6 +1107,22 @@ public partial class MainViewModel : ViewModelBase
             // Transient cache read hiccup — try again next tick.
         }
 
+        // Whatever the cache counts as unread in the channel being looked at
+        // has been seen. Clearing only when the message list repaints (below)
+        // missed everything that never shows in it — a mention in a thread
+        // reply, say — and left the badge on the open channel until the user
+        // left and came back.
+        if (WindowIsInForeground)
+        {
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                if (channelId == _activeChannelId)
+                {
+                    MarkActiveChannelSeen();
+                }
+            });
+        }
+
         try
         {
             var pendingIds = outbox
@@ -1393,6 +1412,11 @@ public partial class MainViewModel : ViewModelBase
             // sidebar badge kept counting messages that never appeared.
             // The next poll tick repaints within a few hundred milliseconds.
             ReturnToLiveConversation();
+            // A click is proof someone is looking: a mention that arrived
+            // while the window wasn't in front (or during a jump to an older
+            // message) is still counted on this row, and this early return
+            // used to leave it there for good.
+            MarkActiveChannelSeen();
             return;
         }
 
@@ -2941,6 +2965,31 @@ public partial class MainViewModel : ViewModelBase
     }
 
     /// <summary>
+    /// One click on a message's hover bar: reacts with that emoji, or takes
+    /// the reaction back if it's already yours — the same toggle as clicking
+    /// the pill, so the shortcut and the pill never disagree.
+    /// </summary>
+    public async Task QuickReactAsync(MessageItem message, EmojiPickerItem emoji)
+    {
+        var mine = message.Reactions.FirstOrDefault(r => r.EmojiName == emoji.Name && r.ReactedByMe);
+        try
+        {
+            var updated = mine is not null
+                ? await _service.RemoveReactionAsync(_session.BaseUrl, _session.Token, _session.User.Id, message.Id, emoji.Name)
+                : await _service.AddReactionAsync(_session.BaseUrl, _session.Token, _session.User.Id, message.Id, emoji.Name);
+            if (mine is null)
+            {
+                RecordEmojiUse(emoji.Name);
+            }
+            ApplyUpdatedReactions(message.Id, updated);
+        }
+        catch (MattermostServiceException ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+    }
+
+    /// <summary>
     /// Fills a reaction pill's tooltip with who reacted, the first time the
     /// pointer rests on it. Names come from the local cache, and only the
     /// people it doesn't know yet are asked of the server — if that fails
@@ -3313,6 +3362,9 @@ public partial class MainViewModel : ViewModelBase
     /// <summary>How many entries the "most used" row holds — two rows of five in the picker's width.</summary>
     private const int FrequentEmojiCount = 10;
 
+    /// <summary>How many of those the message hover bar shows directly.</summary>
+    private const int HoverEmojiCount = 5;
+
     /// <summary>How many matches one emoji grid will draw for a search — see the note in Narrow.</summary>
     private const int MaxEmojiResults = 250;
 
@@ -3474,6 +3526,19 @@ public partial class MainViewModel : ViewModelBase
         }
 
         OnPropertyChanged(nameof(ShowFrequentEmoji));
+
+        // Only touched when the top five actually changed: every visible
+        // message row draws these, and rebuilding them on each pick would
+        // repaint the whole list for nothing.
+        var top = FrequentEmojiOptions.Take(HoverEmojiCount).ToList();
+        if (!top.SequenceEqual(HoverEmojiOptions))
+        {
+            HoverEmojiOptions.Clear();
+            foreach (var item in top)
+            {
+                HoverEmojiOptions.Add(item);
+            }
+        }
     }
 
     /// <summary>
@@ -4738,8 +4803,9 @@ public partial class MainViewModel : ViewModelBase
         {
             await _service.MarkChannelViewedAsync(_session.BaseUrl, _session.Token, channelId);
         }
-        catch
+        catch (Exception ex)
         {
+            CrashLogger.Write("badges", $"the server refused to mark {channelId} as viewed: {ex.Message}");
             // Best-effort — the badge already cleared locally; a failure here
             // just means it could reappear on the next real fetch, no worse
             // than not having this call at all.

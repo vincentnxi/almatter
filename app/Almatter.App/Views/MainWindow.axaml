@@ -832,6 +832,32 @@
                                      down to its end, which is where the actions then are —
                                      no scrolling back up to its first line to react or reply. -->
                                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,4,2" Spacing="4">
+                                    <!-- The most-used emoji, one click away, to the left of the
+                                         other actions. Hidden while the message is still being
+                                         sent: there is no post on the server to react to yet. -->
+                                    <ItemsControl ItemsSource="{Binding #RootWindow.((vm:MainViewModel)DataContext).HoverEmojiOptions}"
+                                                  IsVisible="{Binding !IsPending}">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <StackPanel Orientation="Horizontal" Spacing="4" />
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate DataType="models:EmojiPickerItem">
+                                                <Button Classes="row-button hover-reveal-btn" Width="26" Height="26"
+                                                        ToolTip.Tip="{Binding Name}"
+                                                        Click="OnQuickReactClick">
+                                                    <Border CornerRadius="13" Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1" BoxShadow="{DynamicResource CardShadow}">
+                                                        <Panel>
+                                                            <TextBlock Text="{Binding Glyph}" FontSize="14" IsVisible="{Binding !IsCustom}"
+                                                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                            <Image Source="{Binding Image}" Width="16" Height="16" Stretch="Uniform" IsVisible="{Binding IsCustom}" />
+                                                        </Panel>
+                                                    </Border>
+                                                </Button>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
                                     <Button Classes="row-button hover-reveal-btn" IsVisible="{Binding IsMine}"
                                             Width="26" Height="26" ToolTip.Tip="{Binding T.Edit, Source={x:Static loc:Loc.Instance}}"
                                             Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).StartEditMessageCommand}"
