@@ -50,6 +50,7 @@ internal static class ThemeResources
         resources["AccentBrush"] = ColorTokens.Accent;
         resources["AccentSoftBrush"] = ColorTokens.AccentSoft;
         resources["AccentInkBrush"] = ColorTokens.AccentInk;
+        resources["TextSelectionBrush"] = ColorTokens.TextSelection;
         resources["OnAccentBrush"] = ColorTokens.Solid(theme.OnAccentHex);
         resources["DangerBrush"] = ColorTokens.Solid(theme.DangerHex);
         resources["DangerSoftBrush"] = ColorTokens.Solid(theme.DangerSoftHex);

@@ -33,6 +33,13 @@
     </Window.Resources>
 
     <Window.Styles>
+        <!-- Same selection tint as the main window, rather than the Windows
+             accent color FluentTheme uses by default. -->
+        <Style Selector="TextBox">
+            <Setter Property="SelectionBrush" Value="{DynamicResource TextSelectionBrush}" />
+            <Setter Property="SelectionForegroundBrush" Value="{DynamicResource TextPrimaryBrush}" />
+        </Style>
+
         <Style Selector="Button.language-link">
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />

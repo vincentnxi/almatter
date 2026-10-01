@@ -38,6 +38,7 @@
         <SolidColorBrush x:Key="TextTertiaryBrush" Color="#8A929E" />
         <SolidColorBrush x:Key="AccentBrush" Color="#005FB8" />
         <SolidColorBrush x:Key="AccentSoftBrush" Color="#D7E3F0" />
+        <SolidColorBrush x:Key="TextSelectionBrush" Color="#D7E3F0" />
         <SolidColorBrush x:Key="AccentInkBrush" Color="#074581" />
         <SolidColorBrush x:Key="OnAccentBrush" Color="#FFFFFF" />
         <SolidColorBrush x:Key="DangerBrush" Color="#C42B1C" />
@@ -379,8 +380,18 @@
             <Setter Property="BorderThickness" Value="0" />
             <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
             <Setter Property="CaretBrush" Value="{DynamicResource TextPrimaryBrush}" />
-            <Setter Property="SelectionBrush" Value="{DynamicResource AccentSoftBrush}" />
+            <Setter Property="SelectionBrush" Value="{DynamicResource TextSelectionBrush}" />
+            <Setter Property="SelectionForegroundBrush" Value="{DynamicResource TextPrimaryBrush}" />
         </Style>
+
+        <!-- Selected message text wears the app's own accent tint (the
+             active channel row's, brightened on a dark palette) instead of
+             FluentTheme's default: the Windows accent color.
+             No selection foreground, so links and code keep their own color. -->
+        <Style Selector="SelectableTextBlock">
+            <Setter Property="SelectionBrush" Value="{DynamicResource TextSelectionBrush}" />
+        </Style>
+
         <Style Selector="TextBox.composer /template/ Border#PART_BorderElement">
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />

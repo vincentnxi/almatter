@@ -20,6 +20,9 @@ public static class ColorTokens
     public static IBrush AccentSoft { get; private set; } = Solid("#D7E3F0");
     public static IBrush AccentInk { get; private set; } = Solid("#074581");
 
+    /// <summary>Behind selected text. AccentSoft itself on a light palette; a brighter blue on a dark one.</summary>
+    public static IBrush TextSelection { get; private set; } = Solid("#D7E3F0");
+
     public static IBrush TextPrimary { get; private set; } = Solid(ThemeDefinition.Light.TextPrimary);
     public static IBrush TextSecondary { get; private set; } = Solid(ThemeDefinition.Light.TextSecondary);
     public static IBrush TextTertiary { get; private set; } = Solid(ThemeDefinition.Light.TextTertiary);
@@ -43,6 +46,13 @@ public static class ColorTokens
         Accent = new SolidColorBrush(accentColor);
         AccentSoft = new SolidColorBrush(Lerp(accentColor, Color.Parse(theme.BgPanel), 0.88));
         AccentInk = new SolidColorBrush(Lerp(accentColor, Color.Parse(theme.TextPrimary), 0.35));
+
+        // AccentSoft is nearly the dark background itself, fine for a whole
+        // row but too faint to show which words are selected. Stopping the
+        // lerp about halfway keeps the blue visible and light text readable.
+        TextSelection = theme.IsDark
+            ? new SolidColorBrush(Lerp(accentColor, Color.Parse(theme.BgPanel), 0.55))
+            : AccentSoft;
 
         TextPrimary = Solid(theme.TextPrimary);
         TextSecondary = Solid(theme.TextSecondary);
