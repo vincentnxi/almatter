@@ -168,6 +168,17 @@ public partial class MainWindow : Window
             // Posted rather than called inline: the message list has just
             // been rebuilt when this fires, and the ScrollViewer's content
             // needs a layout pass first to know where "the end" actually is.
+            // Not needed for the thread panel: it isn't virtualized, so a row
+            // growing there just pushes what's below it, as it should.
+            var readingPosition = new ReadingPositionKeeper(MessagesScroller, MessagesItemsControl, StickToBottomSlack);
+            vm.MessageRowsChanging += (_, _) => readingPosition.Capture();
+
+            // A row can still grow after it is first shown (a custom emoji's
+            // picture landing); these keep a reader who is on the newest
+            // message there instead of letting it slide out of view.
+            _ = new BottomFollower(MessagesScroller, StickToBottomSlack);
+            _ = new BottomFollower(ThreadScroller, StickToBottomSlack);
+
             vm.ScrollMessagesToEndRequested += (_, _) =>
                 Dispatcher.UIThread.Post(() => MessagesScroller.ScrollToEnd(), DispatcherPriority.Background);
 
@@ -202,11 +213,6 @@ public partial class MainWindow : Window
             // window when it moves to a monitor with a different scale.
             vm.DisplayScaling = RenderScaling;
             ScalingChanged += (_, _) => vm.DisplayScaling = RenderScaling;
-
-            // Not needed for the thread panel: it isn't virtualized, so a row
-            // growing there just pushes what's below it, as it should.
-            var readingPosition = new ReadingPositionKeeper(MessagesScroller, MessagesItemsControl, StickToBottomSlack);
-            vm.MessageRowsChanging += (_, _) => readingPosition.Capture();
 
             vm.NotificationReceived += (_, notification) =>
                 Dispatcher.UIThread.Post(() => ShowDesktopNotification(notification));

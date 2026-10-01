@@ -1486,8 +1486,14 @@ public partial class MainViewModel : ViewModelBase
             // The user may have already clicked away to another channel while this was in flight.
             if (channelId == _activeChannelId)
             {
-                await PopulateMessagesWithOutboxAsync(channelId, posts, authors);
-                ScrollMessagesToEndRequested?.Invoke(this, EventArgs.Empty);
+                var shown = await WithCachedHistoryAsync(channelId, posts, authors);
+                // Usually the cache already painted this very list and it is
+                // only updated where it stands: scrolling again then would
+                // yank back down a reader who has started scrolling up.
+                if (await PopulateMessagesWithOutboxAsync(channelId, shown, authors))
+                {
+                    ScrollMessagesToEndRequested?.Invoke(this, EventArgs.Empty);
+                }
             }
         }
         catch (MattermostServiceException ex)
@@ -4534,8 +4540,11 @@ public partial class MainViewModel : ViewModelBase
 
         if (targetChannelId == _activeChannelId)
         {
-            await PopulateMessagesWithOutboxAsync(targetChannelId, posts, authors);
-            ScrollMessagesToEndRequested?.Invoke(this, EventArgs.Empty);
+            var shown = await WithCachedHistoryAsync(targetChannelId, posts, authors);
+            if (await PopulateMessagesWithOutboxAsync(targetChannelId, shown, authors))
+            {
+                ScrollMessagesToEndRequested?.Invoke(this, EventArgs.Empty);
+            }
         }
     }
 
@@ -5320,7 +5329,17 @@ public partial class MainViewModel : ViewModelBase
         }
     }
 
-    private void PopulateMessages(List<PostDto> posts, Dictionary<string, UserDto> authors)
+    /// <summary>
+    /// How many of the oldest messages may have left the top of the list
+    /// while everything after them is kept in place. The cache trims a
+    /// channel to its history limit when the channel is opened, which drops
+    /// a few of its oldest messages; more than this is not a trim but a
+    /// different window of the conversation, and is rebuilt.
+    /// </summary>
+    private const int MaxDroppedHeadMessages = 100;
+
+    /// <returns>True when the list was rebuilt from scratch — the caller then has its own scrolling to do.</returns>
+    private bool PopulateMessages(List<PostDto> posts, Dictionary<string, UserDto> authors)
     {
         // Thread replies are shown inline too (not just in the thread panel)
         // so nothing gets missed just by not having a thread open — marked
@@ -5352,21 +5371,52 @@ public partial class MainViewModel : ViewModelBase
         // Matched on message id alone, not on the whole key: an edited
         // message keeps its place in the list, so it should be updated where
         // it sits rather than forcing everything to be rebuilt around it.
+        // The oldest few may also have gone from the top (the cache trimming
+        // the channel to its history limit): what follows them is still kept.
+        // Without this, opening a channel at the limit rebuilt the whole list
+        // and the view jumped.
         var keptCount = 0;
-        if (Messages.Count == _lastRenderedPostKeys.Count
-            && keys.Count >= Messages.Count
-            && _lastRenderedPostKeys.Select(PostIdOfKey).SequenceEqual(keys.Take(Messages.Count).Select(PostIdOfKey)))
+        var droppedHead = 0;
+        if (Messages.Count == _lastRenderedPostKeys.Count && Messages.Count > 0 && keys.Count > 0)
         {
-            keptCount = Messages.Count;
+            var shownIds = _lastRenderedPostKeys.Select(PostIdOfKey).ToList();
+            droppedHead = shownIds.IndexOf(PostIdOfKey(keys[0]));
+            var remaining = shownIds.Count - droppedHead;
+            if (droppedHead >= 0
+                && droppedHead <= MaxDroppedHeadMessages
+                && keys.Count >= remaining
+                && shownIds.Skip(droppedHead).SequenceEqual(keys.Take(remaining).Select(PostIdOfKey)))
+            {
+                keptCount = remaining;
+            }
+        }
+
+        if (keptCount > 0)
+        {
+            var announced = false;
+            var previousKeys = _lastRenderedPostKeys;
+            if (droppedHead > 0)
+            {
+                // Rows leaving above the view shift everything under them;
+                // the reading position keeper puts the view back.
+                MessageRowsChanging?.Invoke(this, EventArgs.Empty);
+                announced = true;
+                for (var i = 0; i < droppedHead; i++)
+                {
+                    Messages.RemoveAt(0);
+                }
+                previousKeys = previousKeys.Skip(droppedHead).ToList();
+                // The new first message opens the list, so it states its day.
+                Messages[0].DateSeparatorLabel = DateSeparatorFor(null, Messages[0].CreateAtMillis);
+            }
 
             // Same id, something else about it moved. Text and reactions are
             // compared separately so a reaction never forces the text to be
             // reset (which would throw away the parsed-and-cached line split
             // for nothing), and neither forces a rebuild of the list.
-            var announced = false;
             for (var i = 0; i < keptCount; i++)
             {
-                if (_lastRenderedPostKeys[i] == keys[i])
+                if (previousKeys[i] == keys[i])
                 {
                     continue;
                 }
@@ -5379,15 +5429,15 @@ public partial class MainViewModel : ViewModelBase
                     announced = true;
                 }
 
-                if (EditPartOfKey(_lastRenderedPostKeys[i]) != EditPartOfKey(keys[i]))
+                if (EditPartOfKey(previousKeys[i]) != EditPartOfKey(keys[i]))
                 {
                     Messages[i].ApplyEditedText(ordered[i].Message);
                 }
-                if (ReactionPartOfKey(_lastRenderedPostKeys[i]) != ReactionPartOfKey(keys[i]))
+                if (ReactionPartOfKey(previousKeys[i]) != ReactionPartOfKey(keys[i]))
                 {
                     ReplaceReactionsInPlace(Messages[i], ordered[i]);
                 }
-                if (PinnedPartOfKey(_lastRenderedPostKeys[i]) != PinnedPartOfKey(keys[i]))
+                if (PinnedPartOfKey(previousKeys[i]) != PinnedPartOfKey(keys[i]))
                 {
                     Messages[i].IsPinned = ordered[i].IsPinned;
                 }
@@ -5489,6 +5539,7 @@ public partial class MainViewModel : ViewModelBase
         {
             MessagesAppended?.Invoke(this, EventArgs.Empty);
         }
+        return keptCount == 0;
     }
 
     /// <summary>
@@ -5540,16 +5591,55 @@ public partial class MainViewModel : ViewModelBase
     }
 
     /// <summary>Paints the confirmed posts, then appends any still-queued outbox messages for this channel so a pending send doesn't vanish until it's actually flushed.</summary>
-    private async Task PopulateMessagesWithOutboxAsync(string channelId, List<PostDto> posts, Dictionary<string, UserDto> authors, List<OutboxItemDto>? prefetchedOutbox = null)
+    /// <returns>True when the list was rebuilt from scratch rather than updated where it stood.</returns>
+    private async Task<bool> PopulateMessagesWithOutboxAsync(string channelId, List<PostDto> posts, Dictionary<string, UserDto> authors, List<OutboxItemDto>? prefetchedOutbox = null)
     {
         await AddLinkedMessageAuthorsAsync(posts, authors);
         if (channelId != _activeChannelId)
         {
-            return;
+            return false;
         }
-        PopulateMessages(posts, authors);
+        var rebuilt = PopulateMessages(posts, authors);
         await AppendPendingOutboxAsync(Messages, channelId, rootId: null, prefetchedOutbox);
         _lastRenderedOutboxIds = Messages.Where(m => m.IsPending).Select(m => m.Id).ToList();
+        return rebuilt;
+    }
+
+    /// <summary>
+    /// The page the server just returned only holds a channel's latest
+    /// messages, while the cache — which that page has just been written
+    /// into — holds its longer history too. Painting the page on its own
+    /// swapped the conversation the cache had just painted for a much
+    /// shorter one, rebuilt the list from scratch, and the next poll swapped
+    /// the long one back: the view jumped twice on every channel with more
+    /// history than one page. This hands back the cache's view instead,
+    /// with the authors of its older messages added, or the page itself if
+    /// the cache doesn't hold it (a failed write).
+    /// </summary>
+    private async Task<List<PostDto>> WithCachedHistoryAsync(string channelId, List<PostDto> page, Dictionary<string, UserDto> authors)
+    {
+        try
+        {
+            var cached = await _service.GetCachedPostsAsync(channelId);
+            var cachedIds = cached.Select(p => p.Id).ToHashSet();
+            if (!page.All(p => cachedIds.Contains(p.Id)))
+            {
+                return page;
+            }
+            var missing = cached.Select(p => p.UserId).Where(id => !authors.ContainsKey(id)).Distinct().ToList();
+            if (missing.Count > 0)
+            {
+                foreach (var user in await _service.GetCachedUsersAsync(missing))
+                {
+                    authors[user.Id] = user;
+                }
+            }
+            return cached;
+        }
+        catch
+        {
+            return page;
+        }
     }
 
     /// <summary>
