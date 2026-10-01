@@ -292,6 +292,14 @@ public static partial class MessageTextParser
                 continue;
             }
 
+            // Before emphasis, so the underscore of "-_-" isn't read as an opener.
+            if (TryEmoticon(text, i, out var emoticonGlyph, out var emoticonLength))
+            {
+                plain.Append(emoticonGlyph);
+                i += emoticonLength;
+                continue;
+            }
+
             if (c is '*' or '_' or '~')
             {
                 var run = RunLength(text, i, c);
@@ -335,6 +343,94 @@ public static partial class MessageTextParser
 
         FlushPlain(segments, plain, style);
     }
+
+    /// <summary>
+    /// The typed faces Mattermost draws as emoji — ":D", ":p", "&lt;3" — each
+    /// with the shortcode it stands for. The same list as the official
+    /// client's, so a message reads the same in both, plus "-_-", which it
+    /// lacks. Letters match in either case.
+    ///
+    /// Only the drawing changes: the message itself still holds what was
+    /// typed, exactly as it does on the server.
+    /// </summary>
+    private static readonly (string Text, string Glyph)[] Emoticons = BuildEmoticons(
+        (":)", "slightly_smiling_face"), (":-)", "slightly_smiling_face"),
+        (";)", "wink"), (";-)", "wink"),
+        (":o", "open_mouth"),
+        (":-o", "scream"),
+        (":]", "smirk"), (":-]", "smirk"),
+        (":d", "smile"), (":-d", "smile"),
+        ("x-d", "stuck_out_tongue_closed_eyes"),
+        (":p", "stuck_out_tongue"), (":-p", "stuck_out_tongue"),
+        (":@", "rage"), (":-@", "rage"), (":[", "rage"), (":-[", "rage"),
+        (":(", "slightly_frowning_face"), (":-(", "slightly_frowning_face"),
+        (":'(", "cry"), (":'-(", "cry"), (":`(", "cry"), (":’(", "cry"),
+        (":/", "confused"), (":-/", "confused"),
+        (":s", "confounded"), (":-s", "confounded"),
+        (":|", "neutral_face"), (":-|", "neutral_face"),
+        (":$", "flushed"), (":-$", "flushed"),
+        (":-x", "mask"),
+        ("<3", "heart"),
+        ("</3", "broken_heart"),
+        ("-_-", "expressionless"));
+
+    private static (string Text, string Glyph)[] BuildEmoticons(params (string Text, string Shortcode)[] emoticons)
+    {
+        var built = new (string Text, string Glyph)[emoticons.Length];
+        for (var i = 0; i < emoticons.Length; i++)
+        {
+            built[i] = (emoticons[i].Text, EmojiShortcodes.ToGlyph(emoticons[i].Shortcode));
+        }
+        return built;
+    }
+
+    /// <summary>
+    /// An emoticon standing on its own at <paramref name="start"/>. It must
+    /// not touch a letter, a digit or an underscore on either side: that is
+    /// what keeps "10:30", "C:/Users", "ftp://" and the ":p" of ":pizza:" as
+    /// typed.
+    /// </summary>
+    private static bool TryEmoticon(string text, int start, out string glyph, out int length)
+    {
+        glyph = "";
+        length = 0;
+
+        if (text[start] is not (':' or ';' or '<' or '-' or 'x' or 'X')
+            || (start > 0 && IsWordCharacter(text[start - 1])))
+        {
+            return false;
+        }
+
+        foreach (var (candidate, candidateGlyph) in Emoticons)
+        {
+            if (string.Compare(text, start, candidate, 0, candidate.Length, StringComparison.OrdinalIgnoreCase) != 0)
+            {
+                continue;
+            }
+
+            var end = start + candidate.Length;
+            if (end < text.Length && IsWordCharacter(text[end]))
+            {
+                continue;
+            }
+
+            // ":o:" and ":x-d:" are shortcodes in their own right, read later.
+            if (text[start] == ':' && EmojiPattern().Match(text, start) is { Success: true } shortcode
+                && shortcode.Index == start
+                && (EmojiShortcodes.IsKnown(shortcode.Groups[1].Value) || HasLetter(shortcode.Groups[1].Value)))
+            {
+                return false;
+            }
+
+            glyph = candidateGlyph;
+            length = candidate.Length;
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool IsWordCharacter(char c) => char.IsLetterOrDigit(c) || c == '_';
 
     /// <summary>
     /// An opening run of "*", "_" or "~~" at <paramref name="start"/>. Tries
