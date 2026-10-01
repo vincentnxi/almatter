@@ -21,6 +21,15 @@ internal static class SettingsStore
             var loaded = JsonSerializer.Deserialize<AppSettings>(json);
             if (loaded is not null)
             {
+                // The sizes on offer before they each went up a notch. Left
+                // as they were, none of the three pills would show as selected.
+                loaded.MessageFontSize = loaded.MessageFontSize switch
+                {
+                    13 => 14,
+                    14.5 => 15.5,
+                    16.5 => 17.5,
+                    var size => size,
+                };
                 return loaded;
             }
         }

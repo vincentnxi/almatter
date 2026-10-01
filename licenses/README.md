@@ -7,6 +7,9 @@ Bundled third-party assets keep their own licences, reproduced here:
   SIL Open Font License 1.1. Open Sans is the official Mattermost client's body
   font; Almatter ships it so the default look matches, and offers the platform
   UI font as an alternative in the settings.
+- `Lato-OFL.txt` — Lato (`app/Almatter.App/Assets/Fonts/Lato-Regular.ttf` and
+  `Lato-Bold.ttf`), SIL Open Font License 1.1. Offered as a third typeface in
+  the settings.
 - `emoji-data-MIT.txt` — emoji-data (https://github.com/iamcal/emoji-data),
   MIT. No file of it is shipped: `tools/generate-emoji-shortcodes.js` reads its
   emoji list and writes `app/Almatter.App/Models/EmojiShortcodesData.cs`, so

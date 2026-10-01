@@ -8,8 +8,13 @@ namespace Almatter.App.Models;
 public sealed partial class FontChoiceOption : ObservableObject
 {
     public required AppFontChoice Choice { get; init; }
-    /// <summary>"Mattermost" is a name, the same in every language.</summary>
-    public string Name => Choice == AppFontChoice.System ? Loc.S.FontSystem : "Mattermost";
+    /// <summary>"Mattermost" and "Lato" are names, the same in every language.</summary>
+    public string Name => Choice switch
+    {
+        AppFontChoice.System => Loc.S.FontSystem,
+        AppFontChoice.Lato => "Lato",
+        _ => "Mattermost",
+    };
 
     /// <summary>Rendered in the face it selects, so the pill previews the actual lettering.</summary>
     public required FontFamily Preview { get; init; }

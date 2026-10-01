@@ -37,7 +37,7 @@ public sealed class MessageInlineText : SelectableTextBlock
 
     /// <summary>The user's message text size; the drawn size is this times FontScale.</summary>
     public static readonly StyledProperty<double> BaseFontSizeProperty =
-        AvaloniaProperty.Register<MessageInlineText, double>(nameof(BaseFontSize), 14.5);
+        AvaloniaProperty.Register<MessageInlineText, double>(nameof(BaseFontSize), 15.5);
 
     public static readonly StyledProperty<double> FontScaleProperty =
         AvaloniaProperty.Register<MessageInlineText, double>(nameof(FontScale), 1.0);

@@ -685,13 +685,18 @@ public partial class MainViewModel : ViewModelBase
             Choice = AppFontChoice.System,
             Preview = AppFonts.Resolve(AppFontChoice.System),
         },
+        new()
+        {
+            Choice = AppFontChoice.Lato,
+            Preview = AppFonts.Resolve(AppFontChoice.Lato),
+        },
     ];
 
     public ObservableCollection<FontSizeOption> FontSizeOptions { get; } =
     [
-        new() { Wording = s => s.FontSizeSmall, Size = 13 },
-        new() { Wording = s => s.FontSizeNormal, Size = 14.5 },
-        new() { Wording = s => s.FontSizeLarge, Size = 16.5 },
+        new() { Wording = s => s.FontSizeSmall, Size = 14 },
+        new() { Wording = s => s.FontSizeNormal, Size = 15.5 },
+        new() { Wording = s => s.FontSizeLarge, Size = 17.5 },
     ];
 
     public ObservableCollection<LanguageOption> LanguageOptions { get; } =

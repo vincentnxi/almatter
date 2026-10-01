@@ -85,7 +85,8 @@ anciennes visées par le projet.
   la *teinte de la barre de titre* qui en découle est propre à Windows (ligne ci-dessus).
 - **Police de l'interface** : la pile `Segoe UI Variable, Segoe UI, Inter` se replie sur
   Inter (embarqué via `Avalonia.Fonts.Inter`) partout où Segoe est absent, donc macOS et
-  Linux rendent correctement sans police à embarquer. Si un rendu vraiment natif est
+  Linux rendent correctement sans police à embarquer. Open Sans et Lato, les deux autres
+  choix, sont embarquées dans l'app (`Assets/Fonts`) et rendent donc pareil partout. Si un rendu vraiment natif est
   souhaité plus tard, il suffira d'ajouter `-apple-system`/`Cantarell` en tête de pile :
   la police n'est déclarée qu'à deux endroits, l'attribut `FontFamily` de `MainWindow.axaml`
   et celui de `LoginWindow.axaml`, dont tout le reste hérite.

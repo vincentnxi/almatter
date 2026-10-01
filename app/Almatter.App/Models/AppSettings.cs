@@ -31,9 +31,15 @@ public sealed partial class AppSettings : ObservableObject
     [ObservableProperty]
     public partial AppFontChoice FontChoice { get; set; } = AppFontChoice.Mattermost;
 
-    /// <summary>14,5px on Segoe UI Variable reads at about the same size as the official client's 14px Open Sans, whose x-height is taller.</summary>
+    /// <summary>
+    /// The middle of the three sizes on offer, 14 / 15,5 / 17,5. The official
+    /// client's 14px is the small one here: the same 14px reads smaller in
+    /// this app, whose renderer draws text paler than a browser does. They
+    /// used to be 13 / 14,5 / 16,5; SettingsStore moves a saved old value
+    /// onto its new equivalent.
+    /// </summary>
     [ObservableProperty]
-    public partial double MessageFontSize { get; set; } = 14.5;
+    public partial double MessageFontSize { get; set; } = 15.5;
 
     /// <summary>
     /// Channel/DM ids in the order the user dragged them within Favoris —
