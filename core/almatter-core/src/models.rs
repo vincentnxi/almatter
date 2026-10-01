@@ -300,12 +300,24 @@ pub struct Reaction {
     pub emoji_name: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct FileInfo {
     pub id: String,
     pub name: String,
     #[serde(default, deserialize_with = "null_as_default")]
     pub size: i64,
+    /// Pixel dimensions, for a picture — zero for anything else. Kept so the
+    /// UI can reserve a thumbnail's box before the thumbnail itself arrives:
+    /// a row that changes height after it's drawn makes the conversation jump.
+    #[serde(default, deserialize_with = "null_as_default")]
+    pub width: i64,
+    #[serde(default, deserialize_with = "null_as_default")]
+    pub height: i64,
+    /// Whether the server made a preview picture for this file (it does for
+    /// every image format it can decode — not SVG) — see
+    /// `MattermostClient::get_file_preview`.
+    #[serde(default, deserialize_with = "null_as_default")]
+    pub has_preview_image: bool,
 }
 
 /// One entry of a post's `metadata.embeds` — Mattermost generates one of

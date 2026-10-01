@@ -188,7 +188,10 @@ impl Database {
                 id      TEXT PRIMARY KEY,
                 post_id TEXT NOT NULL,
                 name    TEXT NOT NULL,
-                size    INTEGER NOT NULL DEFAULT 0
+                size    INTEGER NOT NULL DEFAULT 0,
+                width   INTEGER NOT NULL DEFAULT 0,
+                height  INTEGER NOT NULL DEFAULT 0,
+                has_preview_image INTEGER NOT NULL DEFAULT 0
             );
             CREATE INDEX IF NOT EXISTS idx_files_post ON files(post_id);
 
@@ -314,6 +317,15 @@ impl Database {
         let _ = self
             .conn
             .execute("ALTER TABLE posts ADD COLUMN is_pinned INTEGER NOT NULL DEFAULT 0", []);
+        let _ = self
+            .conn
+            .execute("ALTER TABLE files ADD COLUMN width INTEGER NOT NULL DEFAULT 0", []);
+        let _ = self
+            .conn
+            .execute("ALTER TABLE files ADD COLUMN height INTEGER NOT NULL DEFAULT 0", []);
+        let _ = self
+            .conn
+            .execute("ALTER TABLE files ADD COLUMN has_preview_image INTEGER NOT NULL DEFAULT 0", []);
 
         Ok(())
     }
@@ -421,8 +433,8 @@ impl Database {
         self.conn.execute("DELETE FROM files WHERE post_id = ?1", params![post.id])?;
         for f in &post.metadata.files {
             self.conn.execute(
-                "INSERT OR REPLACE INTO files (id, post_id, name, size) VALUES (?1, ?2, ?3, ?4)",
-                params![f.id, post.id, f.name, f.size],
+                "INSERT OR REPLACE INTO files (id, post_id, name, size, width, height, has_preview_image) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                params![f.id, post.id, f.name, f.size, f.width, f.height, f.has_preview_image],
             )?;
         }
 
@@ -811,12 +823,19 @@ impl Database {
             }
 
             let mut stmt = self.conn.prepare_cached(&format!(
-                "SELECT post_id, id, name, size FROM files WHERE post_id IN ({placeholders})"
+                "SELECT post_id, id, name, size, width, height, has_preview_image FROM files WHERE post_id IN ({placeholders})"
             ))?;
             let rows = stmt.query_map(rusqlite::params_from_iter(chunk), |row| {
                 Ok((
                     row.get::<_, String>(0)?,
-                    FileInfo { id: row.get(1)?, name: row.get(2)?, size: row.get(3)? },
+                    FileInfo {
+                        id: row.get(1)?,
+                        name: row.get(2)?,
+                        size: row.get(3)?,
+                        width: row.get(4)?,
+                        height: row.get(5)?,
+                        has_preview_image: row.get(6)?,
+                    },
                 ))
             })?;
             for row in rows {
@@ -1277,6 +1296,13 @@ pub fn avatar_image_dir() -> PathBuf {
 /// filesystem-safe filename first (see dispatch.rs's `hash_url`).
 pub fn link_preview_image_dir() -> PathBuf {
     app_data_dir().join("link-previews")
+}
+
+/// Where cached attachment thumbnails live, one file per file id — the
+/// server's own preview picture of an attached image, not the attachment
+/// itself (that's `downloads_dir`, and only fetched on a click).
+pub fn file_preview_image_dir() -> PathBuf {
+    app_data_dir().join("file-previews")
 }
 
 /// Same folder as the cache database — a plain-text diagnostic log for
@@ -1788,7 +1814,14 @@ mod tests {
                     Reaction { user_id: "u1".into(), emoji_name: "+1".into() },
                     Reaction { user_id: "u2".into(), emoji_name: "+1".into() },
                 ],
-                files: vec![FileInfo { id: "f1".into(), name: "diagram.png".into(), size: 2048 }],
+                files: vec![FileInfo {
+                    id: "f1".into(),
+                    name: "diagram.png".into(),
+                    size: 2048,
+                    width: 800,
+                    height: 600,
+                    has_preview_image: true,
+                }],
                 ..Default::default()
             },
         };
@@ -1798,6 +1831,9 @@ mod tests {
         assert_eq!(cached[0].metadata.reactions.len(), 2);
         assert_eq!(cached[0].metadata.files.len(), 1);
         assert_eq!(cached[0].metadata.files[0].name, "diagram.png");
+        // What a thumbnail's box is sized from has to survive the cache too.
+        assert_eq!((cached[0].metadata.files[0].width, cached[0].metadata.files[0].height), (800, 600));
+        assert!(cached[0].metadata.files[0].has_preview_image);
 
         // Re-upserting with fewer reactions/files must drop the old ones,
         // not just add to them.
@@ -1838,7 +1874,7 @@ mod tests {
                 Reaction { user_id: "u1".into(), emoji_name: "+1".into() },
                 Reaction { user_id: "u2".into(), emoji_name: "tada".into() },
             ],
-            files: vec![FileInfo { id: "f1".into(), name: "one.png".into(), size: 1 }],
+            files: vec![FileInfo { id: "f1".into(), name: "one.png".into(), size: 1, ..Default::default() }],
             ..Default::default()
         })).unwrap();
 
@@ -1848,8 +1884,8 @@ mod tests {
         db.upsert_post(&post("p3", 3000, PostMetadata {
             reactions: vec![Reaction { user_id: "u3".into(), emoji_name: "eyes".into() }],
             files: vec![
-                FileInfo { id: "f2".into(), name: "two.png".into(), size: 2 },
-                FileInfo { id: "f3".into(), name: "three.png".into(), size: 3 },
+                FileInfo { id: "f2".into(), name: "two.png".into(), size: 2, ..Default::default() },
+                FileInfo { id: "f3".into(), name: "three.png".into(), size: 3, ..Default::default() },
             ],
             ..Default::default()
         })).unwrap();
@@ -2043,7 +2079,7 @@ mod tests {
             is_pinned: false,
             metadata: PostMetadata {
                 reactions: vec![Reaction { user_id: "u1".into(), emoji_name: "+1".into() }],
-                files: vec![FileInfo { id: "f1".into(), name: "diagram.png".into(), size: 2048 }],
+                files: vec![FileInfo { id: "f1".into(), name: "diagram.png".into(), size: 2048, ..Default::default() }],
                 ..Default::default()
             },
         })

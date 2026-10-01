@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Linq;
 using System.Threading.Tasks;
 using Almatter.App.Localization;
 using Avalonia;
@@ -121,6 +122,20 @@ public sealed partial class MessageItem : ObservableObject
     public bool HasThreadReplies => ThreadReplyCount > 0;
     public string ThreadReplyLabel => Loc.S.ReplyCount(ThreadReplyCount);
     public bool HasAttachments => Attachments.Count > 0;
+
+    /// <summary>
+    /// The attachments shown as thumbnails, and the ones shown as file cards —
+    /// two lists because they are laid out differently (pictures side by
+    /// side, cards one under the other). Split once: a message's attachments
+    /// are fixed when its row is built.
+    /// </summary>
+    public IReadOnlyList<AttachmentItem> ImageAttachments => _imageAttachments ??= Attachments.Where(a => a.IsImage).ToList();
+    public IReadOnlyList<AttachmentItem> FileAttachments => _fileAttachments ??= Attachments.Where(a => !a.IsImage).ToList();
+    public bool HasImageAttachments => ImageAttachments.Count > 0;
+    public bool HasFileAttachments => FileAttachments.Count > 0;
+
+    private IReadOnlyList<AttachmentItem>? _imageAttachments;
+    private IReadOnlyList<AttachmentItem>? _fileAttachments;
     public bool HasReactions => Reactions.Count > 0;
 
     /// <summary>Pinned to the channel — drives the marker in the header and the wording of the pin action.</summary>

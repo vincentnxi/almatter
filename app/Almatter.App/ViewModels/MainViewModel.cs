@@ -499,6 +499,27 @@ public partial class MainViewModel : ViewModelBase
     private readonly BoundedBitmapCache _linkPreviewImageCache = new(24L * 1024 * 1024);
 
     /// <summary>
+    /// The largest an attached picture's thumbnail is drawn (MainWindow.axaml
+    /// takes its box from AttachmentItem, which gets it from these): one
+    /// picture alone in a message, or each of several.
+    /// </summary>
+    private const double SingleThumbnailMaxWidth = 360;
+    private const double SingleThumbnailMaxHeight = 260;
+    private const double TileThumbnailMaxWidth = 200;
+    private const double TileThumbnailMaxHeight = 150;
+    private const double ThumbnailMinSide = 40;
+
+    /// <summary>
+    /// Decoded attachment thumbnails, capped like the link-preview images and
+    /// for the same reason. Decoded at the size of their box, the largest is
+    /// under 1 MB on a 150 % screen, so this holds a few dozen at least.
+    /// </summary>
+    private readonly BoundedBitmapCache _attachmentThumbnailCache = new(32L * 1024 * 1024);
+
+    /// <summary>Thumbnails that could not be had, and when to ask again — same idea as _linkPreviewImageFailures.</summary>
+    private readonly ConcurrentDictionary<string, DateTime> _attachmentThumbnailFailures = new();
+
+    /// <summary>
     /// The window's display scale — 1.5 on a 150 % screen. Set by MainWindow;
     /// images are decoded for physical pixels, so without it they'd look soft
     /// on a high-density display.
@@ -5669,15 +5690,126 @@ public partial class MainViewModel : ViewModelBase
         return new ObservableCollection<ReactionItem>(items);
     }
 
-    private static ObservableCollection<AttachmentItem> BuildAttachments(PostDto post)
+    private ObservableCollection<AttachmentItem> BuildAttachments(PostDto post)
     {
-        var items = post.Metadata.Files.Select(f => new AttachmentItem
+        static bool HasKnownSize(FileDto f) => f.HasPreviewImage && f.Width > 0 && f.Height > 0;
+
+        // A message cached before picture dimensions were kept comes back
+        // without them, and stays that way until the server is asked for it
+        // again — which, for anything older than the latest page of a
+        // conversation, is never. Its file name is then all there is to go
+        // on: a picture by its extension gets a tile of a fixed shape.
+        static bool IsImage(FileDto f) => HasKnownSize(f)
+            || (f.Width == 0 && f.Height == 0 && !f.HasPreviewImage
+                && Path.GetExtension(f.Name).ToLowerInvariant() is ".png" or ".jpg" or ".jpeg" or ".gif" or ".webp" or ".bmp");
+
+        // A picture on its own gets room to be looked at; several are tiles,
+        // so that five photos don't push the conversation off the screen.
+        var alone = post.Metadata.Files.Count(IsImage) == 1;
+        var items = post.Metadata.Files.Select(f =>
         {
-            Id = f.Id,
-            FileName = f.Name,
-            SizeBytes = f.Size,
+            var isImage = IsImage(f);
+            var (width, height) = !isImage ? (0, 0)
+                : HasKnownSize(f) ? ThumbnailBoxFor(f.Width, f.Height, alone)
+                : (TileThumbnailMaxWidth, TileThumbnailMaxHeight);
+            return new AttachmentItem
+            {
+                Id = f.Id,
+                FileName = f.Name,
+                SizeBytes = f.Size,
+                IsImage = isImage,
+                ThumbnailWidth = width,
+                ThumbnailHeight = height,
+                // Not fetched here: the thumbnail asks the first time it's
+                // actually shown (see AttachmentItem.Thumbnail).
+                ThumbnailResolver = isImage ? ResolveAttachmentThumbnailAsync : null,
+            };
         });
         return new ObservableCollection<AttachmentItem>(items);
+    }
+
+    /// <summary>
+    /// The box a picture's thumbnail is drawn in: the picture's own shape,
+    /// shrunk to fit the largest size allowed — never enlarged, a small
+    /// screenshot stays small. The floor keeps a sliver (a 4000 × 30 banner)
+    /// something that can still be seen and clicked; the picture is cropped
+    /// to fill whatever the box ends up being.
+    /// </summary>
+    private static (double Width, double Height) ThumbnailBoxFor(long pixelWidth, long pixelHeight, bool alone)
+    {
+        var maxWidth = alone ? SingleThumbnailMaxWidth : TileThumbnailMaxWidth;
+        var maxHeight = alone ? SingleThumbnailMaxHeight : TileThumbnailMaxHeight;
+        var scale = Math.Min(1.0, Math.Min(maxWidth / pixelWidth, maxHeight / pixelHeight));
+        return (
+            Math.Max(ThumbnailMinSide, Math.Round(pixelWidth * scale)),
+            Math.Max(ThumbnailMinSide, Math.Round(pixelHeight * scale)));
+    }
+
+    private async Task ResolveAttachmentThumbnailAsync(AttachmentItem item)
+    {
+        // Same as ResolveLinkPreviewImageAsync: the request arrives from
+        // inside a binding reading Thumbnail, which must return first.
+        await Task.Yield();
+
+        if (await GetAttachmentThumbnailBitmapAsync(item.Id, item.ThumbnailWidth, item.ThumbnailHeight) is { } bitmap)
+        {
+            item.Thumbnail = bitmap;
+        }
+    }
+
+    /// <summary>Same shape as GetLinkPreviewImageBitmapAsync, for an attached picture — cached per file id, decoded from the server's preview of it.</summary>
+    private async Task<Bitmap?> GetAttachmentThumbnailBitmapAsync(string fileId, double boxWidth, double boxHeight)
+    {
+        // The same file is always given the same box, except in the rare
+        // message edited from one picture to several — hence the size in the key.
+        var key = $"{fileId}@{boxWidth}x{boxHeight}";
+        if (_attachmentThumbnailCache.TryGet(key, out var cached))
+        {
+            return cached;
+        }
+        if (_attachmentThumbnailFailures.TryGetValue(fileId, out var retryNotBefore) && DateTime.UtcNow < retryNotBefore)
+        {
+            return null;
+        }
+        await _imageFetchThrottle.WaitAsync();
+        try
+        {
+            if (_attachmentThumbnailCache.TryGet(key, out cached))
+            {
+                return cached;
+            }
+            var path = await _service.GetFilePreviewPathAsync(_session.BaseUrl, _session.Token, fileId);
+            var scaling = DisplayScaling;
+            Bitmap bitmap;
+            try
+            {
+                bitmap = await Task.Run(() => CardImageDecoder.DecodeToCover(path, boxWidth, boxHeight, scaling));
+            }
+            catch (Exception ex)
+            {
+                CrashLogger.Write($"thumbnail: decode failed for {fileId} at {path}, retrying once", ex);
+                TryDeleteFile(path);
+                path = await _service.GetFilePreviewPathAsync(_session.BaseUrl, _session.Token, fileId);
+                bitmap = await Task.Run(() => CardImageDecoder.DecodeToCover(path, boxWidth, boxHeight, scaling));
+            }
+            _attachmentThumbnailCache.Add(key, bitmap);
+            return bitmap;
+        }
+        catch (Exception ex)
+        {
+            // That one picture stays an empty box — still clickable, still opens the file.
+            CrashLogger.Write($"thumbnail: gave up on {fileId}", ex);
+            if (_attachmentThumbnailFailures.Count > 500)
+            {
+                _attachmentThumbnailFailures.Clear();
+            }
+            _attachmentThumbnailFailures[fileId] = DateTime.UtcNow + LinkPreviewRetryAfterFailure;
+            return null;
+        }
+        finally
+        {
+            _imageFetchThrottle.Release();
+        }
     }
 
     private static string FormatTime(long createAtMillis) =>

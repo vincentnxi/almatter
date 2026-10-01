@@ -641,6 +641,26 @@ impl MattermostClient {
         body_bytes(resp).await
     }
 
+    /// The server's own preview of an attached picture: a JPEG at most 1920
+    /// pixels wide, made when the file was uploaded. This is what a thumbnail
+    /// in the conversation is drawn from — far lighter than the attachment
+    /// itself, which can be a 12 MB photo, and always a format the app can
+    /// decode whatever was uploaded. (The server's "thumbnail" endpoint is no
+    /// use here: 120 × 100, too coarse for the size a picture is shown at.)
+    pub async fn get_file_preview(&self, file_id: &str) -> Result<Vec<u8>, ApiError> {
+        let mut req = self.http.get(self.url(&format!("/files/{file_id}/preview")));
+        if let Some(token) = &self.token {
+            req = req.bearer_auth(token);
+        }
+        let resp = req.send().await?;
+        if !resp.status().is_success() {
+            let status = resp.status().as_u16();
+            let body = resp.text().await.unwrap_or_default();
+            return Err(ApiError::from_authenticated_response(status, body));
+        }
+        body_bytes(resp).await
+    }
+
     /// A user's profile picture — Mattermost always returns *something*
     /// here (a generated default avatar if they never set a custom one),
     /// so this only fails for a genuinely unreachable server or unknown user.
@@ -1574,6 +1594,21 @@ mod tests {
         let bytes = client.get_file_bytes("f1").await.expect("file bytes should download");
 
         assert_eq!(bytes, vec![0x25, 0x50, 0x44, 0x46]);
+    }
+
+    #[tokio::test]
+    async fn get_file_preview_asks_for_the_preview_not_the_file() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/api/v4/files/f1/preview"))
+            .respond_with(ResponseTemplate::new(200).set_body_bytes(vec![0xFF, 0xD8, 0xFF]))
+            .mount(&server)
+            .await;
+
+        let client = MattermostClient::new(server.uri()).with_token("abc123");
+        let bytes = client.get_file_preview("f1").await.expect("preview bytes should download");
+
+        assert_eq!(bytes, vec![0xFF, 0xD8, 0xFF]);
     }
 
     #[tokio::test]

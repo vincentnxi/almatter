@@ -774,7 +774,36 @@
                                         <TextBlock Text="{Binding T.Edited, Source={x:Static loc:Loc.Instance}}" IsVisible="{Binding IsEdited}" Margin="6,1,0,0"
                                                    FontSize="11" FontStyle="Italic" Foreground="{DynamicResource TextTertiaryBrush}" />
 
-                                        <ItemsControl IsVisible="{Binding HasAttachments}" ItemsSource="{Binding Attachments}" Margin="0,4,0,0">
+                                        <!-- Attached pictures, as thumbnails. Each box is sized up
+                                             front from the picture's own dimensions, so the bitmap
+                                             arriving later never changes the row's height. -->
+                                        <ItemsControl IsVisible="{Binding HasImageAttachments}" ItemsSource="{Binding ImageAttachments}" Margin="0,6,0,0">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate>
+                                                    <WrapPanel />
+                                                </ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate DataType="models:AttachmentItem">
+                                                    <Button Classes="row-button" Margin="0,0,6,6" HorizontalAlignment="Left" ToolTip.Tip="{Binding ThumbnailTip}"
+                                                            Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).OpenAttachmentCommand}"
+                                                            CommandParameter="{Binding}">
+                                                        <Border Width="{Binding ThumbnailWidth}" Height="{Binding ThumbnailHeight}"
+                                                                Background="{DynamicResource BgPanelBrush}" CornerRadius="8" ClipToBounds="True">
+                                                            <Panel>
+                                                                <Image Source="{Binding Thumbnail}" Stretch="UniformToFill" IsVisible="{Binding Thumbnail, Converter={x:Static conv:ObjectConverters.IsNotNull}}" />
+                                                                <Border IsVisible="{Binding IsDownloading}" Background="#99000000">
+                                                                    <TextBlock Text="{Binding T.Downloading, Source={x:Static loc:Loc.Instance}}" FontSize="11" FontStyle="Italic" Foreground="White"
+                                                                               HorizontalAlignment="Center" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                                                </Border>
+                                                            </Panel>
+                                                        </Border>
+                                                    </Button>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+
+                                        <ItemsControl IsVisible="{Binding HasFileAttachments}" ItemsSource="{Binding FileAttachments}" Margin="0,4,0,0">
                                             <ItemsControl.ItemsPanel>
                                                 <ItemsPanelTemplate>
                                                     <StackPanel Spacing="6" />

@@ -350,6 +350,20 @@ public sealed class MattermostService
         return data.Path;
     }
 
+    /// <summary>Downloads (once — cached to disk after that) the server's preview of an attached picture and returns its local file path — what a thumbnail is decoded from, not the attachment itself.</summary>
+    public async Task<string> GetFilePreviewPathAsync(string baseUrl, string token, string fileId)
+    {
+        var request = new JsonObject
+        {
+            ["command"] = "get_file_preview",
+            ["base_url"] = baseUrl,
+            ["token"] = token,
+            ["file_id"] = fileId,
+        };
+        var data = await CallAsync<FileData>(request);
+        return data.Path;
+    }
+
     public async Task<List<string>> GetFavoritesAsync(string baseUrl, string token, string userId)
     {
         var request = new JsonObject

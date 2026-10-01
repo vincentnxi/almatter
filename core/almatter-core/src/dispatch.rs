@@ -170,6 +170,15 @@ enum Request {
         file_id: String,
         file_name: String,
     },
+    /// Downloads (once — cached to disk after that) the server's preview of
+    /// an attached picture and returns the local file path — what the
+    /// thumbnail in the conversation is decoded from. The attachment itself
+    /// is still only fetched by `GetFile`, on a click.
+    GetFilePreview {
+        base_url: String,
+        token: String,
+        file_id: String,
+    },
     GetFavorites {
         base_url: String,
         token: String,
@@ -852,6 +861,12 @@ async fn handle(request_json: &str, db: &'static Mutex<Database>) -> Value {
                 .await
                 .map(|path| json!({ "path": path }))
         }
+        Request::GetFilePreview { base_url, token, file_id } => {
+            let client = MattermostClient::new(base_url).with_token(token);
+            ensure_file_preview_cached(&client, &file_id)
+                .await
+                .map(|path| json!({ "path": path }))
+        }
         Request::GetFavorites { base_url, token, user_id } => MattermostClient::new(base_url)
             .with_token(token)
             .get_favorite_channel_ids(&user_id)
@@ -1170,6 +1185,25 @@ async fn ensure_link_preview_image_cached(url: &str) -> Result<String, String> {
     Ok(path.to_string_lossy().to_string())
 }
 
+/// Same shape as `ensure_avatar_cached`, for the server's preview of an
+/// attached picture. `file_id` comes from the server and is used as a file
+/// name, so anything that isn't a plain Mattermost id (letters and digits)
+/// is refused rather than joined onto the cache folder's path.
+async fn ensure_file_preview_cached(client: &MattermostClient, file_id: &str) -> Result<String, String> {
+    if file_id.is_empty() || !file_id.chars().all(|c| c.is_ascii_alphanumeric()) {
+        return Err(format!("not a file id: {file_id:?}"));
+    }
+    let dir = crate::db::file_preview_image_dir();
+    let path = dir.join(file_id);
+    let already_cached = check_cached(dir.clone(), path.clone()).await?;
+    if !already_cached {
+        let bytes = client.get_file_preview(file_id).await.map_err(|e| e.to_string())?;
+        write_atomically(path.clone(), bytes).await?;
+        prune_cache_dir_occasionally(dir, FILE_PREVIEW_CACHE_BUDGET).await;
+    }
+    Ok(path.to_string_lossy().to_string())
+}
+
 /// How much disk each derived-image cache may hold. Nothing ever deleted
 /// from these: after a few months of ordinary use the link-preview folder
 /// alone was 32 MB of pictures from articles nobody is going to scroll back
@@ -1183,6 +1217,9 @@ async fn ensure_link_preview_image_cached(url: &str) -> Result<String, String> {
 const LINK_PREVIEW_CACHE_BUDGET: u64 = 24 * 1024 * 1024;
 const EMOJI_CACHE_BUDGET: u64 = 16 * 1024 * 1024;
 const AVATAR_CACHE_BUDGET: u64 = 8 * 1024 * 1024;
+/// Larger than the others: one preview is up to 1920 pixels wide, a few
+/// hundred KB, so this is a couple of hundred pictures.
+const FILE_PREVIEW_CACHE_BUDGET: u64 = 64 * 1024 * 1024;
 
 /// Sweeps only every so often rather than after each write: the sweep lists
 /// and stats the whole folder, which is far more work than the single write

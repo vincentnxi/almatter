@@ -134,6 +134,9 @@ public sealed class FileDto
     [JsonPropertyName("id")] public string Id { get; set; } = "";
     [JsonPropertyName("name")] public string Name { get; set; } = "";
     [JsonPropertyName("size")] public long Size { get; set; }
+    [JsonPropertyName("width")] public long Width { get; set; }
+    [JsonPropertyName("height")] public long Height { get; set; }
+    [JsonPropertyName("has_preview_image")] public bool HasPreviewImage { get; set; }
 }
 
 internal sealed class Envelope<TData>
