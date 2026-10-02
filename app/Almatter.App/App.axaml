@@ -11,7 +11,54 @@
         <local:ViewLocator />
     </Application.DataTemplates>
 
+    <!-- Context menus drawn the way the OS draws its own, rather than in the
+         app's palette: a menu is the one surface people expect to look like
+         the system's. These override FluentTheme's keys of the same name, and
+         follow the app's light/dark choice, not the OS's. The values are
+         Windows 11's; another OS gets its own set through OnPlatform. -->
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.ThemeDictionaries>
+                <ResourceDictionary x:Key="Light">
+                    <SolidColorBrush x:Key="MenuFlyoutPresenterBackground" Color="#F9F9F9" />
+                    <SolidColorBrush x:Key="MenuFlyoutPresenterBorderBrush" Color="#24000000" />
+                    <SolidColorBrush x:Key="MenuFlyoutItemForeground" Color="#E4000000" />
+                    <SolidColorBrush x:Key="MenuFlyoutItemForegroundPointerOver" Color="#E4000000" />
+                    <SolidColorBrush x:Key="MenuFlyoutItemForegroundPressed" Color="#9E000000" />
+                    <SolidColorBrush x:Key="MenuFlyoutItemForegroundDisabled" Color="#5C000000" />
+                    <SolidColorBrush x:Key="MenuFlyoutItemBackgroundPointerOver" Color="#0F000000" />
+                    <SolidColorBrush x:Key="MenuFlyoutItemBackgroundPressed" Color="#0A000000" />
+                </ResourceDictionary>
+                <ResourceDictionary x:Key="Dark">
+                    <SolidColorBrush x:Key="MenuFlyoutPresenterBackground" Color="#2C2C2C" />
+                    <SolidColorBrush x:Key="MenuFlyoutPresenterBorderBrush" Color="#1FFFFFFF" />
+                    <SolidColorBrush x:Key="MenuFlyoutItemForeground" Color="#FFFFFF" />
+                    <SolidColorBrush x:Key="MenuFlyoutItemForegroundPointerOver" Color="#FFFFFF" />
+                    <SolidColorBrush x:Key="MenuFlyoutItemForegroundPressed" Color="#C5FFFFFF" />
+                    <SolidColorBrush x:Key="MenuFlyoutItemForegroundDisabled" Color="#5DFFFFFF" />
+                    <SolidColorBrush x:Key="MenuFlyoutItemBackgroundPointerOver" Color="#0FFFFFFF" />
+                    <SolidColorBrush x:Key="MenuFlyoutItemBackgroundPressed" Color="#0AFFFFFF" />
+                </ResourceDictionary>
+            </ResourceDictionary.ThemeDictionaries>
+            <Thickness x:Key="MenuFlyoutScrollerMargin">0,2</Thickness>
+        </ResourceDictionary>
+    </Application.Resources>
+
     <Application.Styles>
         <FluentTheme />
+
+        <!-- The system's own menu typeface instead of the one chosen for
+             messages. Anywhere but Windows, the platform default. -->
+        <Style Selector="MenuFlyoutPresenter">
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="FontFamily" Value="{OnPlatform Default='$Default', Windows='Segoe UI Variable Text, Segoe UI', x:TypeArguments=FontFamily}" />
+        </Style>
+        <!-- Rows inset from the menu's edge, with a rounded hover tint. -->
+        <Style Selector="MenuFlyoutPresenter MenuItem">
+            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="Margin" Value="4,2" />
+            <Setter Property="Padding" Value="11,7,11,8" />
+        </Style>
     </Application.Styles>
 </Application>
