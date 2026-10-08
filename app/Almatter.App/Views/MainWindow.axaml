@@ -235,7 +235,8 @@
             <Grid ColumnDefinitions="Auto,*" Margin="{Binding IndentMargin}">
                 <TextBlock Text="{Binding Marker}" MinWidth="16" Margin="2,0,6,0" TextAlignment="Right"
                            Foreground="{DynamicResource TextSecondaryBrush}"
-                           FontSize="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.MessageFontSize}" />
+                           FontSize="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.MessageFontSize}"
+                           LineHeight="{Binding #RootWindow.((vm:MainViewModel)DataContext).MessageLineHeight}" />
                 <views:MessageInlineText Grid.Column="1" Segments="{Binding Segments}"
                                          BaseFontSize="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.MessageFontSize}"
                                          LinkCommand="{Binding #RootWindow.((vm:MainViewModel)DataContext).OpenLinkCommand}" />

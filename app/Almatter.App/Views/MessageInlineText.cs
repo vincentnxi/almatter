@@ -49,11 +49,29 @@ public sealed class MessageInlineText : SelectableTextBlock
     /// </summary>
     public static readonly FontFamily MonospaceFont = new("Cascadia Mono, Consolas, Menlo, DejaVu Sans Mono, Liberation Mono, Courier New");
 
-    /// <summary>Same ratio as MainViewModel.InlineEmojiSize.</summary>
-    private const double EmojiScale = 1.35;
+    /// <summary>
+    /// How tall a custom emoji's picture is, as a multiple of the font size.
+    /// As tall as a line and no taller, so a line holding one is no higher
+    /// than its neighbours.
+    /// </summary>
+    public const double EmojiScale = 1.45;
+
+    /// <summary>
+    /// The font size a standard emoji is set in, as a multiple of the text's.
+    /// Smaller than EmojiScale for the same size on screen: a glyph fills
+    /// its font size and a little more, a picture exactly its height.
+    /// </summary>
+    private const double EmojiGlyphScale = 1.3;
+
+    /// <summary>
+    /// Line height as a multiple of the font size — close to the official
+    /// client's 20px lines for 14px text.
+    /// </summary>
+    public const double LineHeightRatio = 1.45;
 
     private readonly List<LinkRange> _links = [];
     private readonly List<Image> _emojiImages = [];
+    private readonly List<Run> _emojiRuns = [];
     private readonly List<CustomEmojiSegment> _pendingEmoji = [];
     private IBrush? _accentBrush;
     private IBrush? _codeBackgroundBrush;
@@ -64,6 +82,7 @@ public sealed class MessageInlineText : SelectableTextBlock
     {
         TextWrapping = TextWrapping.Wrap;
         FontSize = BaseFontSize * FontScale;
+        LineHeight = FontSize * LineHeightRatio;
 
         // Rebuilt when the theme swaps these, since a Run can't hold a
         // DynamicResource of its own.
@@ -128,9 +147,14 @@ public sealed class MessageInlineText : SelectableTextBlock
         }
         else if (change.Property == FontSizeProperty)
         {
+            LineHeight = FontSize * LineHeightRatio;
             foreach (var image in _emojiImages)
             {
                 image.Height = FontSize * EmojiScale;
+            }
+            foreach (var run in _emojiRuns)
+            {
+                run.FontSize = FontSize * EmojiGlyphScale;
             }
         }
     }
@@ -144,6 +168,7 @@ public sealed class MessageInlineText : SelectableTextBlock
         _pendingEmoji.Clear();
         _links.Clear();
         _emojiImages.Clear();
+        _emojiRuns.Clear();
         _pressedLink = null;
 
         var inlines = new InlineCollection();
@@ -174,49 +199,97 @@ public sealed class MessageInlineText : SelectableTextBlock
                 _pendingEmoji.Add(emoji);
             }
 
-            var run = new Run(segment.Text);
-            var decorations = new TextDecorationCollection();
-
-            switch (segment)
+            if (segment is LinkSegment link)
             {
-                case LinkSegment link:
-                    run.Foreground = _accentBrush;
-                    decorations.AddRange(Avalonia.Media.TextDecorations.Underline);
-                    _links.Add(new LinkRange(position, position + segment.Text.Length, link.LinkUrl));
-                    break;
-                case MentionSegment:
-                    run.Foreground = _accentBrush;
-                    run.FontWeight = FontWeight.SemiBold;
-                    break;
+                _links.Add(new LinkRange(position, position + segment.Text.Length, link.LinkUrl));
             }
 
-            if (segment.Style.HasFlag(TextStyle.Bold))
-            {
-                run.FontWeight = FontWeight.Bold;
-            }
-            if (segment.Style.HasFlag(TextStyle.Italic))
-            {
-                run.FontStyle = FontStyle.Italic;
-            }
-            if (segment.Style.HasFlag(TextStyle.Strikethrough))
-            {
-                decorations.AddRange(Avalonia.Media.TextDecorations.Strikethrough);
-            }
+            // Code keeps its emoji at the size of its letters, like everything else in it.
             if (segment.Style.HasFlag(TextStyle.Code))
             {
-                run.FontFamily = MonospaceFont;
-                run.Background = _codeBackgroundBrush;
+                inlines.Add(StyledRun(segment, segment.Text));
             }
-            if (decorations.Count > 0)
+            else
             {
-                run.TextDecorations = decorations;
+                AddWithLargerEmoji(inlines, segment);
             }
-
-            inlines.Add(run);
             position += segment.Text.Length;
         }
 
         Inlines = inlines;
+    }
+
+    /// <summary>
+    /// Adds a segment's text with each standard emoji in a run of its own,
+    /// set larger than the letters. The pieces add up to the same characters
+    /// in the same order, so positions in the laid-out text — what links and
+    /// the selection are found by — don't move.
+    /// </summary>
+    private void AddWithLargerEmoji(InlineCollection inlines, MessageTextSegment segment)
+    {
+        var text = segment.Text;
+        var start = 0;
+        while (start < text.Length)
+        {
+            var emojiStart = EmojiGlyphs.NextStart(text, start);
+            if (emojiStart > start)
+            {
+                inlines.Add(StyledRun(segment, text[start..emojiStart]));
+            }
+            if (emojiStart == text.Length)
+            {
+                break;
+            }
+
+            var length = EmojiGlyphs.LengthAt(text, emojiStart);
+            var emoji = StyledRun(segment, text.Substring(emojiStart, length));
+            emoji.FontSize = FontSize * EmojiGlyphScale;
+            _emojiRuns.Add(emoji);
+            inlines.Add(emoji);
+            start = emojiStart + length;
+        }
+    }
+
+    private Run StyledRun(MessageTextSegment segment, string text)
+    {
+        var run = new Run(text);
+        var decorations = new TextDecorationCollection();
+
+        switch (segment)
+        {
+            case LinkSegment:
+                run.Foreground = _accentBrush;
+                decorations.AddRange(Avalonia.Media.TextDecorations.Underline);
+                break;
+            case MentionSegment:
+                run.Foreground = _accentBrush;
+                run.FontWeight = FontWeight.SemiBold;
+                break;
+        }
+
+        if (segment.Style.HasFlag(TextStyle.Bold))
+        {
+            run.FontWeight = FontWeight.Bold;
+        }
+        if (segment.Style.HasFlag(TextStyle.Italic))
+        {
+            run.FontStyle = FontStyle.Italic;
+        }
+        if (segment.Style.HasFlag(TextStyle.Strikethrough))
+        {
+            decorations.AddRange(Avalonia.Media.TextDecorations.Strikethrough);
+        }
+        if (segment.Style.HasFlag(TextStyle.Code))
+        {
+            run.FontFamily = MonospaceFont;
+            run.Background = _codeBackgroundBrush;
+        }
+        if (decorations.Count > 0)
+        {
+            run.TextDecorations = decorations;
+        }
+
+        return run;
     }
 
     /// <summary>

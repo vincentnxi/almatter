@@ -798,7 +798,10 @@ public partial class MainViewModel : ViewModelBase
     /// an emoji set to exactly the font size reads as undersized next to
     /// the letters around it.
     /// </summary>
-    public double InlineEmojiSize => Settings.MessageFontSize * 1.35;
+    public double InlineEmojiSize => Settings.MessageFontSize * Almatter.App.Views.MessageInlineText.EmojiScale;
+
+    /// <summary>For plain text that sits beside message text and has to share its lines — a list item's marker.</summary>
+    public double MessageLineHeight => Settings.MessageFontSize * Almatter.App.Views.MessageInlineText.LineHeightRatio;
 
     public MainViewModel(Session session)
     {
@@ -855,6 +858,7 @@ public partial class MainViewModel : ViewModelBase
             {
                 RefreshFontSizeSelection();
                 OnPropertyChanged(nameof(InlineEmojiSize));
+                OnPropertyChanged(nameof(MessageLineHeight));
             }
             else if (e.PropertyName == nameof(AppSettings.ShowLinkPreviews) && Settings.ShowLinkPreviews)
             {
