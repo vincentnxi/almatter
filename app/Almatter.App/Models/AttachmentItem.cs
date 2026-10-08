@@ -18,6 +18,13 @@ public sealed partial class AttachmentItem : ObservableObject
     [ObservableProperty]
     public partial bool IsDownloading { get; set; }
 
+    /// <summary>Flips on for a moment after the file has been saved where the user asked, so the download button shows a check mark as confirmation.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(DownloadTip))]
+    public partial bool IsJustSaved { get; set; }
+
+    public string DownloadTip => IsJustSaved ? Loc.S.AttachmentSaved : Loc.S.Download;
+
     /// <summary>
     /// A picture the server has a preview of: shown as a thumbnail in the
     /// conversation rather than as a file card. Everything else — and a
@@ -69,6 +76,7 @@ public sealed partial class AttachmentItem : ObservableObject
     {
         OnPropertyChanged(nameof(SizeLabel));
         OnPropertyChanged(nameof(ThumbnailTip));
+        OnPropertyChanged(nameof(DownloadTip));
     }
 
     /// <summary>"340 Ko", "1,2 Mo" in French; "340 KB", "1.2 MB" in English.</summary>

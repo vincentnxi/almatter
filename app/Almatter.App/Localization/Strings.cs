@@ -60,6 +60,10 @@ public sealed partial class Strings
     public required string Edited { get; init; }
     public required string Open { get; init; }
     public required string Downloading { get; init; }
+    public required string Download { get; init; }
+    public required string AttachmentSaved { get; init; }
+    public required string SaveAttachmentDialogTitle { get; init; }
+    public required Func<string, string> SaveAttachmentFailed { get; init; }
     public required Func<int, string> ReplyCount { get; init; }
     public required string Edit { get; init; }
     public required string Delete { get; init; }

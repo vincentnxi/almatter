@@ -241,6 +241,14 @@ public partial class MainViewModel : ViewModelBase
     /// </summary>
     public Func<Task<IReadOnlyList<string>>>? PickFilesAsync { get; set; }
 
+    /// <summary>
+    /// Set by MainWindow's code-behind to the platform "save as" dialog, for
+    /// the same reason as <see cref="PickFilesAsync"/>. Given the attachment's
+    /// name as a suggestion; returns the chosen local path, null if the user
+    /// cancelled.
+    /// </summary>
+    public Func<string, Task<string?>>? PickSavePathAsync { get; set; }
+
     /// <summary>Search panel — opened via the magnifying-glass icon in the channel header.</summary>
     [ObservableProperty]
     public partial bool IsSearchOpen { get; set; }
@@ -2981,6 +2989,64 @@ public partial class MainViewModel : ViewModelBase
         {
             attachment.IsDownloading = false;
         }
+    }
+
+    private bool _isPickingSavePath;
+
+    /// <summary>
+    /// Bound to an attachment's download button: asks where to put the file,
+    /// then downloads it (once — cached to disk after that) and copies it
+    /// there. Asked first, so the dialog opens at once however big the file
+    /// is. Concurrent on purpose — one large file on its way mustn't grey out
+    /// every other attachment's button — so the guards are its own.
+    /// </summary>
+    [RelayCommand(AllowConcurrentExecutions = true)]
+    private async Task SaveAttachmentAsync(AttachmentItem attachment)
+    {
+        if (attachment.IsDownloading || _isPickingSavePath || PickSavePathAsync is null)
+        {
+            return;
+        }
+
+        string? target;
+        _isPickingSavePath = true;
+        try
+        {
+            target = await PickSavePathAsync(attachment.FileName);
+        }
+        finally
+        {
+            _isPickingSavePath = false;
+        }
+        if (target is null || attachment.IsDownloading)
+        {
+            return;
+        }
+
+        attachment.IsDownloading = true;
+        try
+        {
+            var cached = await _service.GetFilePathAsync(_session.BaseUrl, _session.Token, attachment.Id, attachment.FileName);
+            await Task.Run(() => File.Copy(cached, target, overwrite: true));
+        }
+        catch (MattermostServiceException ex)
+        {
+            ErrorMessage = ex.Message;
+            return;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            ErrorMessage = Loc.S.SaveAttachmentFailed(ex.Message);
+            return;
+        }
+        finally
+        {
+            attachment.IsDownloading = false;
+        }
+
+        attachment.IsJustSaved = true;
+        await Task.Delay(TimeSpan.FromSeconds(1.5));
+        attachment.IsJustSaved = false;
     }
 
     /// <summary>Toggles the current user's own reaction on a message — clicking a reaction pill you already reacted with removes it.</summary>

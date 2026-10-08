@@ -786,20 +786,41 @@
                                             </ItemsControl.ItemsPanel>
                                             <ItemsControl.ItemTemplate>
                                                 <DataTemplate DataType="models:AttachmentItem">
-                                                    <Button Classes="row-button" Margin="0,0,6,6" HorizontalAlignment="Left" ToolTip.Tip="{Binding ThumbnailTip}"
-                                                            Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).OpenAttachmentCommand}"
-                                                            CommandParameter="{Binding}">
-                                                        <Border Width="{Binding ThumbnailWidth}" Height="{Binding ThumbnailHeight}"
-                                                                Background="{DynamicResource BgPanelBrush}" CornerRadius="8" ClipToBounds="True">
-                                                            <Panel>
-                                                                <Image Source="{Binding Thumbnail}" Stretch="UniformToFill" IsVisible="{Binding Thumbnail, Converter={x:Static conv:ObjectConverters.IsNotNull}}" />
-                                                                <Border IsVisible="{Binding IsDownloading}" Background="#99000000">
-                                                                    <TextBlock Text="{Binding T.Downloading, Source={x:Static loc:Loc.Instance}}" FontSize="11" FontStyle="Italic" Foreground="White"
-                                                                               HorizontalAlignment="Center" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-                                                                </Border>
-                                                            </Panel>
-                                                        </Border>
-                                                    </Button>
+                                                    <!-- Two buttons side by side in a Panel rather than one
+                                                         inside the other: the download button sits on the
+                                                         picture's corner, shown with the row's other hover
+                                                         actions. -->
+                                                    <Panel Margin="0,0,6,6" HorizontalAlignment="Left">
+                                                        <Button Classes="row-button" ToolTip.Tip="{Binding ThumbnailTip}"
+                                                                Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).OpenAttachmentCommand}"
+                                                                CommandParameter="{Binding}">
+                                                            <Border Width="{Binding ThumbnailWidth}" Height="{Binding ThumbnailHeight}"
+                                                                    Background="{DynamicResource BgPanelBrush}" CornerRadius="8" ClipToBounds="True">
+                                                                <Panel>
+                                                                    <Image Source="{Binding Thumbnail}" Stretch="UniformToFill" IsVisible="{Binding Thumbnail, Converter={x:Static conv:ObjectConverters.IsNotNull}}" />
+                                                                    <Border IsVisible="{Binding IsDownloading}" Background="#99000000">
+                                                                        <TextBlock Text="{Binding T.Downloading, Source={x:Static loc:Loc.Instance}}" FontSize="11" FontStyle="Italic" Foreground="White"
+                                                                                   HorizontalAlignment="Center" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                                                    </Border>
+                                                                </Panel>
+                                                            </Border>
+                                                        </Button>
+                                                        <Button Classes="row-button hover-reveal-btn" Width="26" Height="26" Margin="0,6,6,0"
+                                                                HorizontalAlignment="Right" VerticalAlignment="Top" ToolTip.Tip="{Binding DownloadTip}"
+                                                                Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).SaveAttachmentCommand}"
+                                                                CommandParameter="{Binding}">
+                                                            <Border CornerRadius="13" Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1" BoxShadow="{DynamicResource CardShadow}">
+                                                                <Panel>
+                                                                    <Path IsVisible="{Binding !IsJustSaved}" Data="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4 M7 10l5 5 5-5 M12 15V3"
+                                                                          Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.5" StrokeLineCap="Round" StrokeJoin="Round"
+                                                                          Width="14" Height="14" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                                    <Path IsVisible="{Binding IsJustSaved}" Data="M20 6 9 17l-5-5"
+                                                                          Stroke="{DynamicResource AccentBrush}" StrokeThickness="2" StrokeLineCap="Round" StrokeJoin="Round"
+                                                                          Width="13" Height="13" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                                </Panel>
+                                                            </Border>
+                                                        </Button>
+                                                    </Panel>
                                                 </DataTemplate>
                                             </ItemsControl.ItemTemplate>
                                         </ItemsControl>
@@ -812,22 +833,40 @@
                                             </ItemsControl.ItemsPanel>
                                             <ItemsControl.ItemTemplate>
                                                 <DataTemplate DataType="models:AttachmentItem">
-                                                    <Button Classes="row-button" ToolTip.Tip="{Binding T.Open, Source={x:Static loc:Loc.Instance}}"
-                                                            Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).OpenAttachmentCommand}"
-                                                            CommandParameter="{Binding}">
-                                                        <Border Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1"
-                                                                CornerRadius="8" Padding="10,8" MaxWidth="340" HorizontalAlignment="Left">
-                                                            <StackPanel Orientation="Horizontal" Spacing="8">
-                                                                <Path Data="M14 2 L6 2 A2 2 0 0 0 4 4 L4 18 A2 2 0 0 0 6 20 L18 20 A2 2 0 0 0 20 18 L20 8 Z M14 2 L14 8 L20 8"
-                                                                      Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.6" Width="20" Height="20" Stretch="Uniform" />
-                                                                <StackPanel>
-                                                                    <TextBlock Text="{Binding FileName}" FontWeight="SemiBold" FontSize="12.5" />
-                                                                    <TextBlock Text="{Binding SizeLabel}" FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}" IsVisible="{Binding !IsDownloading}" />
-                                                                    <TextBlock Text="{Binding T.Downloading, Source={x:Static loc:Loc.Instance}}" FontSize="11" FontStyle="Italic" Foreground="{DynamicResource TextTertiaryBrush}" IsVisible="{Binding IsDownloading}" />
-                                                                </StackPanel>
-                                                            </StackPanel>
-                                                        </Border>
-                                                    </Button>
+                                                    <!-- The card holds two buttons: the file itself (opens
+                                                         it) and, at its right edge, the download button
+                                                         (asks where to save it). -->
+                                                    <Border Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1"
+                                                            CornerRadius="8" MaxWidth="340" HorizontalAlignment="Left">
+                                                        <Grid ColumnDefinitions="*,Auto">
+                                                            <Button Grid.Column="0" Classes="row-button" ToolTip.Tip="{Binding T.Open, Source={x:Static loc:Loc.Instance}}"
+                                                                    Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).OpenAttachmentCommand}"
+                                                                    CommandParameter="{Binding}">
+                                                                <Grid ColumnDefinitions="Auto,*" Margin="10,8,6,8">
+                                                                    <Path Grid.Column="0" Margin="0,0,8,0" Data="M14 2 L6 2 A2 2 0 0 0 4 4 L4 18 A2 2 0 0 0 6 20 L18 20 A2 2 0 0 0 20 18 L20 8 Z M14 2 L14 8 L20 8"
+                                                                          Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.6" Width="20" Height="20" Stretch="Uniform" />
+                                                                    <StackPanel Grid.Column="1">
+                                                                        <TextBlock Text="{Binding FileName}" FontWeight="SemiBold" FontSize="12.5" TextTrimming="CharacterEllipsis" />
+                                                                        <TextBlock Text="{Binding SizeLabel}" FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}" IsVisible="{Binding !IsDownloading}" />
+                                                                        <TextBlock Text="{Binding T.Downloading, Source={x:Static loc:Loc.Instance}}" FontSize="11" FontStyle="Italic" Foreground="{DynamicResource TextTertiaryBrush}" IsVisible="{Binding IsDownloading}" />
+                                                                    </StackPanel>
+                                                                </Grid>
+                                                            </Button>
+                                                            <Button Grid.Column="1" Classes="row-button" Width="30" Height="30" Margin="0,0,6,0" VerticalAlignment="Center"
+                                                                    ToolTip.Tip="{Binding DownloadTip}"
+                                                                    Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).SaveAttachmentCommand}"
+                                                                    CommandParameter="{Binding}">
+                                                                <Panel>
+                                                                    <Path IsVisible="{Binding !IsJustSaved}" Data="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4 M7 10l5 5 5-5 M12 15V3"
+                                                                          Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.6" StrokeLineCap="Round" StrokeJoin="Round"
+                                                                          Width="17" Height="17" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                                    <Path IsVisible="{Binding IsJustSaved}" Data="M20 6 9 17l-5-5"
+                                                                          Stroke="{DynamicResource AccentBrush}" StrokeThickness="2" StrokeLineCap="Round" StrokeJoin="Round"
+                                                                          Width="15" Height="15" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                                </Panel>
+                                                            </Button>
+                                                        </Grid>
+                                                    </Border>
                                                 </DataTemplate>
                                             </ItemsControl.ItemTemplate>
                                         </ItemsControl>

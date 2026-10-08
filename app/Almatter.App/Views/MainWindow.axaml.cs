@@ -303,6 +303,7 @@ public partial class MainWindow : Window
             // The ViewModel can't reach IStorageProvider itself — it's tied
             // to this window (TopLevel), not the DataContext.
             vm.PickFilesAsync = PickFilesAsync;
+            vm.PickSavePathAsync = PickSavePathAsync;
         };
 
         // Tunnel phase: fires before a row's own Button consumes the pointer
@@ -1014,6 +1015,34 @@ public partial class MainWindow : Window
             .Where(path => path is not null)
             .Select(path => path!)
             .ToList();
+    }
+
+    /// <summary>
+    /// Opens the native "save as" dialog for an attachment's download button —
+    /// the ViewModel's own PickSavePathAsync callback. Starts in the user's
+    /// Downloads folder, with the attachment's name filled in. That name is
+    /// whatever its sender's system allowed ("Bilan: T3?.pdf"), so what this
+    /// one refuses in a file name becomes underscores first, or the dialog
+    /// would reject its own suggestion.
+    /// </summary>
+    private async Task<string?> PickSavePathAsync(string fileName)
+    {
+        if (TopLevel.GetTopLevel(this) is not { } topLevel)
+        {
+            return null;
+        }
+
+        var suggested = string.Join("_", System.IO.Path.GetFileName(fileName).Split(System.IO.Path.GetInvalidFileNameChars()));
+        var extension = System.IO.Path.GetExtension(suggested).TrimStart('.');
+        var file = await topLevel.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = Loc.S.SaveAttachmentDialogTitle,
+            SuggestedFileName = suggested,
+            DefaultExtension = extension.Length > 0 ? extension : null,
+            SuggestedStartLocation = await topLevel.StorageProvider.TryGetWellKnownFolderAsync(WellKnownFolder.Downloads),
+        });
+
+        return file?.TryGetLocalPath();
     }
 
     /// <summary>
