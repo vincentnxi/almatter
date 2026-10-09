@@ -110,6 +110,13 @@ internal static class TaskbarBadge
     /// <summary>Best-effort — a failure here (an unusual shell, a locked-down environment, ...) should never take down the app, it just means no badge.</summary>
     public static void Update(IntPtr hwnd, TaskbarBadgeKind kind, int count = 0)
     {
+        // The taskbar button is a Windows shell object; elsewhere there is
+        // no badge for now (see docs/PLATFORM_PORTABILITY.md).
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
         try
         {
             if (GetTaskbarList() is not { } taskbar || hwnd == IntPtr.Zero)

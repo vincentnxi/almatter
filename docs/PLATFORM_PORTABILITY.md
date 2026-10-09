@@ -19,18 +19,27 @@ depuis, est spécifique à Windows et à réécrire.
   dépendance Windows dans ces fichiers eux-mêmes.
 - **`NativeCore.cs`** : le nom de bibliothèque P/Invoke est `"almatter_ffi"` **sans
   extension** (`app/Almatter.App/Interop/NativeCore.cs:21`) — .NET résout automatiquement
-  `almatter_ffi.dll` / `libalmatter_ffi.so` / `libalmatter_ffi.dylib` selon l'OS. Il reste
-  seulement à produire le bon binaire natif par plateforme et à adapter sa copie dans le
-  csproj (actuellement un `<None Include="...\target\debug\almatter_ffi.dll">` codé en
-  dur pour Windows).
+  `almatter_ffi.dll` / `libalmatter_ffi.so` / `libalmatter_ffi.dylib` selon l'OS. Le
+  csproj copie celui des trois que Cargo produit sur la machine de build (propriété
+  `CoreLibrary`, choisie d'après le système qui compile).
+- **Le projet lui-même** cible `net10.0` depuis le 2026-10-09 (auparavant
+  `net10.0-windows`) : il se compile donc sous Linux et macOS, et le compilateur signale
+  tout appel à une API .NET réservée à Windows qui ne serait pas derrière un
+  `OperatingSystem.IsWindows()`. Attention, il ne voit pas les `DllImport` vers
+  `user32.dll` et consorts : ceux-là restent à garder à la main.
+- **La compilation sous Linux est vérifiée à chaque envoi** par
+  `.github/workflows/build-linux.yml` (cœur Rust, ses tests, puis l'application, sur
+  Ubuntu). Ce fichier fait aussi office de liste des prérequis : un compilateur C,
+  `pkg-config`, `libssl-dev`, Rust et le SDK .NET 10. Il prouve que le code compile, pas
+  que l'application fonctionne : **elle n'a encore jamais été lancée sous Linux.**
 
 ## Spécifique à Windows (ajouté depuis le début du projet)
 
-Le projet cible encore `<TargetFramework>net10.0-windows</TargetFramework>` ; un vrai
-portage doit d'abord cibler `net10.0` (ou multi-cibler). **Windows Forms n'est plus utilisé
-depuis le 2026-09-14** (`UseWindowsForms` retiré) : il coûtait ~13 Mo pour une icône de
-notification et le presse-papiers, et n'existe pas hors Windows. Ce qui reste propre à
-Windows est isolé ci-dessous.
+**Windows Forms n'est plus utilisé depuis le 2026-09-14** (`UseWindowsForms` retiré) : il
+coûtait ~13 Mo pour une icône de notification et le presse-papiers, et n'existe pas hors
+Windows. Ce qui reste propre à Windows est isolé ci-dessous ; chaque ligne est derrière
+un `OperatingSystem.IsWindows()` et ne fait simplement rien ailleurs, sauf mention
+contraire.
 
 | Fonctionnalité | Fichier | Mécanisme Windows | Piste macOS / Linux |
 |---|---|---|---|
@@ -39,7 +48,7 @@ Windows est isolé ci-dessous.
 | Badge sur l'icône (barre des tâches) | `Services/TaskbarBadge.cs` (interop COM `ITaskbarList3`, `CreateIconIndirect`) | Shell Windows uniquement. Le **dessin** de la pastille (`RenderPixels`) passe par Skia et est portable ; seule sa pose sur le bouton est propre à Windows | macOS : `NSDockTile.badgeLabel` (interop Cocoa). Linux : pas d'équivalent standard (quelques DE supportent l'API Unity Launcher, la plupart non) — no-op probable. |
 | Présence « disponible » tenue à jour (inactivité du poste) | `Services/SystemIdle.cs`, utilisé par `ReportActivityAsync` dans `MainViewModel` | `GetLastInputInfo` (user32, P/Invoke sans `unsafe`) : temps écoulé depuis la dernière saisie clavier/souris sur tout le poste. Tant qu'il est sous 5 min, l'app signale chaque minute au serveur que l'utilisateur est actif (sinon le serveur le passe « absent ») | Hors Windows, `IdleTime()` renvoie `null` et l'app se considère toujours active : on reste « disponible » tant qu'elle tourne. Linux : `org.freedesktop.ScreenSaver.GetSessionIdleTime` (D-Bus) ou XScreenSaver sous X11 ; macOS : `CGEventSourceSecondsSinceLastEventType`. |
 | Choix du moteur de rendu (processeur par défaut) | `Program.cs` (`RenderingMode`), réglage `AppSettings.UseGpuRendering` | `Win32PlatformOptions { RenderingMode = [Win32RenderingMode.Software] }`. Sur Windows le chemin GPU d'Avalonia passe par ANGLE → Direct3D, ce qui charge le pilote graphique dans le processus : mesuré ici, deux bibliothèques NVIDIA (~190 Mo de code mappé) et 55 threads de plus, pour un gain nul en CPU de rendu. Voir le commentaire de `UseGpuRendering` pour les chiffres | Le raisonnement est le même ailleurs mais **non mesuré** : l'équivalent est `X11PlatformOptions { RenderingMode = [X11RenderingMode.Software] }` (Linux) et `AvaloniaNativePlatformOptions` (macOS). À mesurer avant de reprendre le même défaut — un pilote Mesa/Intel est bien plus léger qu'un pilote NVIDIA, et le réglage existe déjà pour basculer. |
-| Session persistée de façon sécurisée | `Services/SessionStore.cs` | `System.Security.Cryptography.ProtectedData` (DPAPI, Windows uniquement) — paquet NuGet explicite depuis le retrait de Windows Forms, qui l'apportait implicitement | macOS : Keychain (interop Security.framework). Linux : Secret Service / libsecret (D-Bus), avec repli sur un fichier à permissions restreintes si indisponible. |
+| Session persistée de façon sécurisée | `Services/SessionStore.cs` | `System.Security.Cryptography.ProtectedData` (DPAPI, Windows uniquement) — paquet NuGet explicite depuis le retrait de Windows Forms, qui l'apportait implicitement. Hors Windows, `Save` n'écrit rien et `Load` ne renvoie rien : **la session n'est pas mémorisée et l'app redemande le mot de passe à chaque lancement**, plutôt que de poser le jeton en clair sur le disque | macOS : Keychain (interop Security.framework). Linux : Secret Service / libsecret (D-Bus), avec repli sur un fichier à permissions restreintes si indisponible. |
 | Pièce jointe qui est un programme : montrée dans le gestionnaire de fichiers au lieu d'être lancée | `ViewModels/MainViewModel.cs` (`OpenDownloadedFile`, liste `ProgramFileExtensions`) | `explorer.exe /select,"chemin"` (Windows uniquement). Les autres pièces jointes s'ouvrent comme avant, avec le programme associé (`UseShellExecute`). Le fichier vient du serveur et non d'un navigateur : il n'a pas la marque « téléchargé depuis Internet » qui fait demander confirmation à Windows, donc un simple clic sur le message l'aurait exécuté | Hors Windows, l'app ouvre déjà le dossier contenant le fichier (gestionnaire par défaut). macOS : `open -R chemin` révèle le fichier dans le Finder. Linux : `org.freedesktop.FileManager1.ShowItems` (D-Bus) sait sélectionner le fichier ; à défaut, ouvrir le dossier suffit. La liste d'extensions inclut déjà `.sh`, `.command`, `.desktop`, `.app`, `.appimage`. |
 
 ### Installation
@@ -97,16 +106,23 @@ anciennes visées par le projet.
 
 ## Point d'entrée pour la reprise
 
-1. Faire cibler `net10.0` (multi-ciblage `net10.0-windows`/`net10.0` si Windows doit
-   rester supporté en parallèle). `UseWindowsForms` est déjà retiré.
-2. Écrire l'implémentation Linux de `IDesktopNotifier` (D-Bus). Si une icône permanente
+Fait le 2026-10-09, depuis Windows : le projet cible `net10.0`, le csproj copie le bon
+binaire natif (`.dll`/`.so`/`.dylib`), chaque bloc du tableau ci-dessus est derrière une
+vérification de plateforme, et la compilation Linux est vérifiée à chaque envoi.
+
+Reste à faire, sur une vraie machine Linux (ou WSL avec affichage graphique) :
+
+1. Lancer l'application une première fois et corriger ce qui se présente — c'est la
+   première exécution hors Windows.
+2. Mémoriser la session (Secret Service / libsecret, avec repli sur un fichier à
+   permissions restreintes) : sans cela, mot de passe à chaque lancement.
+3. Écrire l'implémentation Linux de `IDesktopNotifier` (D-Bus). Si une icône permanente
    dans la zone de notification est voulue sur les autres OS, `Avalonia.Controls.TrayIcon`
    existe — mais il ne sait pas afficher de notification, d'où l'interface.
-3. Encapsuler chaque bloc du tableau ci-dessus derrière une vérification de plateforme
-   (`OperatingSystem.IsWindows()` / `IsMacOS()` / `IsLinux()`) avec une implémentation
-   (ou un no-op assumé) par OS.
-4. Adapter le csproj pour copier le bon binaire natif (`.dll`/`.so`/`.dylib`) selon la
-   cible de build.
+4. Mesurer le rendu processeur contre carte graphique avant de choisir le défaut
+   (`X11PlatformOptions` dans `Program.cs`, qui ne règle aujourd'hui que Windows).
+5. Empaqueter (AppImage ou Flatpak), en compilant le cœur sur une distribution assez
+   ancienne pour la glibc des machines visées.
 
 Rien de ce qui précède ne touche au cœur Rust ni à la logique métier des ViewModels —
 le travail de portage est localisé à ces quelques points d'intégration OS.

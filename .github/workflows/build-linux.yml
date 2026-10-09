@@ -1,0 +1,70 @@
+# Checks that Almatter still compiles on Linux: the Rust core (with its
+# tests) and the Avalonia app, on one of GitHub's Ubuntu machines.
+#
+# Nothing is published from here. Almatter ships for Windows only for now
+# (see docs/PLATFORM_PORTABILITY.md); this exists so that a change which
+# quietly breaks the Linux build is noticed the day it is made, rather than
+# months later when the port is picked up. It says the code compiles, not
+# that the app works there: nobody opens the window.
+#
+# Runs on every push to master, on pull requests, or by hand from the
+# Actions tab ("Run workflow").
+
+name: Build on Linux
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    steps:
+      # Third-party actions are pinned to a commit rather than a tag: a tag
+      # can be moved to different code, a commit cannot.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: '10.0.x'
+
+      # What a Linux machine needs before the core will build: a C compiler
+      # (SQLite is compiled along with it) and OpenSSL's headers (TLS goes
+      # through the system's OpenSSL). GitHub's image already has them;
+      # listed anyway so this file doubles as the list of prerequisites.
+      - name: Install system packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential pkg-config libssl-dev
+
+      - name: Install Rust
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: core
+
+      - name: Build the Rust core
+        working-directory: core
+        run: cargo build -p almatter-ffi
+
+      - name: Test the Rust core
+        working-directory: core
+        run: cargo test
+
+      - name: Build the app
+        run: dotnet build app/Almatter.App/Almatter.App.csproj -c Debug
+
+      # The csproj only copies the core's library when it finds it, so a
+      # wrong file name there would still build — an app that cannot start.
+      - name: Check the core sits next to the app
+        run: test -f app/Almatter.App/bin/Debug/net10.0/libalmatter_ffi.so

@@ -1,7 +1,11 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net10.0-windows</TargetFramework>
+    <!-- Plain net10.0, not net10.0-windows: the same project then builds on
+         Linux and macOS, and the compiler points out any call to a
+         Windows-only API that isn't behind an OperatingSystem.IsWindows()
+         check. See docs/PLATFORM_PORTABILITY.md. -->
+    <TargetFramework>net10.0</TargetFramework>
     <!-- The executable, and therefore the name in Task Manager, is
          "Almatter" rather than the project name. RootNamespace is pinned
          because it otherwise follows AssemblyName, and every namespace in
@@ -46,19 +50,28 @@
     <AvaloniaResource Include="Assets\**" />
   </ItemGroup>
 
-  <ItemGroup>
+  <PropertyGroup>
     <!-- Rust core, built separately: `cargo build` (Debug config here) or
          a release-mode Cargo build (Release config) in ../../core. Picks
-         the matching Cargo profile's DLL so a Release build doesn't
-         silently ship without almatter_ffi.dll (or with a stale Debug
-         one) just because only a debug artifact happened to exist on disk. -->
-    <None Include="..\..\core\target\release\almatter_ffi.dll" Condition="'$(Configuration)' == 'Release' AND Exists('..\..\core\target\release\almatter_ffi.dll')">
+         the matching Cargo profile's library so a Release build doesn't
+         silently ship without the core (or with a stale Debug one) just
+         because only a debug artifact happened to exist on disk.
+
+         Cargo names the file after the system it builds on; NativeCore.cs
+         asks for "almatter_ffi" with no extension and .NET finds whichever
+         of the three is there. -->
+    <CoreLibrary>almatter_ffi.dll</CoreLibrary>
+    <CoreLibrary Condition="$([MSBuild]::IsOSPlatform('Linux'))">libalmatter_ffi.so</CoreLibrary>
+    <CoreLibrary Condition="$([MSBuild]::IsOSPlatform('OSX'))">libalmatter_ffi.dylib</CoreLibrary>
+    <CoreProfile>debug</CoreProfile>
+    <CoreProfile Condition="'$(Configuration)' == 'Release'">release</CoreProfile>
+    <CoreLibraryPath>..\..\core\target\$(CoreProfile)\$(CoreLibrary)</CoreLibraryPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="$(CoreLibraryPath)" Condition="Exists('$(CoreLibraryPath)')">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <Link>almatter_ffi.dll</Link>
-    </None>
-    <None Include="..\..\core\target\debug\almatter_ffi.dll" Condition="'$(Configuration)' != 'Release' AND Exists('..\..\core\target\debug\almatter_ffi.dll')">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <Link>almatter_ffi.dll</Link>
+      <Link>$(CoreLibrary)</Link>
     </None>
   </ItemGroup>
 

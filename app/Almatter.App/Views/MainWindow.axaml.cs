@@ -1237,6 +1237,13 @@ public partial class MainWindow : Window
     /// </summary>
     private void ApplyTitleBarTheme(MainViewModel vm)
     {
+        // DWM is Windows' own window manager; elsewhere the title bar is the
+        // desktop's to draw (see docs/PLATFORM_PORTABILITY.md).
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
         try
         {
             var handle = TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;

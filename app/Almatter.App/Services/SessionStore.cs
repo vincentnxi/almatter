@@ -31,6 +31,14 @@ internal static class SessionStore
 
     public static void Save(Session session)
     {
+        // DPAPI exists on Windows only. Until the other systems get their own
+        // secure storage (see docs/PLATFORM_PORTABILITY.md) the session is not
+        // remembered there, rather than written to disk unencrypted.
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
         try
         {
             var dir = Path.GetDirectoryName(FilePath);
@@ -50,6 +58,11 @@ internal static class SessionStore
 
     public static Session? Load()
     {
+        if (!OperatingSystem.IsWindows())
+        {
+            return null;
+        }
+
         try
         {
             var encrypted = File.ReadAllBytes(FilePath);
