@@ -175,6 +175,13 @@ public sealed partial class Strings
     public required string ThemeLight { get; init; }
     public required string ThemeDark { get; init; }
     public required string ThemeSystemHint { get; init; }
+    public required string AccentLabel { get; init; }
+    public required string AccentBlue { get; init; }
+    public required string AccentTeal { get; init; }
+    public required string AccentGreen { get; init; }
+    public required string AccentAmber { get; init; }
+    public required string AccentRose { get; init; }
+    public required string AccentViolet { get; init; }
     public required string ReducedContrast { get; init; }
     public required string ReducedContrastHint { get; init; }
     public required string SettingsFont { get; init; }

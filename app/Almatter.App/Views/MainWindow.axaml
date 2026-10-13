@@ -1618,6 +1618,32 @@
                     <TextBlock Text="{Binding T.ThemeSystemHint, Source={x:Static loc:Loc.Instance}}"
                                FontSize="11.5" Foreground="{DynamicResource TextTertiaryBrush}" TextWrapping="Wrap" />
 
+                    <!-- The accent picker. Each swatch is the color itself, in
+                         the shade the current palette gives it; the one in use
+                         wears a ring of its own color. -->
+                    <Grid ColumnDefinitions="*,Auto" Margin="0,4,0,0">
+                        <TextBlock Grid.Column="0" Text="{Binding T.AccentLabel, Source={x:Static loc:Loc.Instance}}" FontSize="12.5" VerticalAlignment="Center" />
+                        <ItemsControl Grid.Column="1" ItemsSource="{Binding AccentOptions}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Orientation="Horizontal" Spacing="2" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="models:AccentOption">
+                                    <Button Classes="swatch-button" Width="26" Height="26" ToolTip.Tip="{Binding Name}"
+                                            Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).SetAccentCommand}"
+                                            CommandParameter="{Binding Accent}">
+                                        <Panel>
+                                            <Ellipse Width="24" Height="24" Stroke="{Binding RingBrush}" StrokeThickness="2" />
+                                            <Ellipse Width="14" Height="14" Fill="{Binding SwatchBrush}" />
+                                        </Panel>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </Grid>
+
                     <Button Classes="row-button" Command="{Binding ToggleReducedContrastCommand}" Margin="0,4,0,0">
                         <Border Background="{DynamicResource BgPanelBrush}" CornerRadius="{DynamicResource RowRadiusValue}" Padding="10,8">
                             <Grid ColumnDefinitions="*,Auto">

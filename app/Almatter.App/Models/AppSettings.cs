@@ -58,6 +58,18 @@ public sealed partial class AppSettings : ObservableObject
     [ObservableProperty]
     public partial bool ReducedContrast { get; set; }
 
+    /// <summary>The accent color, blue unless changed — what the app had before there was a choice.</summary>
+    [ObservableProperty]
+    public partial AppAccent Accent { get; set; } = AppAccent.Blue;
+
+    /// <summary>Called after the palette changes so the ticked boxes of the settings panel take the new accent.</summary>
+    public void RefreshColors()
+    {
+        OnPropertyChanged(nameof(ReducedContrastCheckBrush));
+        OnPropertyChanged(nameof(LinkPreviewsCheckBrush));
+        OnPropertyChanged(nameof(SoundForAllMessagesCheckBrush));
+    }
+
     // The three "…CheckBrush" properties are drawing state for the settings
     // panel, computed from the switches next to them. Without [JsonIgnore]
     // each was written into settings.json as a serialized brush.

@@ -10,9 +10,10 @@ namespace Almatter.App.Models;
 ///
 /// The accent is deliberately per-palette rather than shared. #005FB8 is
 /// the Windows system blue and is right on a light background, but far too
-/// dark to read on #16181C — the dark palette lifts it to #4C9DF5.
+/// dark to read on #16181C — the dark palette lifts it to #4C9DF5. Those two
+/// are the default; Resolve swaps in the user's own choice of accent.
 /// </summary>
-public sealed class ThemeDefinition
+public sealed record ThemeDefinition
 {
     public required string Name { get; init; }
 
@@ -126,8 +127,13 @@ public sealed class ThemeDefinition
         SurfaceRadius = 10,
     };
 
-    /// <summary>Resolves the user's preference to an actual palette. System defers to whatever Windows currently reports.</summary>
-    public static ThemeDefinition Resolve(AppThemeMode mode, bool systemPrefersDark, bool reducedContrast = false)
+    /// <summary>
+    /// Resolves the user's preferences to an actual palette. System defers
+    /// to whatever Windows currently reports. The accent is laid over the
+    /// palette last: only its hue is the user's choice, the shade comes from
+    /// whether the palette is light or dark (see AccentPalette).
+    /// </summary>
+    public static ThemeDefinition Resolve(AppThemeMode mode, bool systemPrefersDark, bool reducedContrast = false, AppAccent accent = AppAccent.Blue)
     {
         var theme = mode switch
         {
@@ -135,7 +141,11 @@ public sealed class ThemeDefinition
             AppThemeMode.Dark => Dark,
             _ => systemPrefersDark ? Dark : Light,
         };
-        return reducedContrast ? theme.Softened() : theme;
+        if (reducedContrast)
+        {
+            theme = theme.Softened();
+        }
+        return theme with { AccentHex = AccentPalette.Hex(accent, theme.IsDark) };
     }
 
     /// <summary>How far the surfaces move toward mid-grey: the light palette dims, the dark one lifts off pure black.</summary>

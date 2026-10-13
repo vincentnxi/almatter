@@ -16,7 +16,7 @@ public partial class LoginWindow : Window
         // logging out and back in never flashes the wrong theme.
         var settings = SettingsStore.Load();
         ColorTokens.ApplyTheme(
-            ThemeDefinition.Resolve(settings.ThemeMode, SystemTheme.PrefersDark, settings.ReducedContrast));
+            ThemeDefinition.Resolve(settings.ThemeMode, SystemTheme.PrefersDark, settings.ReducedContrast, settings.Accent));
         ThemeResources.Apply(this, settings);
     }
 

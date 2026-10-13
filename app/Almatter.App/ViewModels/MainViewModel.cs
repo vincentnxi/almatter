@@ -732,6 +732,16 @@ public partial class MainViewModel : ViewModelBase
         },
     ];
 
+    public ObservableCollection<AccentOption> AccentOptions { get; } =
+    [
+        new() { Accent = AppAccent.Blue },
+        new() { Accent = AppAccent.Teal },
+        new() { Accent = AppAccent.Green },
+        new() { Accent = AppAccent.Amber },
+        new() { Accent = AppAccent.Rose },
+        new() { Accent = AppAccent.Violet },
+    ];
+
     /// <summary>
     /// Raised whenever the theme/accent changes — MainWindow's code-behind
     /// applies the full window-resource palette, font and shape tokens in
@@ -847,7 +857,7 @@ public partial class MainViewModel : ViewModelBase
         InitializeEmojiPicker();
         Settings.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName is nameof(AppSettings.ThemeMode) or nameof(AppSettings.ReducedContrast))
+            if (e.PropertyName is nameof(AppSettings.ThemeMode) or nameof(AppSettings.ReducedContrast) or nameof(AppSettings.Accent))
             {
                 ApplyTheme();
             }
@@ -4124,6 +4134,9 @@ public partial class MainViewModel : ViewModelBase
     private void SetTheme(AppThemeMode mode) => Settings.ThemeMode = mode;
 
     [RelayCommand]
+    private void SetAccent(AppAccent accent) => Settings.Accent = accent;
+
+    [RelayCommand]
     private void SetLanguage(AppLanguage language) => Settings.Language = language;
 
     private void RefreshLanguageSelection()
@@ -4151,6 +4164,10 @@ public partial class MainViewModel : ViewModelBase
         RefreshLanguageSelection();
 
         foreach (var option in ThemeOptions)
+        {
+            option.RefreshLanguage();
+        }
+        foreach (var option in AccentOptions)
         {
             option.RefreshLanguage();
         }
@@ -4223,13 +4240,20 @@ public partial class MainViewModel : ViewModelBase
     private void ApplyTheme()
     {
         ColorTokens.ApplyTheme(
-            ThemeDefinition.Resolve(Settings.ThemeMode, SystemTheme.PrefersDark, Settings.ReducedContrast));
+            ThemeDefinition.Resolve(Settings.ThemeMode, SystemTheme.PrefersDark, Settings.ReducedContrast, Settings.Accent));
 
         foreach (var option in ThemeOptions)
         {
             option.IsSelected = option.Mode == Settings.ThemeMode;
             option.RefreshColors();
         }
+
+        foreach (var option in AccentOptions)
+        {
+            option.IsSelected = option.Accent == Settings.Accent;
+            option.RefreshColors();
+        }
+        Settings.RefreshColors();
 
         foreach (var option in SkinToneOptions)
         {
