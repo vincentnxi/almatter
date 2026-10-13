@@ -293,9 +293,11 @@
         </Style>
 
         <!-- Rows sit a step to the right of their section header, so the
-             header reads as a heading and the rows as its content. -->
+             header reads as a heading and the rows as its content. The
+             same step is taken off the right, so a selected row's tint
+             keeps equal gaps to both edges of the sidebar. -->
         <Style Selector="ItemsControl.section-list">
-            <Setter Property="Margin" Value="12,0,0,0" />
+            <Setter Property="Margin" Value="12,0,12,0" />
         </Style>
 
         <!-- Invisible until pointed at, then a soft accent line — the same
