@@ -22,7 +22,7 @@ desktop app is an Electron wrapper that routinely uses 500–600 MB of memory; A
 aims to do the everyday work — reading, writing, threads, search, notifications — in a
 fraction of that, and to stay usable on older machines.
 
-> **Status: early pre-release (0.9.0).** It is used daily, but expect rough edges.
+> **Status: early pre-release (0.9.1).** It is used daily, but expect rough edges.
 > The interface is available **in English and French**, switchable in the settings.
 
 ## Features
@@ -213,7 +213,7 @@ de mémoire. Almatter vise à assurer l'usage quotidien — lire, écrire, suivr
 chercher, recevoir les notifications — pour une fraction de cette consommation, et à
 rester utilisable sur des machines anciennes.
 
-> **État : préversion (0.9.0).** Utilisé au quotidien, mais tout n'est pas encore poli.
+> **État : préversion (0.9.1).** Utilisé au quotidien, mais tout n'est pas encore poli.
 > L'interface est disponible **en français et en anglais**, au choix dans les réglages.
 
 ## Fonctionnalités
