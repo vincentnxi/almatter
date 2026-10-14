@@ -28,6 +28,18 @@ public sealed class MattermostService
         return (data.Token, data.User);
     }
 
+    /// <summary>Ends the session on the server, so its token stops working anywhere. A token the server already refuses counts as ended, not as an expired session.</summary>
+    public async Task LogoutAsync(string baseUrl, string token)
+    {
+        var request = new JsonObject
+        {
+            ["command"] = "logout",
+            ["base_url"] = baseUrl,
+            ["token"] = token,
+        };
+        await CallAsync<JsonObject>(request);
+    }
+
     public async Task<List<TeamDto>> GetTeamsAsync(string baseUrl, string token)
     {
         var request = new JsonObject

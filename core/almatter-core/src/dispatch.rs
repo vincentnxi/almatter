@@ -26,6 +26,11 @@ enum Request {
         login_id: String,
         password: String,
     },
+    /// Ends the session on the server — see `MattermostClient::logout`.
+    Logout {
+        base_url: String,
+        token: String,
+    },
     GetTeams {
         base_url: String,
         token: String,
@@ -414,15 +419,20 @@ async fn handle(request_json: &str, db: &'static Mutex<Database>) -> Value {
     };
 
     let result: Result<Value, String> = match request {
-        Request::Login { base_url, login_id, password } => {
-            MattermostClient::login(&base_url, &login_id, &password)
-                .await
-                .map(|(token, user)| {
-                    cache_write(db, |cache| cache.upsert_user(&user));
-                    json!({ "token": token, "user": user })
-                })
-                .map_err(|e| e.to_string())
-        }
+        Request::Login { base_url, login_id, password } => match MattermostClient::login(&base_url, &login_id, &password).await {
+            Ok((token, user)) => {
+                claim_cache_for(db, &base_url, &user.id).await;
+                cache_write(db, |cache| cache.upsert_user(&user));
+                Ok(json!({ "token": token, "user": user }))
+            }
+            Err(e) => Err(e.to_string()),
+        },
+        Request::Logout { base_url, token } => MattermostClient::new(base_url)
+            .with_token(token)
+            .logout()
+            .await
+            .map(|()| json!({}))
+            .map_err(|e| e.to_string()),
         Request::GetTeams { base_url, token } => MattermostClient::new(base_url)
             .with_token(token)
             .get_teams()
@@ -1021,6 +1031,34 @@ fn revision_json(r: &crate::db::ChannelRevision) -> Value {
     })
 }
 
+/// Hands the cache to the account that just signed in — emptying it, and the
+/// folders of files fetched with it, when it held another account's. See
+/// `Database::claim_for_account`. On the blocking pool: emptying rebuilds the
+/// database file and deletes folders, more than an async worker should sit on.
+async fn claim_cache_for(db: &'static Mutex<Database>, base_url: &str, user_id: &str) {
+    let account = format!("{}|{user_id}", base_url.trim_end_matches('/').to_ascii_lowercase());
+    let emptied = tokio::task::spawn_blocking(move || {
+        let emptied = crate::db::lock(db).claim_for_account(&account);
+        if let Ok(true) = emptied {
+            // Unit tests share the real app's data folder (see db::log):
+            // they must never empty the user's actual caches.
+            if !cfg!(test) {
+                for dir in crate::db::account_file_dirs() {
+                    let _ = std::fs::remove_dir_all(dir);
+                }
+            }
+        }
+        emptied
+    })
+    .await;
+    match emptied {
+        Ok(Ok(true)) => crate::db::log("cache", "another account signed in: emptied the previous one's cache"),
+        Ok(Ok(false)) => {}
+        Ok(Err(e)) => crate::db::log("cache", &format!("could not hand the cache to the account signing in: {e}")),
+        Err(e) => crate::db::log("cache", &format!("could not hand the cache to the account signing in: {e}")),
+    }
+}
+
 /// Best-effort cache write: a failure here (disk full, odd permissions)
 /// should never take down a successful network response.
 fn cache_write(db: &Mutex<Database>, f: impl FnOnce(&Database) -> rusqlite::Result<()>) {
@@ -1447,6 +1485,51 @@ mod tests {
         assert_eq!(sanitize_file_name("", "f1"), "f1");
         assert_eq!(sanitize_file_name("..", "f1"), "f1");
         assert_eq!(sanitize_file_name("../..", "f1"), "f1");
+    }
+
+    /// Through the real commands: what u1 left queued is never sent once u2
+    /// has signed in, while u1 signing back in keeps it; and sign-out reaches
+    /// the server.
+    #[tokio::test]
+    async fn signing_in_as_someone_else_leaves_nothing_of_the_previous_account() {
+        use wiremock::matchers::{body_partial_json, method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        for (login, id) in [("u1", "u1"), ("u2", "u2")] {
+            Mock::given(method("POST"))
+                .and(path("/api/v4/users/login"))
+                .and(body_partial_json(json!({ "login_id": login })))
+                .respond_with(
+                    ResponseTemplate::new(200)
+                        .insert_header("Token", format!("token-{id}"))
+                        .set_body_json(json!({ "id": id, "username": login })),
+                )
+                .mount(&server)
+                .await;
+        }
+        Mock::given(method("POST"))
+            .and(path("/api/v4/users/logout"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "status": "OK" })))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let db = test_db();
+        let login = |who: &str| format!(r#"{{"command":"login","base_url":"{}","login_id":"{who}","password":"x"}}"#, server.uri());
+        let queued = || SyncEngine::new(&crate::db::lock(db)).pending_count().unwrap();
+
+        assert!(dispatch(&login("u1"), db).await.contains(r#""ok":true"#));
+        SyncEngine::new(&crate::db::lock(db)).enqueue_outbox_message("l1", "c1", None, "de u1", 1000).unwrap();
+
+        assert!(dispatch(&login("u1"), db).await.contains(r#""ok":true"#));
+        assert_eq!(queued(), 1, "u1 signing back in keeps what u1 queued");
+
+        assert!(dispatch(&login("u2"), db).await.contains(r#""ok":true"#));
+        assert_eq!(queued(), 0, "u2 must never send what u1 wrote");
+
+        let logout = format!(r#"{{"command":"logout","base_url":"{}","token":"token-u2"}}"#, server.uri());
+        assert!(dispatch(&logout, db).await.contains(r#""ok":true"#));
     }
 
     #[test]

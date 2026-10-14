@@ -15,6 +15,7 @@ public sealed partial class Strings
         LoginButton = "Sign in",
         LoginBusy = "Signing in…",
         LoginFailed = error => $"Could not sign in: {error}",
+        LoginUnencryptedWarning = "This address starts with http://, not https://: your password and your messages would travel unencrypted, readable by anyone on the same network. Try https:// instead. To sign in anyway, click \"Sign in\" again.",
 
         // ── Sidebar ──────────────────────────────────────────────────
         Search = "Search",

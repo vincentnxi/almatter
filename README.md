@@ -81,7 +81,8 @@ delete your data (saved sign-in, settings, cached messages). That data lives in
 
 - There is **no telemetry, analytics or third-party service**. Almatter talks to the
   Mattermost server you sign in to, with one exception: a link preview's image is
-  downloaded from the linked website itself, like a browser would. Turning link previews
+  downloaded from the linked website itself, like a browser would — never from an address
+  on your own computer or local network, whatever the page asks for. Turning link previews
   off in the settings stops that.
 - Your password is never stored. The session token is saved encrypted with Windows' data
   protection API (DPAPI), readable only by your Windows account.
@@ -278,8 +279,9 @@ données se trouvent dans `%LOCALAPPDATA%\Almatter` et `%APPDATA%\Almatter`.
 - **Aucune télémétrie, aucune mesure d'audience, aucun service tiers.** Almatter
   communique avec le serveur Mattermost auquel vous vous connectez, à une exception
   près : l'image d'un aperçu de lien est téléchargée depuis le site du lien lui-même,
-  comme le ferait un navigateur. Désactiver les aperçus de liens dans les réglages
-  supprime ces téléchargements.
+  comme le ferait un navigateur — jamais depuis une adresse de votre ordinateur ou de
+  votre réseau local, quoi que la page demande. Désactiver les aperçus de liens dans les
+  réglages supprime ces téléchargements.
 - Votre mot de passe n'est jamais enregistré. Le jeton de session est chiffré avec la
   protection de données de Windows (DPAPI) et lisible uniquement par votre compte
   Windows.

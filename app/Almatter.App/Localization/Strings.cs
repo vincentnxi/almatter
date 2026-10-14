@@ -26,6 +26,8 @@ public sealed partial class Strings
     public required string LoginButton { get; init; }
     public required string LoginBusy { get; init; }
     public required Func<string, string> LoginFailed { get; init; }
+    /// <summary>Shown instead of signing in, the first time, when the server address is plain http.</summary>
+    public required string LoginUnencryptedWarning { get; init; }
 
     // ── Sidebar ──────────────────────────────────────────────────────
     public required string Search { get; init; }

@@ -2300,7 +2300,27 @@ public partial class MainViewModel : ViewModelBase
     private async Task LogOutAsync()
     {
         await EndSessionAsync();
+        // Not awaited: the sign-in screen shouldn't wait on a server that may
+        // be unreachable — signing out offline still forgets the session here.
+        _ = EndSessionOnServerAsync(_session.BaseUrl, _session.Token);
         LoggedOut?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// Signing out used to only make this app forget the token: a copy of it
+    /// stayed good on the server until it expired on its own. Called once
+    /// nothing here uses the token any more — no polling, no live connection.
+    /// </summary>
+    private async Task EndSessionOnServerAsync(string baseUrl, string token)
+    {
+        try
+        {
+            await _service.LogoutAsync(baseUrl, token);
+        }
+        catch (MattermostServiceException ex)
+        {
+            CrashLogger.Write("logout", $"the server could not be told; the token stays valid until it expires: {ex.Message}");
+        }
     }
 
     /// <summary>

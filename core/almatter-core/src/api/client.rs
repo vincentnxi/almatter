@@ -1,4 +1,5 @@
-use std::sync::OnceLock;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
 use thiserror::Error;
@@ -111,6 +112,10 @@ pub enum ApiError {
     /// people's websites, whose size nobody vouches for.
     #[error("The file is larger than this app will download ({limit_mb} MB).")]
     TooLarge { limit_mb: usize },
+    /// A picture from another website whose address leads to this computer
+    /// or its local network — see `fetch_external_bytes`.
+    #[error("The picture's address is on this computer or its local network; it was not downloaded.")]
+    PrivateAddress,
     #[error("{message}")]
     Server { status: u16, message: String },
     #[error("login response did not include a session token")]
@@ -218,6 +223,26 @@ impl MattermostClient {
 
         let user: AuthenticatedUser = Self::decode_json("/users/login", resp).await?;
         Ok((token, user))
+    }
+
+    /// Ends this session on the server, so the token stops working anywhere —
+    /// signing out used to only make this app forget it, and a copy of it
+    /// stayed good until it expired on its own. A token the server already
+    /// refuses is as good as ended: that 401 counts as success here rather
+    /// than as an expired session, whose answer is a sign-in screen the user
+    /// is on their way to anyway.
+    pub async fn logout(&self) -> Result<(), ApiError> {
+        let mut req = self.http.post(self.url("/users/logout"));
+        if let Some(token) = &self.token {
+            req = req.bearer_auth(token);
+        }
+        let resp = req.send().await?;
+        let status = resp.status().as_u16();
+        if resp.status().is_success() || status == 401 {
+            return Ok(());
+        }
+        let body = resp.text().await.unwrap_or_default();
+        Err(ApiError::from_response(status, body))
     }
 
     pub async fn get_teams(&self) -> Result<Vec<Team>, ApiError> {
@@ -845,17 +870,188 @@ const MAX_EXTERNAL_BYTES: usize = 12 * 1024 * 1024;
 /// them would have stopped every avatar and emoji from loading.
 const EXTERNAL_FETCH_TIMEOUT: Duration = Duration::from_secs(25);
 
+/// As many redirects as reqwest's own default policy follows.
+const MAX_EXTERNAL_REDIRECTS: usize = 10;
+
+/// The client for other people's websites: same identity and timeouts as the
+/// shared one, but it only ever reaches public addresses. Built lazily, and
+/// left unbuilt on failure so a later call can retry — never swapped for a
+/// stock client, which would reach anything.
+static EXTERNAL_HTTP_CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
+
+fn external_http_client() -> Result<reqwest::Client, ApiError> {
+    if let Some(client) = EXTERNAL_HTTP_CLIENT.get() {
+        return Ok(client.clone());
+    }
+    let built = external_client_reaching(is_public_address)?;
+    Ok(EXTERNAL_HTTP_CLIENT.get_or_init(|| built).clone())
+}
+
+/// A client for other people's websites that connects only to addresses
+/// `allowed` accepts. The check has to happen in three places, because an
+/// address can come in three ways: written out in the URL (checked by
+/// `fetch_external`, and here for every redirect), or behind a name, which
+/// only the DNS answer reveals — "intranet.example.com" can resolve to
+/// 192.168.1.1 as easily as an address can be typed. The names are resolved
+/// here and the answers filtered, so the address connected to is the very
+/// one that was checked.
+///
+/// One gap: when the system sends web traffic through a proxy, the proxy
+/// resolves the names, not this app. Addresses written out in the URL are
+/// still refused.
+fn external_client_reaching(allowed: fn(IpAddr) -> bool) -> Result<reqwest::Client, reqwest::Error> {
+    reqwest::Client::builder()
+        .user_agent(USER_AGENT)
+        .connect_timeout(CONNECT_TIMEOUT)
+        .read_timeout(READ_TIMEOUT)
+        .dns_resolver(Arc::new(AllowedAddressResolver { allowed }))
+        .redirect(reqwest::redirect::Policy::custom(move |attempt| {
+            if attempt.previous().len() >= MAX_EXTERNAL_REDIRECTS {
+                attempt.error("too many redirects")
+            } else if !url_address_allowed(attempt.url(), allowed) {
+                attempt.error(PrivateAddressRefused)
+            } else {
+                attempt.follow()
+            }
+        }))
+        .build()
+}
+
+/// Resolves names as the system would, then keeps only the answers
+/// `allowed` accepts — and fails when none is left.
+struct AllowedAddressResolver {
+    allowed: fn(IpAddr) -> bool,
+}
+
+impl reqwest::dns::Resolve for AllowedAddressResolver {
+    fn resolve(&self, name: reqwest::dns::Name) -> reqwest::dns::Resolving {
+        let allowed = self.allowed;
+        let host = name.as_str().to_string();
+        Box::pin(async move {
+            let addresses: Vec<SocketAddr> = tokio::net::lookup_host((host.as_str(), 0))
+                .await?
+                .filter(|address| allowed(address.ip()))
+                .collect();
+            if addresses.is_empty() {
+                return Err(Box::new(PrivateAddressRefused) as Box<dyn std::error::Error + Send + Sync>);
+            }
+            Ok(Box::new(addresses.into_iter()) as reqwest::dns::Addrs)
+        })
+    }
+}
+
+/// Raised inside reqwest (by the resolver or the redirect policy) and
+/// recognised on the way out, to become `ApiError::PrivateAddress`.
+#[derive(Debug)]
+struct PrivateAddressRefused;
+
+impl std::fmt::Display for PrivateAddressRefused {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("address on this computer or its local network")
+    }
+}
+
+impl std::error::Error for PrivateAddressRefused {}
+
+fn caused_by_private_address(error: &reqwest::Error) -> bool {
+    let mut source: Option<&(dyn std::error::Error + 'static)> = Some(error);
+    while let Some(current) = source {
+        if current.is::<PrivateAddressRefused>() {
+            return true;
+        }
+        source = current.source();
+    }
+    false
+}
+
+/// False when the URL's host is an address written out and `allowed` refuses
+/// it. A name passes here: it is checked once resolved.
+fn url_address_allowed(url: &reqwest::Url, allowed: fn(IpAddr) -> bool) -> bool {
+    let Some(host) = url.host_str() else {
+        return true;
+    };
+    // An IPv6 address keeps its brackets in a URL ("[::1]").
+    match host.trim_start_matches('[').trim_end_matches(']').parse::<IpAddr>() {
+        Ok(address) => allowed(address),
+        Err(_) => true,
+    }
+}
+
+/// Whether an address belongs to the Internet at large, as opposed to this
+/// computer (127.0.0.1, ::1), a local network (192.168.x.x, 10.x.x.x,
+/// fd00::…), a link (169.254.x.x, where cloud machines keep their secrets,
+/// fe80::…) or a range that is never anyone's website. Written out rather
+/// than taken from the standard library, whose IPv6 helpers are recent and
+/// whose IPv4 ones leave out the carrier-grade NAT range (100.64.0.0/10) —
+/// also where some VPNs put the machines of a private network.
+fn is_public_address(address: IpAddr) -> bool {
+    match address {
+        IpAddr::V4(v4) => is_public_v4(v4),
+        IpAddr::V6(v6) => {
+            if let Some(v4) = v6.to_ipv4_mapped() {
+                return is_public_v4(v4);
+            }
+            let s = v6.segments();
+            if s[0] == 0x0064 && s[1] == 0xff9b && s[2..6] == [0, 0, 0, 0] {
+                // NAT64: an IPv4 address reached from an IPv6-only network.
+                return is_public_v4(Ipv4Addr::new((s[6] >> 8) as u8, s[6] as u8, (s[7] >> 8) as u8, s[7] as u8));
+            }
+            if s[0] == 0x2002 {
+                // 6to4: the IPv4 address sits in the second and third groups.
+                return is_public_v4(Ipv4Addr::new((s[1] >> 8) as u8, s[1] as u8, (s[2] >> 8) as u8, s[2] as u8));
+            }
+            !(v6.is_unspecified()
+                || v6.is_loopback()
+                || v6.is_multicast()
+                || s[0..6] == [0, 0, 0, 0, 0, 0] // the retired IPv4-compatible form
+                || (s[0] & 0xfe00) == 0xfc00 // unique local, fc00::/7
+                || (s[0] & 0xffc0) == 0xfe80 // link-local, fe80::/10
+                || (s[0] & 0xffc0) == 0xfec0) // the retired site-local, fec0::/10
+        }
+    }
+}
+
+fn is_public_v4(address: Ipv4Addr) -> bool {
+    let [a, b, c, _] = address.octets();
+    !(a == 0 // "this network", 0.0.0.0/8
+        || address.is_loopback()
+        || address.is_private()
+        || address.is_link_local()
+        || (a == 100 && (b & 0xc0) == 64) // carrier-grade NAT, 100.64.0.0/10
+        || (a == 192 && b == 0 && c == 0) // protocol assignments, 192.0.0.0/24
+        || (a == 198 && (b & 0xfe) == 18) // benchmarking, 198.18.0.0/15
+        || address.is_multicast()
+        || a >= 240) // reserved, broadcast included
+}
+
 /// Raw bytes from an arbitrary external URL — a link preview's `og:image`,
 /// say. Deliberately a free function rather than a `MattermostClient`
 /// method: the target here is some third-party site, not this Mattermost
 /// server, so it must never carry the session's bearer token.
+///
+/// Only public addresses are reached. The page a link leads to chooses its
+/// picture's address, and the picture is fetched by every reader's app the
+/// moment the message is shown, without a click: pointed at
+/// "http://192.168.1.1/…" or "http://localhost:…", it made each of them send
+/// a request into their own computer or network, wherever they were.
 pub async fn fetch_external_bytes(url: &str) -> Result<Vec<u8>, ApiError> {
-    let mut resp = shared_http_client()
+    fetch_external(&external_http_client()?, is_public_address, url).await
+}
+
+/// `fetch_external_bytes` with the client and the address rule given — the
+/// tests' local mock server is, after all, on this computer.
+async fn fetch_external(client: &reqwest::Client, allowed: fn(IpAddr) -> bool, url: &str) -> Result<Vec<u8>, ApiError> {
+    // A URL that doesn't parse is left to reqwest, which reports it as before.
+    if reqwest::Url::parse(url).is_ok_and(|parsed| !url_address_allowed(&parsed, allowed)) {
+        return Err(ApiError::PrivateAddress);
+    }
+    let mut resp = client
         .get(url)
         .header(reqwest::header::ACCEPT, "image/*,*/*;q=0.8")
         .timeout(EXTERNAL_FETCH_TIMEOUT)
         .send()
-        .await?;
+        .await
+        .map_err(|e| if caused_by_private_address(&e) { ApiError::PrivateAddress } else { ApiError::Request(e) })?;
     if !resp.status().is_success() {
         // What a stranger's server sends along with an error is neither worth
         // reading nor worth holding in memory.
@@ -1642,7 +1838,7 @@ mod tests {
             .mount(&server)
             .await;
 
-        let bytes = fetch_external_bytes(&format!("{}/img.png", server.uri()))
+        let bytes = fetch_from_test_server(&format!("{}/img.png", server.uri()))
             .await
             .expect("external bytes should download");
 
@@ -1717,7 +1913,7 @@ mod tests {
             .mount(&server)
             .await;
 
-        let bytes = fetch_external_bytes(&format!("{}/thumb.png", server.uri()))
+        let bytes = fetch_from_test_server(&format!("{}/thumb.png", server.uri()))
             .await
             .expect("a request with the User-Agent must be answered");
         assert_eq!(bytes, vec![1, 2, 3]);
@@ -1741,12 +1937,12 @@ mod tests {
             .mount(&server)
             .await;
 
-        let err = fetch_external_bytes(&format!("{}/huge.png", server.uri()))
+        let err = fetch_from_test_server(&format!("{}/huge.png", server.uri()))
             .await
             .expect_err("a picture over the limit must not be downloaded");
         assert!(matches!(err, ApiError::TooLarge { .. }), "got {err:?}");
 
-        let bytes = fetch_external_bytes(&format!("{}/exactly-at-the-limit.png", server.uri()))
+        let bytes = fetch_from_test_server(&format!("{}/exactly-at-the-limit.png", server.uri()))
             .await
             .expect("one exactly at the limit is fine");
         assert_eq!(bytes.len(), MAX_EXTERNAL_BYTES);
@@ -1763,10 +1959,114 @@ mod tests {
             .mount(&server)
             .await;
 
-        let err = fetch_external_bytes(&format!("{}/blocked.png", server.uri()))
+        let err = fetch_from_test_server(&format!("{}/blocked.png", server.uri()))
             .await
             .expect_err("a 403 is a failure");
         assert!(matches!(err, ApiError::Server { status: 403, .. }), "got {err:?}");
+    }
+
+    #[tokio::test]
+    async fn logout_ends_the_session_on_the_server() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/api/v4/users/logout"))
+            .and(wiremock::matchers::header("authorization", "Bearer live"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({ "status": "OK" })))
+            .expect(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/api/v4/users/logout"))
+            .and(wiremock::matchers::header("authorization", "Bearer dead"))
+            .respond_with(ResponseTemplate::new(401))
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/api/v4/users/logout"))
+            .and(wiremock::matchers::header("authorization", "Bearer unlucky"))
+            .respond_with(ResponseTemplate::new(503))
+            .mount(&server)
+            .await;
+
+        MattermostClient::new(server.uri()).with_token("live").logout().await.expect("a live session ends");
+        // Already refused: ended all the same, and not reported as an expired session.
+        MattermostClient::new(server.uri()).with_token("dead").logout().await.expect("a dead token is as good as ended");
+        let err = MattermostClient::new(server.uri()).with_token("unlucky").logout().await.expect_err("a server error is one");
+        assert!(matches!(err, ApiError::Server { status: 503, .. }), "got {err:?}");
+    }
+
+    /// The mock server listens on this computer, which the real rule refuses:
+    /// the download tests above go through a client that allows any address.
+    async fn fetch_from_test_server(url: &str) -> Result<Vec<u8>, ApiError> {
+        let client = external_client_reaching(|_| true).expect("test client should build");
+        fetch_external(&client, |_| true, url).await
+    }
+
+    #[test]
+    fn only_internet_addresses_count_as_public() {
+        for public in ["93.184.216.34", "8.8.8.8", "2606:4700::1111", "64:ff9b::808:808", "2002:808:808::1"] {
+            assert!(is_public_address(public.parse().unwrap()), "{public} is on the Internet");
+        }
+        for local in [
+            "127.0.0.1", "127.8.9.10", "0.0.0.0", "10.1.2.3", "172.16.0.1", "172.31.255.255", "192.168.1.1",
+            "169.254.169.254", "100.64.0.1", "100.127.255.254", "192.0.0.1", "198.18.0.1", "224.0.0.1",
+            "255.255.255.255", "::1", "::", "fd12:3456::1", "fe80::1", "fec0::1", "ff02::1",
+            "::ffff:192.168.1.1", "::ffff:127.0.0.1", "64:ff9b::a00:1", "2002:c0a8:101::1", "::127.0.0.1",
+        ] {
+            assert!(!is_public_address(local.parse().unwrap()), "{local} is not on the Internet");
+        }
+        // Next door to the private ranges, but public.
+        for edge in ["172.32.0.1", "100.128.0.1", "11.0.0.1", "192.169.0.1"] {
+            assert!(is_public_address(edge.parse().unwrap()), "{edge} is on the Internet");
+        }
+    }
+
+    /// The real rule, against a picture on this computer: refused before a
+    /// single request goes out — written as an address, or as a name that
+    /// resolves to one.
+    #[tokio::test]
+    async fn a_picture_on_this_computer_or_its_network_is_never_requested() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .respond_with(ResponseTemplate::new(200).set_body_bytes(vec![1, 2, 3]))
+            .expect(0)
+            .mount(&server)
+            .await;
+        let port = server.address().port();
+
+        for url in [
+            format!("http://127.0.0.1:{port}/img.png"),
+            format!("http://localhost:{port}/img.png"),
+            format!("http://[::1]:{port}/img.png"),
+            "http://192.168.1.1/admin.png".to_string(),
+            "http://169.254.169.254/latest/meta-data".to_string(),
+        ] {
+            let err = fetch_external_bytes(&url).await.expect_err("must be refused");
+            assert!(matches!(err, ApiError::PrivateAddress), "{url}: got {err:?}");
+        }
+    }
+
+    /// A public page can redirect its picture to a local address: every hop
+    /// is checked, not only the first.
+    #[tokio::test]
+    async fn a_redirect_to_a_refused_address_is_not_followed() {
+        let server = MockServer::start().await;
+        let port = server.address().port();
+        Mock::given(method("GET"))
+            .and(path("/img.png"))
+            .respond_with(ResponseTemplate::new(302).insert_header("Location", format!("http://127.0.0.2:{port}/inside.png")))
+            .mount(&server)
+            .await;
+
+        // 127.0.0.1 plays the public website here, 127.0.0.2 the local network.
+        fn only_the_mock(address: IpAddr) -> bool {
+            address == IpAddr::V4(Ipv4Addr::LOCALHOST)
+        }
+        let client = external_client_reaching(only_the_mock).expect("test client should build");
+        let err = fetch_external(&client, only_the_mock, &format!("http://127.0.0.1:{port}/img.png"))
+            .await
+            .expect_err("the redirect must be refused");
+        assert!(matches!(err, ApiError::PrivateAddress), "got {err:?}");
     }
 
     /// Hits a real, live third-party Mattermost server — not run by default.

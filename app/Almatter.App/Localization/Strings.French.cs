@@ -15,6 +15,7 @@ public sealed partial class Strings
         LoginButton = "Se connecter",
         LoginBusy = "Connexion…",
         LoginFailed = error => $"Connexion impossible : {error}",
+        LoginUnencryptedWarning = "Cette adresse commence par http:// et non https:// : votre mot de passe et vos messages circuleraient en clair, lisibles par quiconque sur le même réseau. Essayez plutôt avec https://. Pour vous connecter malgré tout, cliquez de nouveau sur « Se connecter ».",
 
         // ── Sidebar ──────────────────────────────────────────────────
         Search = "Rechercher",

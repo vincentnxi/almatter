@@ -60,6 +60,21 @@ public partial class LoginViewModel : ViewModelBase
         OnPropertyChanged(nameof(ButtonLabel));
     }
 
+    /// <summary>
+    /// The unencrypted address the user has already been warned about. Over
+    /// plain http the password, the session token and every message cross the
+    /// network readable by anyone on it — a café's Wi-Fi, say — and the app
+    /// used to go ahead without a word. Now the first click only warns, and a
+    /// second one on the same address goes ahead.
+    /// </summary>
+    private string? _unencryptedAddressAccepted;
+
+    /// <summary>Plain http to another machine. A server on this very computer (a developer's test server) never crosses a network.</summary>
+    private static bool IsUnencrypted(string baseUrl) =>
+        Uri.TryCreate(baseUrl, UriKind.Absolute, out var address)
+        && address.Scheme == Uri.UriSchemeHttp
+        && !address.IsLoopback;
+
     private bool CanLogIn => !IsBusy && ServerUrl.Trim().Length > 0 && LoginId.Trim().Length > 0 && Password.Length > 0;
 
     [RelayCommand(CanExecute = nameof(CanLogIn))]
@@ -76,6 +91,12 @@ public partial class LoginViewModel : ViewModelBase
             if (!baseUrl.Contains("://", StringComparison.Ordinal))
             {
                 baseUrl = "https://" + baseUrl;
+            }
+            if (IsUnencrypted(baseUrl) && baseUrl != _unencryptedAddressAccepted)
+            {
+                _unencryptedAddressAccepted = baseUrl;
+                ErrorMessage = Loc.S.LoginUnencryptedWarning;
+                return;
             }
             var (token, user) = await _service.LoginAsync(baseUrl, LoginId.Trim(), Password);
             LoggedIn?.Invoke(this, new Session(baseUrl, token, user));

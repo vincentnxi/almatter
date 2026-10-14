@@ -96,6 +96,51 @@ impl Database {
         Ok(value)
     }
 
+    /// Makes this cache `account`'s, emptying it first when it held another
+    /// account's — returns whether it did. `account` names both the server
+    /// and the user, so a second server counts as another account too.
+    ///
+    /// The cache belongs to one account at a time. Before this, signing out
+    /// and in as someone else on the same Windows session left the first
+    /// person's messages in place, readable through the offline search, and
+    /// their unsent messages queued — to be sent by the outbox under the new
+    /// account's name. The same account signing back in (after its session
+    /// ran out, say) keeps everything, its queued messages first of all.
+    ///
+    /// A cache that names no account yet predates this rule, and is taken to
+    /// be the account signing in: emptying it would also throw away the
+    /// messages an expired session leaves queued for exactly that sign-in.
+    pub fn claim_for_account(&self, account: &str) -> rusqlite::Result<bool> {
+        let previous: Option<String> = self
+            .conn
+            .query_row("SELECT value FROM sync_state WHERE key = 'account'", [], |row| row.get(0))
+            .optional()?;
+        let another_account = previous.as_deref().is_some_and(|previous| previous != account);
+
+        self.in_transaction(|| {
+            if another_account {
+                for table in ACCOUNT_TABLES {
+                    self.conn.execute(&format!("DELETE FROM {table}"), [])?;
+                }
+            }
+            self.conn.execute(
+                "INSERT INTO sync_state (key, value) VALUES ('account', ?1)
+                 ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                params![account],
+            )?;
+            Ok(())
+        })?;
+
+        if another_account {
+            // Deleted rows stay readable in the file's free pages, and in the
+            // write-ahead log, until something overwrites them: rebuild the
+            // file, then empty the log.
+            self.conn.execute_batch("VACUUM")?;
+            self.conn.query_row("PRAGMA wal_checkpoint(TRUNCATE)", [], |_| Ok(()))?;
+        }
+        Ok(another_account)
+    }
+
     /// The cache file used by the app: `<platform data dir>/Almatter/cache.sqlite3`,
     /// falling back to a relative path if the platform data dir can't be resolved.
     pub fn open_default() -> rusqlite::Result<Self> {
@@ -1257,6 +1302,35 @@ pub struct ChannelRevision {
     pub pinned: i64,
 }
 
+/// Every table holding something of the signed-in account's — all of them,
+/// `sync_state` included; the search index follows `posts` by its triggers.
+/// A table added to the schema belongs here unless it holds nothing of an
+/// account's.
+const ACCOUNT_TABLES: &[&str] = &[
+    "teams",
+    "channels",
+    "users",
+    "posts",
+    "reactions",
+    "files",
+    "outbox",
+    "sync_state",
+    "custom_emoji",
+    "favorite_channels",
+    "channel_aliases",
+    "mention_events",
+    "reaction_events",
+    "typing_events",
+    "channel_participants",
+];
+
+/// The folders of files fetched for an account: attachments and their
+/// previews, avatars, custom emoji, link-preview pictures. Emptied along with
+/// the database when another account signs in.
+pub fn account_file_dirs() -> [PathBuf; 5] {
+    [downloads_dir(), file_preview_image_dir(), avatar_image_dir(), emoji_image_dir(), link_preview_image_dir()]
+}
+
 fn app_data_dir() -> PathBuf {
     directories::ProjectDirs::from("com", "Almatter", "Almatter")
         .map(|dirs| dirs.data_dir().to_path_buf())
@@ -1469,6 +1543,71 @@ mod tests {
         let cached = db.cached_channels_for_team("t1").unwrap();
         assert_eq!(cached.len(), 2);
         assert!(cached.iter().any(|c| c.id == "dm1"));
+    }
+
+    /// Every table of the schema is emptied for another account — a table
+    /// added later and forgotten in ACCOUNT_TABLES fails here.
+    #[test]
+    fn account_tables_cover_the_whole_schema() {
+        let db = Database::open_in_memory().unwrap();
+        let mut stmt = db
+            .connection()
+            .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'posts_fts%'")
+            .unwrap();
+        let tables: Vec<String> = stmt.query_map([], |row| row.get(0)).unwrap().map(Result::unwrap).collect();
+        for table in &tables {
+            assert!(ACCOUNT_TABLES.contains(&table.as_str()), "table {table} is not emptied for another account");
+        }
+    }
+
+    #[test]
+    fn the_same_account_keeps_its_cache_and_queued_messages() {
+        let db = Database::open_in_memory().unwrap();
+        assert!(!db.claim_for_account("https://chat.example.com|u1").unwrap(), "a first claim empties nothing");
+        db.upsert_post(&pinned_fixture("p1", "c1", 1000, false)).unwrap();
+        crate::sync::SyncEngine::new(&db).enqueue_outbox_message("l1", "c1", None, "pas encore parti", 1000).unwrap();
+
+        assert!(!db.claim_for_account("https://chat.example.com|u1").unwrap());
+        assert_eq!(db.cached_posts_for_channel("c1").unwrap().len(), 1);
+        assert_eq!(crate::sync::SyncEngine::new(&db).pending_count().unwrap(), 1);
+    }
+
+    #[test]
+    fn another_account_finds_nothing_of_the_previous_one() {
+        let dir = std::env::temp_dir().join(format!("almatter-account-test-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("cache.sqlite3");
+        let db = Database::open(&path.to_string_lossy()).unwrap();
+
+        db.claim_for_account("https://chat.example.com|u1").unwrap();
+        let mut post = pinned_fixture("p1", "c1", 1000, false);
+        post.message = "marqueur-confidentiel-7f3a".into();
+        db.upsert_post(&post).unwrap();
+        crate::sync::SyncEngine::new(&db).enqueue_outbox_message("l1", "c1", None, "marqueur-confidentiel-7f3a", 1000).unwrap();
+
+        let marker = b"marqueur-confidentiel-7f3a";
+        let on_disk = |file: &std::path::Path| {
+            std::fs::read(file).is_ok_and(|bytes| bytes.windows(marker.len()).any(|w| w == marker))
+        };
+        assert!(
+            on_disk(&path) || on_disk(&path.with_extension("sqlite3-wal")),
+            "the check below must be able to see the text at all"
+        );
+
+        assert!(db.claim_for_account("https://chat.example.com|u2").unwrap(), "another user empties the cache");
+        assert!(db.cached_posts_for_channel("c1").unwrap().is_empty());
+        assert!(db.search_posts("marqueur", 10).unwrap().is_empty(), "the offline search finds nothing either");
+        assert_eq!(crate::sync::SyncEngine::new(&db).pending_count().unwrap(), 0, "nothing left to send under u2's name");
+
+        // Not just out of the tables: out of the file and its log.
+        for file in [path.clone(), path.with_extension("sqlite3-wal")] {
+            assert!(!on_disk(&file), "{} still holds the text", file.display());
+        }
+
+        // Another server is another account too.
+        assert!(db.claim_for_account("https://autre.example.com|u2").unwrap());
+        drop(db);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     fn pinned_fixture(id: &str, channel_id: &str, create_at: i64, is_pinned: bool) -> Post {
