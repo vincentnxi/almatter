@@ -87,6 +87,7 @@ delete your data (saved sign-in, settings, cached messages). That data lives in
 - Your password is never stored. The session token is saved encrypted with Windows' data
   protection API (DPAPI), readable only by your Windows account.
 - Messages are cached on your disk so they open instantly and remain readable offline.
+- Found a security problem? Please report it privately — see [SECURITY.md](SECURITY.md).
 
 ## How it's built
 
@@ -287,6 +288,8 @@ données se trouvent dans `%LOCALAPPDATA%\Almatter` et `%APPDATA%\Almatter`.
   Windows.
 - Les messages sont mis en cache sur le disque pour s'ouvrir instantanément et rester
   lisibles hors ligne.
+- Vous avez trouvé un problème de sécurité ? Merci de le signaler en privé — voir
+  [SECURITY.md](SECURITY.md).
 
 ## Organisation du code
 

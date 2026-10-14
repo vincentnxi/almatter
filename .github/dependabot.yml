@@ -1,0 +1,20 @@
+# The actions the workflows use are pinned to a commit (see the comment in
+# each workflow), so nothing moves them forward on its own — a fix in one of
+# them would never reach these builds. Dependabot proposes the newer commit
+# once a month as a pull request, version comment included, to be read and
+# merged like any other change.
+#
+# The Rust and .NET dependencies are not listed here: Dependabot's security
+# updates already open a pull request when one of them has a known flaw
+# (rustls, 2026-10-13), and routine version bumps beyond that are done by
+# hand, with the app tested.
+
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns: ["*"]

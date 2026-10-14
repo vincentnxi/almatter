@@ -33,16 +33,26 @@ jobs:
     steps:
       # Third-party actions are pinned to a commit rather than a tag: a tag
       # can be moved to different code, a commit cannot.
+      # persist-credentials: false — nothing here pushes, so the workflow's
+      # token has no reason to stay in .git/config for every later step
+      # (the build scripts included) to read.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       # A tag that disagrees with <Version> in the csproj would publish an
       # installer whose name and "About" say something else than the release.
+      # The tag name comes in through the environment rather than written
+      # into the script: a ${{ }} expression is pasted into the code before
+      # PowerShell runs it, so a tag name holding a quote would become code.
       - name: Check the tag matches the app version
         if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          TAG: ${{ github.ref_name }}
         run: |
           $version = ([xml](Get-Content app\Almatter.App\Almatter.App.csproj -Raw)).Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1
-          if ("v$version" -ne '${{ github.ref_name }}') {
-            throw "Tag ${{ github.ref_name }} does not match <Version>$version</Version> in Almatter.App.csproj"
+          if ("v$version" -ne $env:TAG) {
+            throw "Tag $env:TAG does not match <Version>$version</Version> in Almatter.App.csproj"
           }
 
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
@@ -54,11 +64,11 @@ jobs:
           rustup toolchain install stable --profile minimal
           rustup default stable
 
-      # Reuses compiled dependencies from earlier runs; the fat-LTO release
-      # build of the core is by far the slowest part otherwise.
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
-        with:
-          workspaces: core
+      # No build cache here, on purpose. This job makes the installer that
+      # gets published (and, later, signed); a cache is compiled code from
+      # an earlier run, and whatever had managed to write a poisoned one
+      # would have it built into the release. A slower build of an installer
+      # made a few times a month is the cheaper side of that trade.
 
       # Same Inno Setup release as on the development PC, checked against its
       # SHA-256 so a tampered download stops the build. To update: take the
