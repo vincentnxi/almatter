@@ -22,7 +22,7 @@ desktop app is an Electron wrapper that routinely uses 500–600 MB of memory; A
 aims to do the everyday work — reading, writing, threads, search, notifications — in a
 fraction of that, and to stay usable on older machines.
 
-> **Status: early pre-release (0.8.0).** It is used daily, but expect rough edges.
+> **Status: early pre-release (0.9.0).** It is used daily, but expect rough edges.
 > The interface is available **in English and French**, switchable in the settings.
 
 ## Features
@@ -45,9 +45,9 @@ fraction of that, and to stay usable on older machines.
   messages, replies in your threads, links to your messages, reactions) marked 🔔 and the
   only ones that make a sound, unless you ask for a sound on every message — an unread badge on the taskbar icon, a title bar that
   follows the theme.
-- **Appearance** — light and dark themes (or follow Windows), a reduced-contrast mode,
-  adjustable message font size, and a choice between the official client's Open Sans
-  and the system UI font.
+- **Appearance** — light and dark themes (or follow Windows), six accent colours, a
+  reduced-contrast mode, adjustable message font size, and a choice between the official
+  client's Open Sans, Lato and the system UI font.
 
 ### Not supported (yet)
 
@@ -189,7 +189,7 @@ suggested approach for each OS.
 
 Almatter is released under the [MIT License](LICENSE).
 
-It bundles the Open Sans font under the SIL Open Font License 1.1, and its emoji
+It bundles the Open Sans and Lato fonts under the SIL Open Font License 1.1, and its emoji
 shortcode table is generated from emoji-data (MIT) — see [licenses/](licenses/).
 
 Almatter is an independent project, not affiliated with or endorsed by Mattermost, Inc.
@@ -213,7 +213,7 @@ de mémoire. Almatter vise à assurer l'usage quotidien — lire, écrire, suivr
 chercher, recevoir les notifications — pour une fraction de cette consommation, et à
 rester utilisable sur des machines anciennes.
 
-> **État : préversion (0.8.0).** Utilisé au quotidien, mais tout n'est pas encore poli.
+> **État : préversion (0.9.0).** Utilisé au quotidien, mais tout n'est pas encore poli.
 > L'interface est disponible **en français et en anglais**, au choix dans les réglages.
 
 ## Fonctionnalités
@@ -238,9 +238,9 @@ rester utilisable sur des machines anciennes.
   destinées (mentions, messages privés, réponses dans vos fils, liens vers vos messages,
   réactions) marquées 🔔 et seules à faire du bruit, sauf si vous demandez un son pour tous les messages —, pastille de non-lus sur l'icône de
   la barre des tâches, barre de titre assortie au thème.
-- **Apparence** — thèmes clair et sombre (ou celui de Windows), mode contraste réduit,
-  taille du texte des messages réglable, et choix entre Open Sans (la police du client
-  officiel) et la police système.
+- **Apparence** — thèmes clair et sombre (ou celui de Windows), six couleurs
+  d'accentuation, mode contraste réduit, taille du texte des messages réglable, et choix
+  entre Open Sans (la police du client officiel), Lato et la police système.
 
 ### Pas encore pris en charge
 
@@ -393,7 +393,7 @@ système.
 
 Almatter est distribué sous [licence MIT](LICENSE).
 
-Il embarque la police Open Sans, sous SIL Open Font License 1.1, et sa table de
+Il embarque les polices Open Sans et Lato, sous SIL Open Font License 1.1, et sa table de
 raccourcis emoji est générée à partir d'emoji-data (MIT) — voir [licenses/](licenses/).
 
 Almatter est un projet indépendant, sans lien avec Mattermost, Inc. ni approuvé par
