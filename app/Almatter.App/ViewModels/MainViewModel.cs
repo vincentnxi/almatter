@@ -2955,11 +2955,20 @@ public partial class MainViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// What runs code when opened. An attachment is a file any member of the
-    /// server chose to send, and it was fetched by this app rather than by a
-    /// browser, so it carries none of the marks ("downloaded from the
-    /// Internet") that make Windows ask before running it: opening one of
-    /// these from a click on a message would simply run it.
+    /// What runs code when opened, or hands what it holds to something that
+    /// does. An attachment is a file any member of the server chose to send:
+    /// opening one of these from a click on a message would simply run it.
+    /// The mark of the Web (<see cref="MarkOfTheWeb"/>) makes Windows ask
+    /// first for some of them, not for all — a script for an interpreter the
+    /// user installed, a OneNote notebook or a compiled help file run without
+    /// a question — so these are never opened from the message.
+    ///
+    /// Beyond the classic programs and scripts, the second half is what
+    /// phishing campaigns have actually used since: OneNote files carrying a
+    /// script, compiled help, Excel add-ins (.xll), Remote Desktop files that
+    /// hand the drives over (.rdp), ClickOnce shortcuts, troubleshooting
+    /// packages (.diagcab), disk images that open as a folder of programs,
+    /// Python scripts, and theme, search and shell-command files.
     /// </summary>
     private static readonly HashSet<string> ProgramFileExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -2967,6 +2976,11 @@ public partial class MainViewModel : ViewModelBase
         ".hta", ".msi", ".msp", ".msc", ".lnk", ".url", ".cpl", ".reg", ".jar", ".appx", ".msix", ".appinstaller",
         ".application", ".gadget", ".sct", ".settingcontent-ms", ".library-ms", ".search-ms",
         ".sh", ".command", ".desktop", ".app", ".appimage", ".run",
+        ".one", ".onepkg", ".chm", ".hlp", ".xll", ".rdp", ".appref-ms", ".diagcab", ".diagpkg",
+        ".iso", ".img", ".vhd", ".vhdx", ".py", ".pyw", ".pyz", ".pyzw", ".pyc",
+        ".ws", ".wsc", ".scf", ".website", ".searchconnector-ms", ".theme", ".themepack", ".deskthemepack",
+        ".msu", ".inf", ".ins", ".isp", ".jnlp", ".xbap", ".mde", ".accde", ".ade", ".adp",
+        ".ps1xml", ".ps2", ".psc1", ".psd1", ".pssc", ".cdxml",
     };
 
     /// <summary>
@@ -3005,6 +3019,7 @@ public partial class MainViewModel : ViewModelBase
         try
         {
             var path = await _service.GetFilePathAsync(_session.BaseUrl, _session.Token, attachment.Id, attachment.FileName);
+            MarkOfTheWeb.Apply(path);
             OpenDownloadedFile(path);
         }
         catch (MattermostServiceException ex)
@@ -3057,7 +3072,19 @@ public partial class MainViewModel : ViewModelBase
         try
         {
             var cached = await _service.GetFilePathAsync(_session.BaseUrl, _session.Token, attachment.Id, attachment.FileName);
-            await Task.Run(() => File.Copy(cached, target, overwrite: true));
+            await Task.Run(() =>
+            {
+                // The contents alone, then a mark of its own: a saved copy is
+                // the one the user double-clicks later, in Explorer, and File.Copy
+                // would leave whether it is marked up to what the cached copy
+                // happens to carry.
+                using (var from = File.OpenRead(cached))
+                using (var to = File.Create(target))
+                {
+                    from.CopyTo(to);
+                }
+                MarkOfTheWeb.Apply(target);
+            });
         }
         catch (MattermostServiceException ex)
         {
