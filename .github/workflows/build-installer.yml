@@ -26,6 +26,14 @@ jobs:
   build:
     runs-on: windows-2025
     timeout-minutes: 60
+    # Reading the code, plus what signing the provenance attestation below
+    # needs: an OIDC token for Sigstore's certificate, and the right to
+    # store the attestation and its record. Still nothing that can push.
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+      artifact-metadata: write
     defaults:
       run:
         shell: pwsh
@@ -94,6 +102,16 @@ jobs:
 
       - name: Build the installer
         run: .\installer\build-installer.ps1
+
+      # A signed, public statement that this exact installer was built here,
+      # from this commit of the public source, by this workflow. Anyone can
+      # check a downloaded copy with
+      #   gh attestation verify Almatter-Setup-<version>.exe --repo vincentnxi/almatter
+      # It only covers an installer uploaded to a release as it came out of
+      # this run (the artifact below), not one built elsewhere.
+      - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: installer/output/Almatter-Setup-*.exe
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
