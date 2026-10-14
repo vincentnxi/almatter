@@ -32,8 +32,15 @@ public static partial class MessageTextParser
     /// "[Foo](https://en.wikipedia.org/wiki/Foo_(bar))". Read as "no parentheses
     /// at all", such a link was left as raw text, and every link pasted from a
     /// web page passes through here as Markdown.
+    ///
+    /// A backslash in the label is only ever read as the start of an escape,
+    /// never also as a plain character. Allowing both gave a run of n
+    /// backslashes with no closing "]" a Fibonacci number of ways to be split,
+    /// each tried in turn: "[" and 40 backslashes held the window for 3.4
+    /// seconds, every two more multiplying that by 2.6 — a message anyone on
+    /// the server could post to freeze every Almatter that showed it.
     /// </remarks>
-    [GeneratedRegex(@"\G(?:\[((?:\\.|[^\[\]])+)\]\((https?://(?:[^\s()]|\([^\s()]*\))+)\)|(https?://[^\s<>""]+)|(?<![\w.])@([A-Za-z][A-Za-z0-9_.-]*))", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"\G(?:\[((?:\\.|[^\[\]\\])+)\]\((https?://(?:[^\s()]|\([^\s()]*\))+)\)|(https?://[^\s<>""]+)|(?<![\w.])@([A-Za-z][A-Za-z0-9_.-]*))", RegexOptions.IgnoreCase)]
     private static partial Regex LinkAtPattern();
 
     /// <summary>

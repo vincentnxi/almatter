@@ -1144,6 +1144,7 @@ async fn refetch_post_into_cache(
 /// `spawn_blocking` moves this onto Tokio's separate, much larger blocking
 /// thread pool instead, so it can't stall the async workers.
 async fn ensure_emoji_image_cached(client: &MattermostClient, emoji_id: &str) -> Result<String, String> {
+    require_plain_id(emoji_id)?;
     let dir = crate::db::emoji_image_dir();
     let path = dir.join(emoji_id);
     let already_cached = check_cached(dir.clone(), path.clone()).await?;
@@ -1157,6 +1158,7 @@ async fn ensure_emoji_image_cached(client: &MattermostClient, emoji_id: &str) ->
 
 /// Same shape as `ensure_emoji_image_cached`, for a user's profile picture.
 async fn ensure_avatar_cached(client: &MattermostClient, user_id: &str) -> Result<String, String> {
+    require_plain_id(user_id)?;
     let dir = crate::db::avatar_image_dir();
     let path = dir.join(user_id);
     let already_cached = check_cached(dir.clone(), path.clone()).await?;
@@ -1186,13 +1188,9 @@ async fn ensure_link_preview_image_cached(url: &str) -> Result<String, String> {
 }
 
 /// Same shape as `ensure_avatar_cached`, for the server's preview of an
-/// attached picture. `file_id` comes from the server and is used as a file
-/// name, so anything that isn't a plain Mattermost id (letters and digits)
-/// is refused rather than joined onto the cache folder's path.
+/// attached picture.
 async fn ensure_file_preview_cached(client: &MattermostClient, file_id: &str) -> Result<String, String> {
-    if file_id.is_empty() || !file_id.chars().all(|c| c.is_ascii_alphanumeric()) {
-        return Err(format!("not a file id: {file_id:?}"));
-    }
+    require_plain_id(file_id)?;
     let dir = crate::db::file_preview_image_dir();
     let path = dir.join(file_id);
     let already_cached = check_cached(dir.clone(), path.clone()).await?;
@@ -1275,6 +1273,24 @@ async fn prune_cache_dir_occasionally(dir: std::path::PathBuf, budget_bytes: u64
         return;
     }
     let _ = tokio::task::spawn_blocking(move || prune_cache_dir(&dir, budget_bytes)).await;
+}
+
+/// Refuses an id that is about to become a file or folder name on disk
+/// unless it is a plain Mattermost id: letters and digits, nothing else.
+///
+/// Emoji, user and file ids all come from the server, and joining one onto
+/// a cache folder trusted it with the path. An id like
+/// `..\..\..\Microsoft\Windows\Start Menu\Programs\Startup\x.bat` walked out
+/// of the folder (and an absolute or `\\host\share` one replaced it
+/// outright), so a hostile or compromised server could write whatever it
+/// answered anywhere in the user's profile — and since the app deletes and
+/// refetches a picture it can't decode, delete or overwrite files there too.
+fn require_plain_id(id: &str) -> Result<(), String> {
+    if !id.is_empty() && id.chars().all(|c| c.is_ascii_alphanumeric()) {
+        Ok(())
+    } else {
+        Err(format!("not a Mattermost id: {id:?}"))
+    }
 }
 
 fn hash_url(url: &str) -> String {
@@ -1405,6 +1421,7 @@ async fn ensure_file_cached(
     file_id: &str,
     file_name: &str,
 ) -> Result<String, String> {
+    require_plain_id(file_id)?;
     let dir = crate::db::downloads_dir().join(file_id);
     let path = dir.join(sanitize_file_name(file_name, file_id));
     let already_cached = check_cached(dir, path.clone()).await?;
@@ -1430,6 +1447,38 @@ mod tests {
         assert_eq!(sanitize_file_name("", "f1"), "f1");
         assert_eq!(sanitize_file_name("..", "f1"), "f1");
         assert_eq!(sanitize_file_name("../..", "f1"), "f1");
+    }
+
+    #[test]
+    fn require_plain_id_accepts_only_letters_and_digits() {
+        assert!(require_plain_id("8xq3z1ywkjbd5r7mzc9n4a6tfe").is_ok());
+        assert!(require_plain_id("u1").is_ok());
+        for bad in ["", "..", "../x", "..\\..\\Startup\\x.bat", "C:\\Users\\x", "\\\\host\\share\\x", "a b", "id.png"] {
+            assert!(require_plain_id(bad).is_err(), "{bad:?} should be refused");
+        }
+    }
+
+    /// Every command that turns a server-supplied id into a path refuses one
+    /// that would leave its cache folder — before anything touches the disk
+    /// or the network (the base URL points nowhere: an attempt to reach it
+    /// would come back as a connection error, not this one).
+    #[tokio::test]
+    async fn ids_that_would_escape_the_cache_folders_are_refused() {
+        let db = test_db();
+        let traversal = r"..\\..\\..\\..\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\x.bat";
+        for (command, field) in [
+            ("get_emoji_image", "emoji_id"),
+            ("get_user_avatar", "user_id"),
+            ("get_file_preview", "file_id"),
+            ("get_file", "file_id"),
+        ] {
+            let request = format!(
+                r#"{{"command":"{command}","base_url":"http://127.0.0.1:1","token":"x","{field}":"{traversal}","file_name":"x.bat"}}"#
+            );
+            let response = dispatch(&request, db).await;
+            assert!(response.contains(r#""ok":false"#), "{command}: {response}");
+            assert!(response.contains("not a Mattermost id"), "{command} was not refused up front: {response}");
+        }
     }
 
     /// Leaked on purpose: `dispatch` requires `'static` (real production
