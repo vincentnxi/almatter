@@ -29,7 +29,7 @@ internal static class CardImageDecoder
     /// native memory that no garbage collector will hear about. A real preview
     /// is a few megapixels; this leaves room for a 24-megapixel photo.
     /// </summary>
-    private const long MaxDecodedPixels = 25_000_000;
+    internal const long MaxDecodedPixels = 25_000_000;
 
     private static void RefuseIfAbsurd(int width, int height)
     {

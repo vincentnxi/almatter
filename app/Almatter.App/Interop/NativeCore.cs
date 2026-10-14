@@ -1,6 +1,14 @@
 using System;
 using System.Runtime.InteropServices;
 
+// Where every DllImport in this assembly looks for its library. Left to
+// itself, Windows also tries the current directory and every folder on PATH
+// when the file isn't where it is expected, so a planted copy could be
+// loaded instead. The system's own libraries (user32, shell32, gdi32,
+// dwmapi) come from System32 only; the core's, below, from the app's folder
+// only.
+[assembly: DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+
 namespace Almatter.App.Interop;
 
 /// <summary>
@@ -21,12 +29,15 @@ internal static class NativeCore
     private const string LibraryName = "almatter_ffi";
 
     [DllImport(LibraryName, EntryPoint = "almatter_core_version")]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.AssemblyDirectory)]
     private static extern IntPtr almatter_core_version();
 
     [DllImport(LibraryName, EntryPoint = "almatter_core_free_string")]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.AssemblyDirectory)]
     private static extern void almatter_core_free_string(IntPtr ptr);
 
     [DllImport(LibraryName, EntryPoint = "almatter_core_call", CharSet = CharSet.Ansi, BestFitMapping = false)]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.AssemblyDirectory)]
     private static extern IntPtr almatter_core_call([MarshalAs(UnmanagedType.LPUTF8Str)] string requestJson);
 
     /// <summary>Round-trips a call through the Rust core to prove the bridge works end to end.</summary>

@@ -73,6 +73,7 @@ public sealed partial class Strings
         ConnectingToServer = "Connecting to the server…",
         LoadingTeamsAndChannels = "Fetching teams and channels",
         CopyLink = "Copy link",
+        LinkLeadsElsewhere = "⚠ This link doesn't lead to the address it shows, but to:",
         CopyMessageLink = "Copy link to this message",
         MessageLinkCopied = "Link copied",
         DeleteMessageQuestion = "Delete this message?",

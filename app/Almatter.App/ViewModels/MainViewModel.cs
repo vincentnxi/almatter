@@ -1352,7 +1352,9 @@ public partial class MainViewModel : ViewModelBase
             AvatarPath = await NotificationAvatarPathAsync(mention.AuthorId),
         };
 
-        CrashLogger.Write("mentions", $"raising NotificationReceived: title='{title}', hasSubscribers={NotificationReceived is not null}");
+        // Ids, never the title: it names who wrote and where, and a log is
+        // what gets attached to a bug report.
+        CrashLogger.Write("mentions", $"raising NotificationReceived for {mention.PostId}, hasSubscribers={NotificationReceived is not null}");
         await Dispatcher.UIThread.InvokeAsync(() => NotificationReceived?.Invoke(this, notification));
     }
 
@@ -1389,7 +1391,7 @@ public partial class MainViewModel : ViewModelBase
             AvatarPath = await NotificationAvatarPathAsync(reaction.UserId),
         };
 
-        CrashLogger.Write("mentions", $"raising a reaction notification: title='{title}', emoji={reaction.EmojiName}");
+        CrashLogger.Write("mentions", $"raising a reaction notification for {reaction.PostId}, emoji={reaction.EmojiName}");
         await Dispatcher.UIThread.InvokeAsync(() => NotificationReceived?.Invoke(this, notification));
     }
 
@@ -2946,7 +2948,10 @@ public partial class MainViewModel : ViewModelBase
 
         try
         {
-            Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+            // The address as parsed, not the text as written: the two can
+            // differ — a quotation mark, say, which Uri escapes and the raw
+            // text would hand to the browser's command line as it is.
+            Process.Start(new ProcessStartInfo(address.AbsoluteUri) { UseShellExecute = true });
         }
         catch
         {

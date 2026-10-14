@@ -29,9 +29,9 @@
 ; https://builds.dotnet.microsoft.com/dotnet/release-metadata/10.0/releases.json,
 ; check the download against Microsoft's SHA-512 listed there, then put its
 ; SHA-256 here (Inno Setup only verifies SHA-256).
-#define DotNetVersion "10.0.12"
-#define DotNetUrl "https://builds.dotnet.microsoft.com/dotnet/Runtime/10.0.12/dotnet-runtime-10.0.12-win-x64.exe"
-#define DotNetSha256 "02ea072c08f890f9dc0d3ac71b5fd4c2bfcdced4e1133e2d917ce5422b025585"
+#define DotNetVersion "10.0.13"
+#define DotNetUrl "https://builds.dotnet.microsoft.com/dotnet/Runtime/10.0.13/dotnet-runtime-10.0.13-win-x64.exe"
+#define DotNetSha256 "15c6e0af2bfdead22d2a44c5ffae579ddf45ca465c38722a0490e77221fdb81d"
 
 [Setup]
 ; Never change AppId: it is how a newer installer recognises an existing

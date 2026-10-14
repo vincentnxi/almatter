@@ -16,6 +16,17 @@ internal static class RoundAvatar
     /// <summary>Null when the file isn't an image Skia can read.</summary>
     public static byte[]? ToPng(string path, int size)
     {
+        // The picture is decoded whole below, and its dimensions are whatever
+        // the file declares — the same limit as every other picture the app
+        // decodes (see CardImageDecoder).
+        using (var codec = SKCodec.Create(path))
+        {
+            if (codec is null || (long)codec.Info.Width * codec.Info.Height > ViewModels.CardImageDecoder.MaxDecodedPixels)
+            {
+                return null;
+            }
+        }
+
         using var source = SKImage.FromEncodedData(path);
         if (source is null)
         {

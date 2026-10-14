@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Linq;
 using System.Windows.Input;
 using Avalonia;
 using Avalonia.Controls;
@@ -201,7 +202,7 @@ public sealed class MessageInlineText : SelectableTextBlock
 
             if (segment is LinkSegment link)
             {
-                _links.Add(new LinkRange(position, position + segment.Text.Length, link.LinkUrl));
+                _links.Add(new LinkRange(position, position + segment.Text.Length, link.LinkUrl, segment.Text));
             }
 
             // Code keeps its emoji at the size of its letters, like everything else in it.
@@ -330,7 +331,9 @@ public sealed class MessageInlineText : SelectableTextBlock
         }
     }
 
-    private string? LinkAt(Point point)
+    private string? LinkAt(Point point) => LinkRangeAt(point)?.Url;
+
+    private LinkRange? LinkRangeAt(Point point)
     {
         if (_links.Count == 0)
         {
@@ -348,7 +351,7 @@ public sealed class MessageInlineText : SelectableTextBlock
             {
                 if (box.Contains(local))
                 {
-                    return link.Url;
+                    return link;
                 }
             }
         }
@@ -387,14 +390,100 @@ public sealed class MessageInlineText : SelectableTextBlock
     protected override void OnPointerMoved(PointerEventArgs e)
     {
         base.OnPointerMoved(e);
-        SetHandCursor(LinkAt(e.GetPosition(this)) is not null);
+        var link = LinkRangeAt(e.GetPosition(this));
+        SetHandCursor(link is not null);
+        ShowLinkAddress(link);
     }
 
     protected override void OnPointerExited(PointerEventArgs e)
     {
         base.OnPointerExited(e);
         SetHandCursor(false);
+        ShowLinkAddress(null);
     }
+
+    private string? _addressShownFor;
+
+    /// <summary>
+    /// The address a link really leads to, next to the pointer as soon as it
+    /// is over the link — what a browser shows in its status bar. A link's
+    /// text is whatever its author typed: "[impots.gouv.fr](https://ailleurs…)"
+    /// read as the tax office's site, and nothing on screen said otherwise
+    /// before the click.
+    /// </summary>
+    private void ShowLinkAddress(LinkRange? link)
+    {
+        if (link?.Url == _addressShownFor)
+        {
+            return;
+        }
+        _addressShownFor = link?.Url;
+        if (link is { } shown)
+        {
+            ToolTip.SetTip(this, LinkAddressTip(shown.Label, shown.Url));
+            ToolTip.SetIsOpen(this, true);
+        }
+        else
+        {
+            ToolTip.SetIsOpen(this, false);
+            ClearValue(ToolTip.TipProperty);
+        }
+    }
+
+    /// <summary>Longer than this, an address is cut — its start, the site, is what matters.</summary>
+    private const int MaxShownAddressLength = 200;
+
+    internal static string LinkAddressTip(string label, string url)
+    {
+        var address = url.Length <= MaxShownAddressLength ? url : url[..(MaxShownAddressLength - 1)] + "…";
+        return LabelNamesAnotherSite(label, url) ? Loc.S.LinkLeadsElsewhere + "\n" + address : address;
+    }
+
+    /// <summary>
+    /// Endings that make a link's text read as a web address. A heuristic for a
+    /// warning, not a rule: without such a list "rapport.pdf" or "index.html"
+    /// would read as sites too.
+    /// </summary>
+    private static readonly HashSet<string> AddressEndings = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "com", "net", "org", "info", "biz", "fr", "be", "ch", "lu", "ca", "eu", "de", "uk", "es", "it", "nl",
+        "io", "co", "app", "dev", "ai", "me", "tv", "ly", "gl", "gouv", "edu", "gov", "int",
+    };
+
+    /// <summary>
+    /// Whether a link's text reads as an address on another site than the one
+    /// the link leads to. A subdomain of the site written ("docs.example.com"
+    /// for "example.com") is the same site.
+    /// </summary>
+    internal static bool LabelNamesAnotherSite(string label, string url)
+    {
+        var text = label.Trim();
+        if (text.Length == 0 || text.Any(char.IsWhiteSpace) || !text.Contains('.'))
+        {
+            return false;
+        }
+        if (!text.Contains("://", StringComparison.Ordinal))
+        {
+            text = "http://" + text;
+        }
+        if (!Uri.TryCreate(text, UriKind.Absolute, out var written)
+            || !Uri.TryCreate(url, UriKind.Absolute, out var real)
+            || written.HostNameType != UriHostNameType.Dns && written.HostNameType != UriHostNameType.IPv4)
+        {
+            return false;
+        }
+
+        var writtenHost = WithoutWww(written.IdnHost);
+        if (written.HostNameType == UriHostNameType.Dns && !AddressEndings.Contains(writtenHost[(writtenHost.LastIndexOf('.') + 1)..]))
+        {
+            return false;
+        }
+        var realHost = WithoutWww(real.IdnHost);
+        return !(realHost == writtenHost || realHost.EndsWith("." + writtenHost, StringComparison.Ordinal));
+    }
+
+    private static string WithoutWww(string host) =>
+        (host.StartsWith("www.", StringComparison.OrdinalIgnoreCase) ? host[4..] : host).ToLowerInvariant();
 
     private void SetHandCursor(bool hand)
     {
@@ -446,7 +535,7 @@ public sealed class MessageInlineText : SelectableTextBlock
         menu.ShowAt(this, showAtPointer: true);
     }
 
-    private readonly record struct LinkRange(int Start, int End, string Url);
+    private readonly record struct LinkRange(int Start, int End, string Url, string Label);
 
     private sealed class ResourceObserver(Action<object?> onNext) : IObserver<object?>
     {

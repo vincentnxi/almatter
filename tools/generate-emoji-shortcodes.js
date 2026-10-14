@@ -8,20 +8,60 @@
 //
 //   node tools/generate-emoji-shortcodes.js [path-to-emoji.json]
 //
-// With no argument it downloads the current list. The generated file is
-// committed, so this only needs running to pick up newer emoji.
+// With no argument it downloads the list at the commit pinned below and
+// checks it against its SHA-256. The generated file is committed, so this
+// only needs running to pick up newer emoji.
+//
+// What it downloads ends up compiled into the app, so it is pinned rather
+// than taken from "master": a list altered upstream would otherwise flow
+// straight into the code. To move to a newer list: put the new commit in
+// SOURCE_COMMIT, run once (it stops on the hash and prints the new one),
+// read the change to EmojiShortcodesData.cs, then put that hash in
+// SOURCE_SHA256 and run again.
 
+const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 
-const SOURCE_URL = 'https://raw.githubusercontent.com/iamcal/emoji-data/master/emoji.json';
+// The list as of 2026-09-14 — the one EmojiShortcodesData.cs was made from.
+const SOURCE_COMMIT = '13ee711e222ea17fe537bfea953c687866f16411';
+const SOURCE_SHA256 = '8736d721991e48c41c57acc46b65e5d32258a45e4bcdebcc6012f420f81e775d';
+const SOURCE_URL = `https://raw.githubusercontent.com/iamcal/emoji-data/${SOURCE_COMMIT}/emoji.json`;
 const OUT = path.join(__dirname, '..', 'app', 'Almatter.App', 'Models', 'EmojiShortcodesData.cs');
 
 async function load(arg) {
   if (arg) return JSON.parse(fs.readFileSync(arg, 'utf8'));
   const resp = await fetch(SOURCE_URL);
   if (!resp.ok) throw new Error(`download failed: HTTP ${resp.status}`);
-  return resp.json();
+  const bytes = Buffer.from(await resp.arrayBuffer());
+  const sha256 = crypto.createHash('sha256').update(bytes).digest('hex');
+  if (sha256 !== SOURCE_SHA256) {
+    throw new Error(`emoji.json at ${SOURCE_COMMIT} has SHA-256 ${sha256}, expected ${SOURCE_SHA256}`);
+  }
+  return JSON.parse(bytes.toString('utf8'));
+}
+
+// Everything below is written into C# source, inside raw string literals.
+// A shortcode is letters, digits, "_", "+" and "-" ("+1", "flag-fr"); a
+// glyph is hex code points. Anything else — a quotation mark or a line break
+// above all, which could end the literal and start code of its own — stops
+// the run instead of being written out.
+const SHORTCODE = /^[a-z0-9_+-]+$/;
+const UNIFIED = /^[0-9A-F]{4,6}(-[0-9A-F]{4,6})*$/;
+
+function check(entry) {
+  if (typeof entry.unified !== 'string' || !UNIFIED.test(entry.unified)) {
+    throw new Error(`unexpected code points: ${JSON.stringify(entry.unified)}`);
+  }
+  for (const hex of entry.unified.split('-')) {
+    const cp = parseInt(hex, 16);
+    if (cp < 0x20 || cp === 0x22 || cp > 0x10ffff || (cp >= 0xd800 && cp <= 0xdfff)) {
+      throw new Error(`refusing code point U+${hex} in ${entry.unified}`);
+    }
+  }
+  if (!Array.isArray(entry.short_names) || !entry.short_names.every((n) => typeof n === 'string' && SHORTCODE.test(n))) {
+    throw new Error(`unexpected shortcode in ${JSON.stringify(entry.short_names)}`);
+  }
 }
 
 const glyphOf = (unified) =>
@@ -38,6 +78,7 @@ const takesSimpleTone = (e) => {
 
 async function main() {
   const data = await load(process.argv[2]);
+  data.forEach(check);
 
   const names = new Map(); // shortcode -> glyph, first writer wins
   const toneCapable = new Set();

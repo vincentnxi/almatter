@@ -87,6 +87,8 @@ public sealed partial class Strings
     public required string ConnectingToServer { get; init; }
     public required string LoadingTeamsAndChannels { get; init; }
     public required string CopyLink { get; init; }
+    /// <summary>Above the real address, when a link's text reads as another site's address.</summary>
+    public required string LinkLeadsElsewhere { get; init; }
     public required string CopyMessageLink { get; init; }
     public required string MessageLinkCopied { get; init; }
     public required string DeleteMessageQuestion { get; init; }
