@@ -31,7 +31,23 @@ depuis, est spécifique à Windows et à réécrire.
   `.github/workflows/build-linux.yml` (cœur Rust, ses tests, puis l'application, sur
   Ubuntu). Ce fichier fait aussi office de liste des prérequis : un compilateur C,
   `pkg-config`, `libssl-dev`, Rust et le SDK .NET 10. Il prouve que le code compile, pas
-  que l'application fonctionne : **elle n'a encore jamais été lancée sous Linux.**
+  que l'application fonctionne.
+- **Premier lancement sous Linux le 2026-10-17** (Ubuntu, session graphique avec Wayland
+  et XWayland) : compilation sans avertissement, `libalmatter_ffi.so` chargée, connexion
+  au serveur et affichage normaux. C'est un constat d'usage, pas une recette de test :
+  les points marqués « à tester » plus bas n'ont pas été vérifiés un par un.
+
+  Pour compiler et lancer à la main (prérequis : voir ci-dessus ; `dotnet-sdk-10.0` vient
+  des dépôts Ubuntu, Rust de `rustup`) :
+
+  ```bash
+  cd core && cargo build -p almatter-ffi                 # d'abord : dotnet build ne lance jamais cargo
+  cd ../app/Almatter.App && dotnet build
+  dotnet bin/Debug/net10.0/Almatter.dll
+  ```
+
+  Le csproj copie `libalmatter_ffi.so` à côté de `Almatter.dll`. Sous Linux, la session
+  n'est pas mémorisée (voir le tableau) : le mot de passe est redemandé à chaque lancement.
 
 ## Spécifique à Windows (ajouté depuis le début du projet)
 
@@ -111,10 +127,13 @@ Fait le 2026-10-09, depuis Windows : le projet cible `net10.0`, le csproj copie 
 binaire natif (`.dll`/`.so`/`.dylib`), chaque bloc du tableau ci-dessus est derrière une
 vérification de plateforme, et la compilation Linux est vérifiée à chaque envoi.
 
-Reste à faire, sur une vraie machine Linux (ou WSL avec affichage graphique) :
+Fait le 2026-10-17, sur une vraie machine Ubuntu : première exécution hors Windows,
+sans correction nécessaire (voir « Premier lancement sous Linux » plus haut).
 
-1. Lancer l'application une première fois et corriger ce qui se présente — c'est la
-   première exécution hors Windows.
+Reste à faire :
+
+1. Passer en revue les points « à tester » de la section suivante (collage avec liens,
+   gestionnaire de fichiers, polices) maintenant qu'une machine Linux est disponible.
 2. Mémoriser la session (Secret Service / libsecret, avec repli sur un fichier à
    permissions restreintes) : sans cela, mot de passe à chaque lancement.
 3. Écrire l'implémentation Linux de `IDesktopNotifier` (D-Bus). Si une icône permanente
