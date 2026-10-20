@@ -77,6 +77,10 @@ public partial class MainWindow : Window
         // stayed "in the background" for good and never marked anything read.
         AddHandler(PointerPressedEvent, (_, _) => AssumeForegroundOnInput(), RoutingStrategies.Tunnel, handledEventsToo: true);
         AddHandler(KeyDownEvent, (_, _) => AssumeForegroundOnInput(), RoutingStrategies.Tunnel, handledEventsToo: true);
+        DragDrop.SetAllowDrop(this, true);
+        AddHandler(DragDrop.DragOverEvent, OnFilesDragOver);
+        AddHandler(DragDrop.DropEvent, OnFilesDropped);
+        AddHandler(DragDrop.DragLeaveEvent, (_, _) => HideDropFrames());
         PropertyChanged += (_, e) =>
         {
             if (e.Property == WindowStateProperty)
@@ -826,6 +830,73 @@ public partial class MainWindow : Window
         }
 
         await PasteKeepingLinksAsync(clipboard, textBox);
+    }
+
+    /// <summary>Only files can be dropped; the cursor says so (a "forbidden" sign) for anything else, such as selected text.</summary>
+    private void OnFilesDragOver(object? sender, DragEventArgs e)
+    {
+        var isFiles = e.DataTransfer.Contains(DataFormat.File);
+        e.DragEffects = isFiles ? DragDropEffects.Copy : DragDropEffects.None;
+        e.Handled = true;
+
+        var overThread = isFiles && IsOverOpenThread(e);
+        SetDropHighlight(ThreadComposerFrame, overThread);
+        SetDropHighlight(ComposerFrame, isFiles && !overThread);
+    }
+
+    private void HideDropFrames()
+    {
+        SetDropHighlight(ThreadComposerFrame, false);
+        SetDropHighlight(ComposerFrame, false);
+    }
+
+    /// <summary>The composer that will receive the dragged files outlines itself in the accent colour (the "drop-target" style in the XAML).</summary>
+    private static void SetDropHighlight(Border composer, bool on) => composer.Classes.Set("drop-target", on);
+
+    private bool IsOverOpenThread(DragEventArgs e) =>
+        DataContext is MainViewModel { IsThreadOpen: true }
+        && e.GetPosition(ThreadPanel) is { X: >= 0, Y: >= 0 } p
+        && p.X <= ThreadPanel.Bounds.Width && p.Y <= ThreadPanel.Bounds.Height;
+
+    /// <summary>
+    /// Files dropped anywhere on the window become attachments, exactly as if
+    /// picked with a paperclip: of the thread reply when they land on the open
+    /// thread panel, of the channel's composer everywhere else. Folders can't
+    /// be attached and are skipped, like on paste.
+    /// </summary>
+    private void OnFilesDropped(object? sender, DragEventArgs e)
+    {
+        e.Handled = true;
+        HideDropFrames();
+        if (DataContext is not MainViewModel vm)
+        {
+            return;
+        }
+
+        var paths = (e.DataTransfer.TryGetFiles() ?? [])
+            .OfType<IStorageFile>()
+            .Select(f => f.TryGetLocalPath())
+            .Where(path => path is not null)
+            .Select(path => path!)
+            .ToList();
+        if (paths.Count == 0)
+        {
+            return;
+        }
+
+        _ = AttachDroppedFilesAsync(vm, paths, IsOverOpenThread(e));
+    }
+
+    private static async Task AttachDroppedFilesAsync(MainViewModel vm, IReadOnlyList<string> paths, bool isThread)
+    {
+        try
+        {
+            await vm.AttachPastedFilesAsync(paths, isThread);
+        }
+        catch (Exception ex)
+        {
+            Diagnostics.CrashLogger.Write("drop: attaching the dropped files failed", ex);
+        }
     }
 
     private static async Task PasteKeepingLinksAsync(Avalonia.Input.Platform.IClipboard clipboard, TextBox textBox)

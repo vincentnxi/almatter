@@ -373,6 +373,16 @@
             <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
         </Style>
 
+        <!-- The frame around each composer, outlined in the accent colour while files are dragged over the window (class set from code-behind). -->
+        <Style Selector="Border.composer-frame">
+            <Setter Property="BorderBrush" Value="{DynamicResource DividerStrongBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+        </Style>
+        <Style Selector="Border.composer-frame.drop-target">
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+            <Setter Property="BorderThickness" Value="2" />
+        </Style>
+
         <!-- The message composer boxes: no FluentTheme chrome at all — its
              focused/pointerover states pull a light background and an
              accent-colored border from the default (always-light) theme
@@ -1060,7 +1070,7 @@
                 </StackPanel>
             </Border>
 
-            <Border Grid.Row="2" Margin="20,10,20,16" BorderBrush="{DynamicResource DividerStrongBrush}" BorderThickness="1" CornerRadius="{DynamicResource SurfaceRadiusValue}" Background="{DynamicResource CardBgBrush}">
+            <Border x:Name="ComposerFrame" Classes="composer-frame" Grid.Row="2" Margin="20,10,20,16" CornerRadius="{DynamicResource SurfaceRadiusValue}" Background="{DynamicResource CardBgBrush}">
                 <StackPanel>
                     <Border IsVisible="{Binding IsEditingMessage}" Background="{DynamicResource BgPanelBrush}" CornerRadius="{DynamicResource RowRadiusValue}" Margin="10,8,10,0" Padding="10,5">
                         <Grid ColumnDefinitions="Auto,*,Auto">
@@ -1166,7 +1176,7 @@
         </Grid>
 
         <!-- THREAD PANEL — only takes up space (an Auto-sized column) while a thread is actually open, per user request. -->
-        <Border Grid.Column="2" Width="320" IsVisible="{Binding IsThreadOpen}"
+        <Border x:Name="ThreadPanel" Grid.Column="2" Width="320" IsVisible="{Binding IsThreadOpen}"
                 Background="{DynamicResource BgAppBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1,0,0,0">
             <Grid RowDefinitions="52,*,Auto">
                 <Border Grid.Row="0" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1" Padding="14,0">
@@ -1428,7 +1438,7 @@
                     </StackPanel>
                 </ScrollViewer>
 
-                <Border Grid.Row="2" Margin="14,10,14,14" BorderBrush="{DynamicResource DividerStrongBrush}" BorderThickness="1" CornerRadius="{DynamicResource SurfaceRadiusValue}" Background="{DynamicResource CardBgBrush}" Padding="10,8">
+                <Border x:Name="ThreadComposerFrame" Classes="composer-frame" Grid.Row="2" Margin="14,10,14,14" CornerRadius="{DynamicResource SurfaceRadiusValue}" Background="{DynamicResource CardBgBrush}" Padding="10,8">
                     <StackPanel Spacing="4">
                         <ItemsControl ItemsSource="{Binding ThreadPendingAttachments}">
                             <ItemsControl.ItemsPanel>
