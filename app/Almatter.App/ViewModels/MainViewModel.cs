@@ -121,6 +121,12 @@ public partial class MainViewModel : ViewModelBase
 
     private void ShowActiveChannelName(ChannelDto channel)
     {
+        // A rename comes through here too and must not close the panel;
+        // only arriving in another channel does.
+        if (_membersChannelId != channel.Id)
+        {
+            ResetMembersPanel();
+        }
         ActiveChannelName = ChannelDisplayName(channel);
         var original = ChannelOriginalName(channel);
         ActiveChannelOriginalName = ActiveChannelName == original ? "" : original;
@@ -390,6 +396,38 @@ public partial class MainViewModel : ViewModelBase
     public bool HasPinnedMessages => PinnedCount > 0;
 
     public ObservableCollection<PinnedMessageItem> PinnedMessages { get; } = [];
+
+    /// <summary>The channel's member list panel, opened from the header.</summary>
+    [ObservableProperty]
+    public partial bool IsMembersPanelOpen { get; set; }
+
+    [ObservableProperty]
+    public partial string MembersQuery { get; set; } = "";
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(NoMemberResults))]
+    public partial bool IsLoadingMembers { get; set; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(NoMemberResults))]
+    public partial string? MembersError { get; set; }
+
+    /// <summary>The members matching the filter box, online people first.</summary>
+    public ObservableCollection<ChannelMemberItem> ChannelMemberResults { get; } = [];
+
+    /// <summary>Shown next to the panel title — the whole channel's size, not the filtered count.</summary>
+    [ObservableProperty]
+    public partial int ChannelMemberCount { get; set; }
+
+    /// <summary>Same three-way distinction as the other panels: never "personne" over a spinner or an error.</summary>
+    public bool NoMemberResults => !IsLoadingMembers && MembersError is null && ChannelMemberResults.Count == 0;
+
+    private List<ChannelMemberItem> _channelMembers = [];
+
+    /// <summary>The channel the member list above belongs to; a load that comes back for another one is dropped.</summary>
+    private string? _membersChannelId;
+
+    partial void OnMembersQueryChanged(string value) => ApplyMembersFilter();
 
     /// <summary>Emoji picker — opened from a message's "+" button, or from either composer's smiley.</summary>
     [ObservableProperty]
@@ -3279,6 +3317,187 @@ public partial class MainViewModel : ViewModelBase
 
     [RelayCommand]
     private void ClosePinnedPanel() => IsPinnedPanelOpen = false;
+
+    private void ResetMembersPanel()
+    {
+        IsMembersPanelOpen = false;
+        _membersChannelId = null;
+        _channelMembers = [];
+        ChannelMemberResults.Clear();
+        ChannelMemberCount = 0;
+        MembersQuery = "";
+        MembersError = null;
+        IsLoadingMembers = false;
+        OnPropertyChanged(nameof(NoMemberResults));
+    }
+
+    [RelayCommand]
+    private void CloseMembersPanel() => IsMembersPanelOpen = false;
+
+    /// <summary>Opens the member list: the cached one paints at once, then the server's replaces it.</summary>
+    [RelayCommand]
+    private async Task OpenMembersPanelAsync()
+    {
+        if (_activeChannelId is not { } channelId)
+        {
+            return;
+        }
+
+        IsMembersPanelOpen = true;
+        IsPinnedPanelOpen = false;
+        MembersError = null;
+        MembersQuery = "";
+        if (_membersChannelId != channelId)
+        {
+            _channelMembers = [];
+            ChannelMemberResults.Clear();
+            ChannelMemberCount = 0;
+        }
+        _membersChannelId = channelId;
+        IsLoadingMembers = _channelMembers.Count == 0;
+
+        try
+        {
+            try
+            {
+                await PopulateMembersAsync(channelId, await _service.GetCachedChannelMembersAsync(channelId));
+            }
+            catch (MattermostServiceException ex)
+            {
+                CrashLogger.Write("members: cached read failed", ex);
+            }
+
+            try
+            {
+                await PopulateMembersAsync(
+                    channelId,
+                    await _service.GetChannelMembersAsync(_session.BaseUrl, _session.Token, channelId));
+            }
+            catch (MattermostServiceException ex)
+            {
+                if (channelId == _activeChannelId)
+                {
+                    // A cached list that is already on screen stays; the error only shows when there is nothing else.
+                    if (_channelMembers.Count == 0)
+                    {
+                        MembersError = ex.Message;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                if (channelId == _activeChannelId && _channelMembers.Count == 0)
+                {
+                    MembersError = Loc.S.UnexpectedError(ex.Message);
+                }
+            }
+        }
+        finally
+        {
+            if (channelId == _activeChannelId)
+            {
+                IsLoadingMembers = false;
+            }
+        }
+    }
+
+    private async Task PopulateMembersAsync(string channelId, List<string> userIds)
+    {
+        if (userIds.Count == 0 || channelId != _activeChannelId)
+        {
+            return;
+        }
+
+        var users = (await _service.GetCachedUsersAsync(userIds)).ToDictionary(u => u.Id);
+        var missing = userIds.Where(id => !users.ContainsKey(id)).ToList();
+        if (missing.Count > 0)
+        {
+            try
+            {
+                foreach (var chunk in missing.Chunk(200))
+                {
+                    foreach (var user in await _service.GetUsersAsync(_session.BaseUrl, _session.Token, chunk))
+                    {
+                        users[user.Id] = user;
+                    }
+                }
+            }
+            catch (MattermostServiceException ex)
+            {
+                // Offline: the people the cache knows are still worth showing.
+                CrashLogger.Write("members: user lookup failed", ex);
+            }
+        }
+
+        // Presence is never cached, so ask for it every time; it is cosmetic and a failure just leaves everyone grey.
+        try
+        {
+            foreach (var chunk in userIds.Chunk(200))
+            {
+                foreach (var status in await _service.GetStatusesAsync(_session.BaseUrl, _session.Token, chunk))
+                {
+                    _presenceByUserId[status.UserId] = ToPresence(status.Status);
+                }
+            }
+        }
+        catch (MattermostServiceException ex)
+        {
+            CrashLogger.Write("members: presence read failed", ex);
+        }
+
+        if (channelId != _activeChannelId)
+        {
+            return;
+        }
+
+        _channelMembers = userIds
+            .Where(users.ContainsKey)
+            .Select(id => users[id])
+            .Select(user => new ChannelMemberItem
+            {
+                UserId = user.Id,
+                DisplayName = user.DisplayName,
+                Username = user.Username,
+                Initials = user.Initials,
+                AvatarHex = AvatarColorFor(user.Id),
+                Presence = _presenceByUserId.TryGetValue(user.Id, out var presence) ? presence : PresenceStatus.Offline,
+                CanMessage = user.Id != _session.User.Id,
+            })
+            .OrderBy(m => m.Presence == PresenceStatus.Offline ? 1 : 0)
+            .ThenBy(m => m.DisplayName, StringComparer.CurrentCultureIgnoreCase)
+            .ToList();
+        ChannelMemberCount = userIds.Count;
+        IsLoadingMembers = false;
+        ApplyMembersFilter();
+    }
+
+    private void ApplyMembersFilter()
+    {
+        var query = MembersQuery.Trim();
+        ChannelMemberResults.Clear();
+        foreach (var member in _channelMembers)
+        {
+            if (query.Length == 0
+                || member.DisplayName.Contains(query, StringComparison.CurrentCultureIgnoreCase)
+                || member.Username.Contains(query, StringComparison.CurrentCultureIgnoreCase))
+            {
+                ChannelMemberResults.Add(member);
+            }
+        }
+        OnPropertyChanged(nameof(NoMemberResults));
+    }
+
+    /// <summary>Clicking a member opens the conversation with them, as in the official client.</summary>
+    [RelayCommand]
+    private async Task OpenMemberConversationAsync(ChannelMemberItem? item)
+    {
+        if (item is not { CanMessage: true })
+        {
+            return;
+        }
+        IsMembersPanelOpen = false;
+        await OpenDirectMessageWithAsync(item.UserId);
+    }
 
     /// <summary>Bound to a row in the pinned panel — closes it and jumps the conversation to that message.</summary>
     [RelayCommand]

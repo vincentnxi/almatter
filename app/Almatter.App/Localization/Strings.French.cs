@@ -41,6 +41,7 @@ public sealed partial class Strings
 
         // ── Conversation ─────────────────────────────────────────────
         PinnedMessages = "Messages épinglés",
+        ChannelMembers = "Membres",
         SendMessage = "Envoyer un message",
         WriteInChannel = channel => $"Écrire dans #{channel}…",
         Sending = "Envoi en cours…",

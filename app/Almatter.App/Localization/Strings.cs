@@ -55,6 +55,7 @@ public sealed partial class Strings
 
     // ── Conversation ─────────────────────────────────────────────────
     public required string PinnedMessages { get; init; }
+    public required string ChannelMembers { get; init; }
     public required string SendMessage { get; init; }
     public required Func<string, string> WriteInChannel { get; init; }
     public required string Sending { get; init; }

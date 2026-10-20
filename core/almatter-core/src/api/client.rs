@@ -330,9 +330,25 @@ impl MattermostClient {
 
     /// Every member of one specific channel — used to resolve a group DM's
     /// participant list, since a GM channel's `name` (unlike a 1:1 DM's)
-    /// isn't parseable into user ids.
+    /// isn't parseable into user ids, and to fill the channel's member list.
+    /// The server pages this endpoint (60 by default, 200 at most), so a
+    /// busy channel needs several calls; the page cap bounds a server that
+    /// never returns a short page.
     pub async fn get_channel_members(&self, channel_id: &str) -> Result<Vec<ChannelParticipant>, ApiError> {
-        self.get_json(&format!("/channels/{channel_id}/members")).await
+        const PER_PAGE: usize = 200;
+        const MAX_PAGES: usize = 50;
+        let mut members: Vec<ChannelParticipant> = Vec::new();
+        for page in 0..MAX_PAGES {
+            let batch: Vec<ChannelParticipant> = self
+                .get_json(&format!("/channels/{channel_id}/members?page={page}&per_page={PER_PAGE}"))
+                .await?;
+            let received = batch.len();
+            members.extend(batch);
+            if received < PER_PAGE {
+                break;
+            }
+        }
+        Ok(members)
     }
 
     /// Users matching `term`, restricted to members of `channel_id` — what
@@ -1083,7 +1099,7 @@ async fn body_bytes(resp: reqwest::Response) -> Result<Vec<u8>, ApiError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use wiremock::matchers::{body_json, method, path};
+    use wiremock::matchers::{body_json, method, path, query_param};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
     #[tokio::test]
@@ -1237,6 +1253,30 @@ mod tests {
         assert_eq!(members.len(), 3);
         assert_eq!(members[0].user_id, "u1");
         assert_eq!(members[2].user_id, "u3");
+    }
+
+    #[tokio::test]
+    async fn get_channel_members_reads_every_page() {
+        let server = MockServer::start().await;
+        let full_page: Vec<_> = (0..200).map(|i| serde_json::json!({ "user_id": format!("u{i}") })).collect();
+        Mock::given(method("GET"))
+            .and(path("/api/v4/channels/c1/members"))
+            .and(query_param("page", "0"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(full_page))
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/api/v4/channels/c1/members"))
+            .and(query_param("page", "1"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([{ "user_id": "last" }])))
+            .mount(&server)
+            .await;
+
+        let client = MattermostClient::new(server.uri()).with_token("abc123");
+        let members = client.get_channel_members("c1").await.expect("members should parse");
+
+        assert_eq!(members.len(), 201);
+        assert_eq!(members[200].user_id, "last");
     }
 
     #[tokio::test]
