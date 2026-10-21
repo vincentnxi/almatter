@@ -1,0 +1,79 @@
+# Looks for known security flaws in the libraries Almatter is built from:
+# the Rust crates (checked against the RustSec database) and the NuGet
+# packages (checked against NuGet's own advisory list).
+#
+# A flaw can be published the day after a release, so this runs every week
+# as well as on pushes and pull requests, or by hand from the Actions tab
+# ("Run workflow"). A red run means a library in use has a known flaw: the
+# log names it and the version that fixes it.
+#
+# Nothing is published from here and nothing is changed: it only reports.
+
+name: Audit dependencies
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  schedule:
+    - cron: '17 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  rust:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Rust
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+
+      # cargo-audit is built from source at the version crates.io serves,
+      # rather than through a third-party action, so no extra code is
+      # trusted. --locked builds it with the dependency versions its own
+      # authors tested.
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: core
+          cache-bin: true
+
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+
+      # Exits with an error when a crate in Cargo.lock has a known
+      # vulnerability. Unmaintained-crate notices are shown but do not fail.
+      - name: Audit Cargo.lock
+        working-directory: core
+        run: cargo audit
+
+  dotnet:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: '10.0.x'
+
+      # `dotnet list package --vulnerable` always exits 0, so the output is
+      # searched for the word it prints when it finds something.
+      - name: Check NuGet packages, direct and indirect
+        run: |
+          dotnet list app/Almatter.App/Almatter.App.csproj package --vulnerable --include-transitive 2>&1 | tee audit.txt
+          if grep -q "has the following vulnerable packages" audit.txt; then
+            echo "::error::A NuGet package has a known vulnerability (see the list above)."
+            exit 1
+          fi
