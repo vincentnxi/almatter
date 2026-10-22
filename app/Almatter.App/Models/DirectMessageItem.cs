@@ -51,6 +51,9 @@ public sealed partial class DirectMessageItem : ObservableObject, IChannelListIt
     [ObservableProperty]
     public partial bool ShowDropIndicatorBelow { get; set; }
 
+    [ObservableProperty]
+    public partial bool IsFilteredOut { get; set; }
+
     /// <summary>Unread mentions — drives the accent-colored number badge. The server counts every DM message as a mention (there's no @ needed in a 1:1), so this is effectively "unread DM count".</summary>
     [ObservableProperty]
     public partial int MentionCount { get; set; }

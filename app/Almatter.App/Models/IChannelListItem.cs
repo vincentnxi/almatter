@@ -15,6 +15,9 @@ public interface IChannelListItem
     bool ShowDropIndicatorAbove { get; set; }
     bool ShowDropIndicatorBelow { get; set; }
 
+    /// <summary>Hidden because it doesn't match what's typed in the sidebar's filter box.</summary>
+    bool IsFilteredOut { get; set; }
+
     /// <summary>Set whenever there's any unread message, mention or not — used (alongside MentionCount) to drive the taskbar overlay badge across every channel/DM at once.</summary>
     bool HasUnread { get; }
 

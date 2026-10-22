@@ -333,6 +333,8 @@ public partial class MainWindow : Window
         ComposerBox.AddHandler(KeyDownEvent, OnComposerKeyDown, RoutingStrategies.Tunnel);
         ThreadComposerBox.AddHandler(KeyDownEvent, OnThreadComposerKeyDown, RoutingStrategies.Tunnel);
         SearchBox.AddHandler(KeyDownEvent, OnSearchKeyDown, RoutingStrategies.Tunnel);
+        SidebarFilterBox.AddHandler(KeyDownEvent, OnSidebarFilterKeyDown, RoutingStrategies.Tunnel);
+        AddHandler(KeyDownEvent, OnWindowShortcutKeyDown, RoutingStrategies.Tunnel);
         EmojiSearchBox.AddHandler(KeyDownEvent, OnEmojiSearchKeyDown, RoutingStrategies.Tunnel);
         RenameChannelBox.AddHandler(KeyDownEvent, OnRenameChannelKeyDown, RoutingStrategies.Tunnel);
 
@@ -1205,6 +1207,48 @@ public partial class MainWindow : Window
         }
         e.Handled = true;
         vm.RunSearchCommand.Execute(null);
+    }
+
+    /// <summary>Ctrl+K, as in Mattermost's own client: jump to the sidebar filter box from anywhere.</summary>
+    private void OnWindowShortcutKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.K || e.KeyModifiers != KeyModifiers.Control)
+        {
+            return;
+        }
+        e.Handled = true;
+        SidebarFilterBox.Focus();
+        SidebarFilterBox.SelectAll();
+    }
+
+    private void OnSidebarFilterKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (DataContext is not MainViewModel vm)
+        {
+            return;
+        }
+        switch (e.Key)
+        {
+            case Key.Enter:
+                e.Handled = true;
+                vm.OpenFirstSidebarMatchCommand.Execute(null);
+                ComposerBox.Focus();
+                break;
+            case Key.Escape:
+                e.Handled = true;
+                vm.SidebarFilter = "";
+                ComposerBox.Focus();
+                break;
+        }
+    }
+
+    private void OnClearSidebarFilterClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is MainViewModel vm)
+        {
+            vm.SidebarFilter = "";
+        }
+        SidebarFilterBox.Focus();
     }
 
     private void OnRenameChannelKeyDown(object? sender, KeyEventArgs e)

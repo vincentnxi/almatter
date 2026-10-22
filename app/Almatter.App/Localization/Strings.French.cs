@@ -121,6 +121,7 @@ public sealed partial class Strings
         NoChannelsToJoin = "Aucun canal public à rejoindre",
         Join = "Rejoindre",
         SearchMessagePlaceholder = "Rechercher un message…",
+        FindConversationPlaceholder = "Trouver une conversation",
         NoResults = "Aucun résultat",
         NoPinnedMessages = "Aucun message épinglé dans ce canal. Survolez un message et utilisez l'épingle pour en garder un sous la main.",
         GoToMessage = "Aller à ce message",

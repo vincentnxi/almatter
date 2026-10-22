@@ -54,6 +54,9 @@ public sealed partial class ChannelItem : ObservableObject, IChannelListItem
     [ObservableProperty]
     public partial bool ShowDropIndicatorBelow { get; set; }
 
+    [ObservableProperty]
+    public partial bool IsFilteredOut { get; set; }
+
     public bool HasMentions => MentionCount > 0;
     public bool IsPrivate => Kind == ChannelKind.Private;
 

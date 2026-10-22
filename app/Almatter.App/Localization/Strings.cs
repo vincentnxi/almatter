@@ -150,6 +150,7 @@ public sealed partial class Strings
     public required string NoChannelsToJoin { get; init; }
     public required string Join { get; init; }
     public required string SearchMessagePlaceholder { get; init; }
+    public required string FindConversationPlaceholder { get; init; }
     public required string NoResults { get; init; }
     public required string NoPinnedMessages { get; init; }
     public required string GoToMessage { get; init; }

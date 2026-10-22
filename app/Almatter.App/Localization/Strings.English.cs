@@ -119,6 +119,7 @@ public sealed partial class Strings
         NoChannelsToJoin = "No public channels to join",
         Join = "Join",
         SearchMessagePlaceholder = "Search messages…",
+        FindConversationPlaceholder = "Find a conversation",
         NoResults = "No results",
         NoPinnedMessages = "No pinned messages in this channel. Hover over a message and use the pin to keep it at hand.",
         GoToMessage = "Go to this message",

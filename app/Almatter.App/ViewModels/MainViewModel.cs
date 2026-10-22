@@ -349,6 +349,19 @@ public partial class MainViewModel : ViewModelBase
     [ObservableProperty]
     public partial bool IsFavoritesSectionExpanded { get; set; } = true;
 
+    /// <summary>What's typed in the box at the top of the sidebar: hides every favorite, channel and DM whose name doesn't contain it.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsSidebarFiltered), nameof(ShowFavoritesList), nameof(ShowChannelsList), nameof(ShowDirectMessagesList))]
+    public partial string SidebarFilter { get; set; } = "";
+
+    public bool IsSidebarFiltered => !string.IsNullOrWhiteSpace(SidebarFilter);
+
+    // A collapsed section would hide its matches, so filtering opens them
+    // all without touching the remembered collapsed/expanded state.
+    public bool ShowFavoritesList => IsFavoritesSectionExpanded || IsSidebarFiltered;
+    public bool ShowChannelsList => IsChannelsSectionExpanded || IsSidebarFiltered;
+    public bool ShowDirectMessagesList => IsDirectMessagesSectionExpanded || IsSidebarFiltered;
+
     /// <summary>Settings panel — opened via the gear icon at the bottom of the sidebar.</summary>
     [ObservableProperty]
     public partial bool IsSettingsOpen { get; set; }
@@ -889,6 +902,10 @@ public partial class MainViewModel : ViewModelBase
         Loc.Instance.SetLanguage(Settings.Language);
         RefreshLanguageSelection();
         ThreadReplies.CollectionChanged += (_, _) => OnPropertyChanged(nameof(ThreadReplyCountLabel));
+        FavoriteChannels.CollectionChanged += OnSidebarListChanged;
+        Channels.CollectionChanged += OnSidebarListChanged;
+        FavoriteDirectMessages.CollectionChanged += OnSidebarListChanged;
+        DirectMessages.CollectionChanged += OnSidebarListChanged;
         ApplyTheme();
         RefreshFontChoiceSelection();
         RefreshFontSizeSelection();
@@ -2167,9 +2184,78 @@ public partial class MainViewModel : ViewModelBase
 
     // Persisted as they change rather than at close: these survive a crash
     // that way, and AppSettings saves itself on every property change.
-    partial void OnIsFavoritesSectionExpandedChanged(bool value) => Settings.FavoritesExpanded = value;
-    partial void OnIsChannelsSectionExpandedChanged(bool value) => Settings.ChannelsExpanded = value;
-    partial void OnIsDirectMessagesSectionExpandedChanged(bool value) => Settings.DirectMessagesExpanded = value;
+    partial void OnIsFavoritesSectionExpandedChanged(bool value)
+    {
+        Settings.FavoritesExpanded = value;
+        OnPropertyChanged(nameof(ShowFavoritesList));
+    }
+
+    partial void OnIsChannelsSectionExpandedChanged(bool value)
+    {
+        Settings.ChannelsExpanded = value;
+        OnPropertyChanged(nameof(ShowChannelsList));
+    }
+
+    partial void OnIsDirectMessagesSectionExpandedChanged(bool value)
+    {
+        Settings.DirectMessagesExpanded = value;
+        OnPropertyChanged(nameof(ShowDirectMessagesList));
+    }
+
+    partial void OnSidebarFilterChanged(string value)
+    {
+        foreach (var item in SidebarItems())
+        {
+            item.IsFilteredOut = !MatchesSidebarFilter(item);
+        }
+    }
+
+    // Lists are rebuilt on every refresh; rows arriving while a filter is
+    // typed must come in already filtered, not flash up unfiltered.
+    private void OnSidebarListChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
+    {
+        if (e.NewItems is null)
+        {
+            return;
+        }
+        foreach (IChannelListItem item in e.NewItems)
+        {
+            item.IsFilteredOut = !MatchesSidebarFilter(item);
+        }
+    }
+
+    private IEnumerable<IChannelListItem> SidebarItems() =>
+        FavoriteChannels.Cast<IChannelListItem>()
+            .Concat(FavoriteDirectMessages)
+            .Concat(Channels)
+            .Concat(DirectMessages);
+
+    /// <summary>Case- and accent-insensitive, on the shown name and on the real one behind an alias.</summary>
+    private bool MatchesSidebarFilter(IChannelListItem item)
+    {
+        var query = SidebarFilter.Trim();
+        if (query.Length == 0)
+        {
+            return true;
+        }
+        const CompareOptions options = CompareOptions.IgnoreCase | CompareOptions.IgnoreNonSpace;
+        var compare = CultureInfo.InvariantCulture.CompareInfo;
+        return compare.IndexOf(item.ShownName, query, options) >= 0
+            || compare.IndexOf(item.OriginalName, query, options) >= 0;
+    }
+
+    /// <summary>Enter in the filter box: open the first row still showing, in sidebar order, and clear the filter.</summary>
+    [RelayCommand]
+    private void OpenFirstSidebarMatch()
+    {
+        var first = SidebarItems().FirstOrDefault(i => !i.IsFilteredOut);
+        if (first is null)
+        {
+            return;
+        }
+        SidebarFilter = "";
+        SelectChannelCommand.Execute(first.Id);
+    }
 
     [RelayCommand]
     private void ToggleDirectMessagesSection() => IsDirectMessagesSectionExpanded = !IsDirectMessagesSectionExpanded;
