@@ -22,7 +22,7 @@ desktop app is an Electron wrapper that routinely uses 500–600 MB of memory; A
 aims to do the everyday work — reading, writing, threads, search, notifications — in a
 fraction of that, and to stay usable on older machines.
 
-> **Status: early pre-release (0.9.2).** It is used daily, but expect rough edges.
+> **Status: early pre-release (0.10.0).** It is used daily, but expect rough edges.
 > The interface is available **in English and French**, switchable in the settings.
 
 ## Features
@@ -33,11 +33,12 @@ fraction of that, and to stay usable on older machines.
   presence, and read state synced with your other devices.
 - **Messaging** — Markdown rendering with a formatting toolbar, edit and delete, threads
   in a side panel, reactions and an emoji picker, `@mentions` with autocomplete, pinned
-  messages.
-- **Attachments** — attach files, or paste images and files straight into the composer.
-  Pasting from a web page keeps its links.
+  messages, a channel's member list.
+- **Attachments** — attach files, drag them onto the window, or paste images and files
+  straight into the composer. Pasting from a web page keeps its links.
 - **Link previews**, with a setting to turn them off.
-- **Search** messages, browse and join channels, start direct messages.
+- **Search** messages, find a conversation by name from the sidebar (Ctrl+K), browse and
+  join channels, start direct messages.
 - **Offline outbox** — messages written while disconnected are queued and sent when the
   connection comes back.
 - **Windows integration** — notifications from the notification area (a message, or a
@@ -215,7 +216,7 @@ de mémoire. Almatter vise à assurer l'usage quotidien — lire, écrire, suivr
 chercher, recevoir les notifications — pour une fraction de cette consommation, et à
 rester utilisable sur des machines anciennes.
 
-> **État : préversion (0.9.2).** Utilisé au quotidien, mais tout n'est pas encore poli.
+> **État : préversion (0.10.0).** Utilisé au quotidien, mais tout n'est pas encore poli.
 > L'interface est disponible **en français et en anglais**, au choix dans les réglages.
 
 ## Fonctionnalités
@@ -228,11 +229,13 @@ rester utilisable sur des machines anciennes.
   autres appareils.
 - **Messagerie** — rendu Markdown avec barre de mise en forme, modification et
   suppression, fils de discussion dans un panneau latéral, réactions et sélecteur
-  d'émojis, `@mentions` avec autocomplétion, messages épinglés.
-- **Pièces jointes** — joindre des fichiers, ou coller directement images et fichiers
-  dans la zone de saisie. Un texte collé depuis une page web garde ses liens.
+  d'émojis, `@mentions` avec autocomplétion, messages épinglés, liste des membres
+  d'un canal.
+- **Pièces jointes** — joindre des fichiers, les glisser sur la fenêtre, ou coller
+  directement images et fichiers dans la zone de saisie. Un texte collé depuis une page web garde ses liens.
 - **Aperçus de liens**, désactivables dans les réglages.
-- **Recherche** dans les messages, parcours et ajout de canaux, messages directs.
+- **Recherche** dans les messages, conversation retrouvée par son nom depuis la barre
+  latérale (Ctrl+K), parcours et ajout de canaux, messages directs.
 - **File d'envoi hors ligne** — les messages écrits sans connexion sont mis en attente
   et envoyés au retour de celle-ci.
 - **Intégration à Windows** — notifications depuis la zone de notification (un message,
