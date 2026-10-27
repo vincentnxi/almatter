@@ -183,8 +183,15 @@ public partial class MainWindow : Window
             _ = new BottomFollower(MessagesScroller, StickToBottomSlack);
             _ = new BottomFollower(ThreadScroller, StickToBottomSlack);
 
+            _jumpTarget = new JumpTargetHolder(MessagesScroller, MessagesItemsControl);
+
             vm.ScrollMessagesToEndRequested += (_, _) =>
+            {
+                // Back to the newest message on purpose: a jump still holding
+                // an older one in the middle would pull the view straight back.
+                _jumpTarget.Release();
                 Dispatcher.UIThread.Post(() => MessagesScroller.ScrollToEnd(), DispatcherPriority.Background);
+            };
 
             vm.ScrollToMessageRequested += (_, postId) =>
                 Dispatcher.UIThread.Post(() => ScrollToMessage(postId), DispatcherPriority.Background);
@@ -1118,85 +1125,21 @@ public partial class MainWindow : Window
         return file?.TryGetLocalPath();
     }
 
+    /// <summary>Holds the message a jump aimed at in the middle of the conversation while the rows around it settle (see JumpTargetHolder).</summary>
+    private JumpTargetHolder? _jumpTarget;
+
     /// <summary>
-    /// Scrolls a specific message row into view (roughly centered) after a
-    /// "jump to this message" from a search result — the row may be
+    /// Scrolls a specific message row into view (centered) after a "jump to
+    /// this message" from a search result, a link or a pin — the row may be
     /// anywhere in the currently painted list, not necessarily at the end.
     /// </summary>
-    private int _settlingScrollIndex = -1;
-    private int _settlingScrollAttemptsLeft;
-
     private void ScrollToMessage(string postId)
     {
-        if (DataContext is not MainViewModel vm)
+        if (DataContext is not MainViewModel vm || vm.Messages.FirstOrDefault(m => m.Id == postId) is not { } target)
         {
             return;
         }
-
-        var target = vm.Messages.FirstOrDefault(m => m.Id == postId);
-        if (target is null)
-        {
-            return;
-        }
-        var index = vm.Messages.IndexOf(target);
-        if (index < 0)
-        {
-            return;
-        }
-
-        // The message list is virtualized, so a target far from the current
-        // scroll position isn't realized yet — ScrollIntoView forces that
-        // (and a rough scroll) first. Its jump, and the first centering pass
-        // right after, are still only based on the panel's ESTIMATED height
-        // for not-yet-realized neighboring items; as those get realized with
-        // their real (often quite different) heights over the next few
-        // layout passes, the panel keeps correcting the scroll extent —
-        // visible as the target message drifting out of view a moment after
-        // it was first centered. Re-centering across a few more layout
-        // passes, instead of just once, rides that out instead of fighting it.
-        MessagesItemsControl.ScrollIntoView(index);
-        _settlingScrollIndex = index;
-        _settlingScrollAttemptsLeft = 8;
-        MessagesScroller.LayoutUpdated -= OnSettlingScrollLayoutUpdated;
-        MessagesScroller.LayoutUpdated += OnSettlingScrollLayoutUpdated;
-        CenterMessageContainer(index);
-    }
-
-    private void OnSettlingScrollLayoutUpdated(object? sender, EventArgs e)
-    {
-        if (_settlingScrollAttemptsLeft <= 0 || _settlingScrollIndex < 0)
-        {
-            MessagesScroller.LayoutUpdated -= OnSettlingScrollLayoutUpdated;
-            return;
-        }
-        _settlingScrollAttemptsLeft--;
-        var moved = CenterMessageContainer(_settlingScrollIndex);
-        if (!moved || _settlingScrollAttemptsLeft <= 0)
-        {
-            MessagesScroller.LayoutUpdated -= OnSettlingScrollLayoutUpdated;
-        }
-    }
-
-    /// <summary>Re-centers the given message in the viewport; returns false once the position has already settled (nothing worth correcting), so the caller can stop re-running this on every subsequent layout pass.</summary>
-    private bool CenterMessageContainer(int index)
-    {
-        if (MessagesItemsControl.ContainerFromIndex(index) is not { } container)
-        {
-            return true;
-        }
-        var topLeft = container.TranslatePoint(new Point(0, 0), MessagesScroller);
-        if (topLeft is not { } point)
-        {
-            return true;
-        }
-
-        var targetY = Math.Max(0, MessagesScroller.Offset.Y + point.Y - (MessagesScroller.Viewport.Height / 2) + (container.Bounds.Height / 2));
-        if (Math.Abs(targetY - MessagesScroller.Offset.Y) < 1)
-        {
-            return false;
-        }
-        MessagesScroller.Offset = new Vector(MessagesScroller.Offset.X, targetY);
-        return true;
+        _jumpTarget?.Hold(target);
     }
 
     private void OnSearchKeyDown(object? sender, KeyEventArgs e)

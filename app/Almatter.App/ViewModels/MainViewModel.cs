@@ -1534,6 +1534,7 @@ public partial class MainViewModel : ViewModelBase
         _activeChannelId = channelId;
         Settings.LastChannelId = channelId;
         ReturnToLiveConversation();
+        var jumpsBefore = _jumpCount;
         foreach (var item in Channels.Concat(FavoriteChannels))
         {
             item.IsSelected = item.Id == channelId;
@@ -1567,8 +1568,11 @@ public partial class MainViewModel : ViewModelBase
             var authors = (await _service.GetUsersAsync(_session.BaseUrl, _session.Token, authorIds))
                 .ToDictionary(u => u.Id);
 
-            // The user may have already clicked away to another channel while this was in flight.
-            if (channelId == _activeChannelId)
+            // The user may have already clicked away to another channel while this was in flight
+            // — or jumped to a message (a search result clicked straight away): repainting the
+            // latest page and scrolling to the end then threw the view off the message just
+            // opened. The jump painted the list itself; the polling loop keeps it current.
+            if (channelId == _activeChannelId && jumpsBefore == _jumpCount)
             {
                 var shown = await WithCachedHistoryAsync(channelId, posts, authors);
                 // Usually the cache already painted this very list and it is
@@ -2839,6 +2843,9 @@ public partial class MainViewModel : ViewModelBase
     /// </summary>
     private void ReturnToLiveConversation() => IsViewingJumpedMessage = false;
 
+    /// <summary>How many jumps to a message have started — lets a channel load still in flight tell that one happened since, and leave the list alone.</summary>
+    private int _jumpCount;
+
     /// <summary>Bound to the floating down-arrow: back to the newest message, and back to live updates with it.</summary>
     [RelayCommand]
     private void ReturnToLiveTail()
@@ -2860,6 +2867,8 @@ public partial class MainViewModel : ViewModelBase
         {
             return;
         }
+
+        _jumpCount++;
 
         var channelChanged = channelId != _activeChannelId;
         _activeChannelId = channelId;
@@ -2900,7 +2909,7 @@ public partial class MainViewModel : ViewModelBase
             // with the view already at the bottom, so nothing hinted that
             // new messages had stopped appearing.
             var cached = await _service.GetCachedPostsAsync(channelId);
-            if (cached.Any(p => p.Id == postId))
+            if (IsAmongRecentMessages(cached, postId))
             {
                 var cachedAuthors = (await _service.GetCachedUsersAsync(cached.Select(p => p.UserId).Distinct()))
                     .ToDictionary(u => u.Id);
@@ -2939,6 +2948,42 @@ public partial class MainViewModel : ViewModelBase
         {
             ErrorMessage = ex.Message;
         }
+    }
+
+    /// <summary>The server's default page when a channel is opened — the newest messages the cache is sure to hold without a hole.</summary>
+    private const int RecentPageSize = 60;
+
+    /// <summary>A silence longer than this between two cached messages is more likely a hole in the cache than a quiet channel.</summary>
+    private static readonly TimeSpan MaxGapInRecentHistory = TimeSpan.FromDays(3);
+
+    /// <summary>
+    /// Whether a message sits in the channel's recent history as the cache
+    /// holds it — unbroken from it down to the newest message — so showing
+    /// the cached conversation shows it in its real surroundings.
+    ///
+    /// Being in the cache is not enough: a search result, a pinned message
+    /// or a linked one is stored on its own, months or years older than the
+    /// rest. Taken for recent, it was painted alone above the channel's
+    /// latest messages, with nothing it was answering or answered by — the
+    /// jump looked like it had gone nowhere. Measured on a real cache: most
+    /// channels carried a few such strays, up to three years old.
+    /// </summary>
+    private static bool IsAmongRecentMessages(List<PostDto> cached, string postId)
+    {
+        var ordered = cached.OrderBy(p => p.CreateAt).ToList();
+        var index = ordered.FindIndex(p => p.Id == postId);
+        if (index < 0 || index < ordered.Count - RecentPageSize)
+        {
+            return false;
+        }
+        for (var i = index; i < ordered.Count - 1; i++)
+        {
+            if (ordered[i + 1].CreateAt - ordered[i].CreateAt > MaxGapInRecentHistory.TotalMilliseconds)
+            {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static async Task ClearHighlightAfterDelayAsync(MessageItem item)
