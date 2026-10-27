@@ -1,7 +1,6 @@
 ﻿; Inno Setup 6.7 script for Almatter. Build it through build-installer.ps1,
-; which publishes the app into publish\ and passes the version on the
-; command line; compiling this file on its own only works once publish\
-; already holds a published build.
+; which publishes the app into publish\ and passes the version and the .NET
+; runtime to fetch on the command line.
 ;
 ; Choices behind it (see the 2026-09-14 discussion):
 ; - Per-user install under %LOCALAPPDATA%\Programs, no admin rights needed
@@ -9,7 +8,7 @@
 ; - Framework-dependent, untrimmed build. The app only needs the base .NET
 ;   runtime (Microsoft.NETCore.App, not the Desktop one); if .NET 10 is
 ;   missing, Setup downloads Microsoft's installer, checks it against the
-;   pinned SHA-256 below, and runs it. That step is the only one that asks
+;   SHA-256 fixed at build time (see below), and runs it. That step is the only one that asks
 ;   for Windows' admin permission.
 ; - Minimal wizard: tasks (desktop icon) -> install -> finish with
 ;   "Launch Almatter". The ready page only appears when .NET has to be
@@ -23,15 +22,14 @@
 #endif
 
 ; .NET runtime fetched when missing. Any 10.0.x satisfies the app (it asks
-; for 10.0.0 and rolls forward to the newest patch), so this only needs
-; bumping to pick up security fixes for fresh installs. To update: take the
-; "dotnet-runtime-win-x64.exe" entry of the latest release in
-; https://builds.dotnet.microsoft.com/dotnet/release-metadata/10.0/releases.json,
-; check the download against Microsoft's SHA-512 listed there, then put its
-; SHA-256 here (Inno Setup only verifies SHA-256).
-#define DotNetVersion "10.0.13"
-#define DotNetUrl "https://builds.dotnet.microsoft.com/dotnet/Runtime/10.0.13/dotnet-runtime-10.0.13-win-x64.exe"
-#define DotNetSha256 "15c6e0af2bfdead22d2a44c5ffae579ddf45ca465c38722a0490e77221fdb81d"
+; for 10.0.0 and rolls forward to the newest patch). build-installer.ps1
+; looks up the newest 10.0.x at build time, checks it against Microsoft's
+; SHA-512 and signature, and passes its version, URL and SHA-256 here
+; (Inno Setup only verifies SHA-256). There is deliberately no fallback
+; value: a stale one would quietly ship an outdated runtime.
+#if !Defined(DotNetVersion) || !Defined(DotNetUrl) || !Defined(DotNetSha256)
+  #error DotNetVersion, DotNetUrl and DotNetSha256 are set by build-installer.ps1: build through it.
+#endif
 
 [Setup]
 ; Never change AppId: it is how a newer installer recognises an existing

@@ -4,10 +4,14 @@
 # once a month as a pull request, version comment included, to be read and
 # merged like any other change.
 #
-# The Rust and .NET dependencies are not listed here: Dependabot's security
-# updates already open a pull request when one of them has a known flaw
-# (rustls, 2026-10-13), and routine version bumps beyond that are done by
-# hand, with the app tested.
+# The libraries compiled into the app — NuGet packages and Rust crates — get
+# the same treatment every week: one pull request per ecosystem gathering the
+# minor and patch updates, so the Linux build, the Rust tests and the audit
+# run on them before anything is merged. They are never taken silently at
+# build time: a new version can break the app, or be a hijacked release.
+# Major versions arrive as separate pull requests, since they usually need
+# code changes. A known flaw still triggers Dependabot's security update
+# straight away (rustls, 2026-10-13), whatever the schedule.
 
 version: 2
 updates:
@@ -18,3 +22,21 @@ updates:
     groups:
       actions:
         patterns: ["*"]
+
+  - package-ecosystem: nuget
+    directory: /app/Almatter.App
+    schedule:
+      interval: weekly
+    groups:
+      nuget:
+        patterns: ["*"]
+        update-types: [minor, patch]
+
+  - package-ecosystem: cargo
+    directory: /core
+    schedule:
+      interval: weekly
+    groups:
+      cargo:
+        patterns: ["*"]
+        update-types: [minor, patch]

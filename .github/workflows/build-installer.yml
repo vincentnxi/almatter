@@ -78,21 +78,37 @@ jobs:
       # would have it built into the release. A slower build of an installer
       # made a few times a month is the cheaper side of that trade.
 
-      # Same Inno Setup release as on the development PC, checked against its
-      # SHA-256 so a tampered download stops the build. To update: take the
-      # innosetup-<version>.exe of a release at
-      # https://github.com/jrsoftware/issrc/releases, check it is signed by
-      # "Pyrsys B.V." (right-click > Properties > Digital Signatures), then put
-      # its URL and SHA-256 here.
-      - name: Install Inno Setup 6.7.3
+      # The newest Inno Setup 6 release, so its fixes reach the installer
+      # without a manual bump. Version 7 or later is not taken on its own:
+      # a new major version can change how Almatter.iss is read, so moving
+      # to it is a deliberate change, tested by hand.
+      # A download is only run once it matches the SHA-256 GitHub recorded
+      # for the release file and carries a valid signature from Inno Setup's
+      # publisher, Pyrsys B.V. — a tampered download stops the build.
+      - name: Install Inno Setup 6 (latest)
         env:
-          INNO_URL: https://github.com/jrsoftware/issrc/releases/download/is-6_7_3/innosetup-6.7.3.exe
-          INNO_SHA256: 9c73c3bae7ed48d44112a0f48e66742c00090bdb5bef71d9d3c056c66e97b732
+          GH_TOKEN: ${{ github.token }}
         run: |
+          $headers = @{ Authorization = "Bearer $env:GH_TOKEN"; Accept = 'application/vnd.github+json' }
+          $release = (Invoke-RestMethod 'https://api.github.com/repos/jrsoftware/issrc/releases?per_page=100' -Headers $headers) |
+            Where-Object { -not $_.draft -and -not $_.prerelease -and $_.tag_name -match '^is-6_\d+_\d+$' } |
+            Sort-Object { [version]($_.tag_name -replace '^is-', '' -replace '_', '.') } -Descending |
+            Select-Object -First 1
+          if (-not $release) { throw 'No Inno Setup 6 release found' }
+          $innoVersion = $release.tag_name -replace '^is-', '' -replace '_', '.'
+          $asset = $release.assets | Where-Object { $_.name -eq "innosetup-$innoVersion.exe" } | Select-Object -First 1
+          if (-not $asset) { throw "Release $($release.tag_name) has no innosetup-$innoVersion.exe" }
+          if ($asset.digest -notmatch '^sha256:([0-9a-f]{64})$') { throw "No SHA-256 recorded for $($asset.name)" }
+          $expected = $Matches[1]
+          Write-Host "Inno Setup $innoVersion"
           $setup = Join-Path $env:RUNNER_TEMP 'innosetup.exe'
-          Invoke-WebRequest $env:INNO_URL -OutFile $setup
+          Invoke-WebRequest $asset.browser_download_url -OutFile $setup
           $hash = (Get-FileHash $setup -Algorithm SHA256).Hash
-          if ($hash -ne $env:INNO_SHA256) { throw "Inno Setup download has SHA-256 $hash, expected $env:INNO_SHA256" }
+          if ($hash -ne $expected) { throw "Inno Setup download has SHA-256 $hash, GitHub lists $expected" }
+          $signature = Get-AuthenticodeSignature $setup
+          if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch '(^|, )O=Pyrsys B\.V\.(,|$)') {
+            throw "Inno Setup download is not validly signed by Pyrsys B.V. ($($signature.Status), $($signature.SignerCertificate.Subject))"
+          }
           $dir = Join-Path $env:RUNNER_TEMP 'InnoSetup'
           $p = Start-Process $setup -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', '/CURRENTUSER', "/DIR=$dir" -Wait -PassThru
           if ($p.ExitCode -ne 0) { throw "Inno Setup install failed ($($p.ExitCode))" }
