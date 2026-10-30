@@ -692,7 +692,13 @@ async fn handle(request_json: &str, db: &'static Mutex<Database>) -> Value {
                 .update_post(&post_id, &message)
                 .await
                 .map(|post| {
-                    cache_write(db, |cache| cache.upsert_post(&post));
+                    // Not `upsert_post`: the server's answer to an edit comes
+                    // back without the post's reactions, and upserting it
+                    // wiped them from the cache until the next refetch put
+                    // them back — a few seconds of reactions vanishing from
+                    // the message just edited. Same rule as the live
+                    // `post_edited` event in ws.rs.
+                    cache_write(db, |cache| cache.update_post_text(&post.id, &post.message, post.edit_at, post.is_pinned));
                     json!({ "post": post })
                 })
                 .map_err(|e| e.to_string())
@@ -2196,19 +2202,37 @@ mod tests {
 
     #[tokio::test]
     async fn edit_message_updates_the_cache_with_the_new_text() {
+        use crate::models::{Post, PostMetadata, Reaction};
         use wiremock::matchers::{method, path};
         use wiremock::{Mock, MockServer, ResponseTemplate};
 
+        // The server's answer carries no reactions — which is exactly what
+        // used to wipe them from the cache.
         let server = MockServer::start().await;
         Mock::given(method("PUT"))
             .and(path("/api/v4/posts/p1"))
             .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-                "id": "p1", "channel_id": "c1", "user_id": "u1", "message": "edited", "create_at": 1000
+                "id": "p1", "channel_id": "c1", "user_id": "u1", "message": "edited", "create_at": 1000, "edit_at": 2000
             })))
             .mount(&server)
             .await;
 
         let db = test_db();
+        db.lock().unwrap().upsert_post(&Post {
+            id: "p1".into(),
+            channel_id: "c1".into(),
+            root_id: "".into(),
+            user_id: "u1".into(),
+            message: "original".into(),
+            create_at: 1000,
+            reply_count: 0,
+            edit_at: 0,
+            is_pinned: false,
+            metadata: PostMetadata {
+                reactions: vec![Reaction { user_id: "u2".into(), emoji_name: "thumbsup".into() }],
+                ..Default::default()
+            },
+        }).unwrap();
         let response = dispatch(
             &format!(
                 r#"{{"command":"edit_message","base_url":"{}","token":"tok","post_id":"p1","message":"edited"}}"#,
@@ -2221,6 +2245,8 @@ mod tests {
 
         let cached = db.lock().unwrap().cached_posts_for_channel("c1").unwrap();
         assert_eq!(cached[0].message, "edited");
+        assert_eq!(cached[0].edit_at, 2000);
+        assert_eq!(cached[0].metadata.reactions.len(), 1, "the edit must keep the post's reactions");
     }
 
     #[tokio::test]

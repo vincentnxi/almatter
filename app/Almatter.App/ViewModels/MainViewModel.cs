@@ -535,6 +535,16 @@ public partial class MainViewModel : ViewModelBase
 
     private DateTime _lastActivityReportAt = DateTime.MinValue;
 
+    /// <summary>Whether the last poll tick found the user idle — coming back from it is reported at once.</summary>
+    private bool _wasIdle;
+
+    /// <summary>
+    /// After coming back, how long to wait before re-reading this user's
+    /// status: the report goes over the socket and the read over HTTP, so
+    /// asking straight away can beat the server to it and read "away" again.
+    /// </summary>
+    private static readonly TimeSpan PresenceRecheckDelay = TimeSpan.FromSeconds(3);
+
     /// <summary>
     /// When the user last picked a status by hand. A presence refresh already
     /// in flight at that moment carries the old value and must not put it back
@@ -1087,10 +1097,21 @@ public partial class MainViewModel : ViewModelBase
                 // message, with nothing on screen to say so.
                 try
                 {
-                    if (DateTime.UtcNow - _lastActivityReportAt >= ActivityReportInterval)
+                    // Back at the keyboard after a while away: tell the server
+                    // now rather than at the next minute's report, and re-read
+                    // the status shortly after — otherwise the picker stayed
+                    // on "away" for up to two minutes after the mouse moved.
+                    var isIdle = IsUserIdle();
+                    var cameBack = _wasIdle && !isIdle;
+                    _wasIdle = isIdle;
+                    if (cameBack || DateTime.UtcNow - _lastActivityReportAt >= ActivityReportInterval)
                     {
                         _lastActivityReportAt = DateTime.UtcNow;
-                        await ReportActivityAsync();
+                        await ReportActivityAsync(isIdle);
+                    }
+                    if (cameBack)
+                    {
+                        _lastPresenceRefreshAt = DateTime.UtcNow - PresenceRefreshInterval + PresenceRecheckDelay;
                     }
 
                     if (DateTime.UtcNow - _lastPresenceRefreshAt >= PresenceRefreshInterval)
@@ -5458,9 +5479,9 @@ public partial class MainViewModel : ViewModelBase
     /// minutes while the picker still said available. A hand-picked away or
     /// do-not-disturb is never overridden (see ws.rs).
     /// </summary>
-    private async Task ReportActivityAsync()
+    private async Task ReportActivityAsync(bool isIdle)
     {
-        if (SystemIdle.IdleTime() is { } idle && idle >= IdleThreshold)
+        if (isIdle)
         {
             return;
         }
@@ -5473,6 +5494,9 @@ public partial class MainViewModel : ViewModelBase
             // Best-effort — the next minute's report tries again.
         }
     }
+
+    /// <summary>No keyboard or mouse input anywhere on the computer for <see cref="IdleThreshold"/>. Unknown reads as active.</summary>
+    private static bool IsUserIdle() => SystemIdle.IdleTime() is { } idle && idle >= IdleThreshold;
 
     /// <summary>Everyone with a message currently loaded — the channel, the open thread and its root.</summary>
     private IEnumerable<string> LoadedMessageAuthorIds()

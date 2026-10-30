@@ -1267,9 +1267,13 @@
                 Background="{DynamicResource BgAppBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1,0,0,0">
             <Grid RowDefinitions="52,*,Auto">
                 <Border Grid.Row="0" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1" Padding="14,0">
-                    <Grid ColumnDefinitions="*,Auto,Auto">
-                        <TextBlock Grid.Column="0" Text="{Binding T.Thread, Source={x:Static loc:Loc.Instance}}" FontWeight="Bold" VerticalAlignment="Center" />
-                        <TextBlock Grid.Column="1" Text="{Binding ActiveChannelName}" Foreground="{DynamicResource TextTertiaryBrush}" FontSize="12" VerticalAlignment="Center" Margin="0,0,10,0" />
+                    <!-- The channel name takes only what's left and trims: a group
+                         conversation's name lists every member and, sized to its
+                         content, pushed the close button out of the panel. -->
+                    <Grid ColumnDefinitions="Auto,*,Auto">
+                        <TextBlock Grid.Column="0" Text="{Binding T.Thread, Source={x:Static loc:Loc.Instance}}" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,10,0" />
+                        <TextBlock Grid.Column="1" Text="{Binding ActiveChannelName}" ToolTip.Tip="{Binding ActiveChannelName}" Foreground="{DynamicResource TextTertiaryBrush}" FontSize="12" VerticalAlignment="Center" HorizontalAlignment="Right"
+                                   TextTrimming="CharacterEllipsis" Margin="0,0,10,0" />
                         <Button Grid.Column="2" Classes="row-button" Width="20" Height="20"
                                 Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).CloseThreadCommand}">
                             <Canvas Width="14" Height="14" VerticalAlignment="Center" HorizontalAlignment="Center">

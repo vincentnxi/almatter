@@ -657,16 +657,16 @@ impl Database {
     /// channel-members endpoint would once it next runs. The user's own
     /// message counts as already read, so the gap stays put for it. Either
     /// way last_post_at moves forward, which is what orders the DM list by
-    /// recent activity. A no-op if the channel isn't cached yet (nothing to
-    /// widen the gap on).
+    /// recent activity. Returns false, changing nothing, when the channel
+    /// isn't cached yet — the caller then has to fetch it.
     pub fn bump_channel_activity(
         &self,
         channel_id: &str,
         post_at: i64,
         own_post: bool,
         mentioned: bool,
-    ) -> rusqlite::Result<()> {
-        self.conn.execute(
+    ) -> rusqlite::Result<bool> {
+        let updated = self.conn.execute(
             "UPDATE channels SET total_msg_count = total_msg_count + 1,
                 msg_count = msg_count + ?3,
                 mention_count = mention_count + ?2,
@@ -679,7 +679,7 @@ impl Database {
                 post_at
             ],
         )?;
-        Ok(())
+        Ok(updated > 0)
     }
 
     /// Optimistic local update after a successful `mark_channel_viewed` —
@@ -2331,8 +2331,8 @@ mod tests {
         db.bump_channel_activity("c1", 1000, false, false).unwrap();
         assert_eq!(db.cached_channels_for_team("t1").unwrap()[0].last_post_at, 8000);
 
-        // A channel not yet cached is simply a no-op, not an error.
-        db.bump_channel_activity("unknown-channel", 1000, false, true).unwrap();
+        // A channel not yet cached is reported, not an error.
+        assert!(!db.bump_channel_activity("unknown-channel", 1000, false, true).unwrap());
     }
 
     #[test]

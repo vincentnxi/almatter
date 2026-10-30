@@ -12,7 +12,7 @@ use tokio_tungstenite::tungstenite::Message;
 
 use crate::api::MattermostClient;
 use crate::db::Database;
-use crate::models::Post;
+use crate::models::{ChannelType, Post};
 
 #[derive(Debug, Error)]
 pub enum WsError {
@@ -559,12 +559,19 @@ async fn handle_event(text: &str, user_id: &str, client: &MattermostClient, db: 
     // bold/badge state and DM ordering notice it. The user's own message
     // (from here or another device) moves the conversation up too, just
     // without making it unread.
-    {
+    let channel_known = {
         let cache = crate::db::lock(db);
         let own_post = post.user_id == user_id;
-        if let Err(e) = cache.bump_channel_activity(&post.channel_id, post.create_at, own_post, mentioned && !own_post) {
-            crate::db::log("ws", &format!("failed to bump channel activity: {e}"));
+        match cache.bump_channel_activity(&post.channel_id, post.create_at, own_post, mentioned && !own_post) {
+            Ok(known) => known,
+            Err(e) => {
+                crate::db::log("ws", &format!("failed to bump channel activity: {e}"));
+                true
+            }
         }
+    };
+    if !channel_known {
+        cache_new_channel(&post.channel_id, client, db).await;
     }
 
     // Every message from someone else queues a notification event now, not
@@ -581,6 +588,64 @@ async fn handle_event(text: &str, user_id: &str, client: &MattermostClient, db: 
             Ok(()) => {}
             Err(e) => crate::db::log("ws", &format!("failed to queue notification: {e}")),
         }
+    }
+}
+
+/// A message in a channel the cache has never seen — typically a group
+/// conversation someone just started with this user, or a channel they were
+/// just added to. The sidebar only lists cached channels, so without this the
+/// notification fires but the conversation stays invisible until the next
+/// full channel refetch (a restart, in practice). Fetched after the post
+/// landed, the server's counts already include it: nothing to bump on top.
+async fn cache_new_channel(channel_id: &str, client: &MattermostClient, db: &'static Mutex<Database>) {
+    let mut channel = match client.get_channel(channel_id).await {
+        Ok(channel) => channel,
+        Err(e) => {
+            crate::db::log("ws", &format!("failed to fetch new channel {channel_id}: {e}"));
+            return;
+        }
+    };
+    if let Ok(member) = client.get_my_channel_member(channel_id).await {
+        channel.msg_count = member.msg_count;
+        channel.mention_count = member.mention_count;
+        channel.is_muted = member.is_muted();
+    }
+
+    // A group's name comes from its members, which the sidebar reads from
+    // the cache when it repaints between refetches — a group without them
+    // there is skipped, as are names it can't resolve.
+    let mut participant_ids = Vec::new();
+    if channel.channel_type == ChannelType::Group {
+        match client.get_channel_members(channel_id).await {
+            Ok(members) => participant_ids = members.into_iter().map(|m| m.user_id).collect(),
+            Err(e) => crate::db::log("ws", &format!("failed to fetch new group's members: {e}")),
+        }
+    }
+    let unknown_users: Vec<String> = {
+        let cache = crate::db::lock(db);
+        participant_ids
+            .iter()
+            .filter(|id| cache.cached_user(id).ok().flatten().is_none())
+            .cloned()
+            .collect()
+    };
+    let users = if unknown_users.is_empty() {
+        Vec::new()
+    } else {
+        client.get_users_by_ids(&unknown_users).await.unwrap_or_default()
+    };
+
+    let cache = crate::db::lock(db);
+    for user in &users {
+        let _ = cache.upsert_user(user);
+    }
+    if !participant_ids.is_empty() {
+        if let Err(e) = cache.replace_channel_participants(channel_id, &participant_ids) {
+            crate::db::log("ws", &format!("failed to cache new group's members: {e}"));
+        }
+    }
+    if let Err(e) = cache.upsert_channel(&channel) {
+        crate::db::log("ws", &format!("failed to cache new channel: {e}"));
     }
 }
 
@@ -1298,5 +1363,72 @@ mod tests {
         assert_eq!(backoff_after_drop(long_delay, HEALTHY_CONNECTION - Duration::from_secs(1)), long_delay);
         assert_eq!(backoff_after_drop(long_delay, HEALTHY_CONNECTION), RECONNECT_MIN);
         assert_eq!(backoff_after_drop(long_delay, Duration::from_secs(3600)), RECONNECT_MIN);
+    }
+
+    /// A group created just to send this user a message: the notification
+    /// fired, but the group never reached the sidebar, which only lists
+    /// cached channels. The channel, its members and their names all have to
+    /// land in the cache for the sidebar's cache-only repaint to show it.
+    #[tokio::test]
+    async fn a_message_in_a_group_never_seen_caches_the_group_and_its_members() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/api/v4/channels/gm1"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "id": "gm1", "team_id": "", "name": "abc", "display_name": "u1, u2, me",
+                "type": "G", "total_msg_count": 1, "last_post_at": 1000
+            })))
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/api/v4/channels/gm1/members/me"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "channel_id": "gm1", "msg_count": 0, "mention_count": 0
+            })))
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/api/v4/channels/gm1/members"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!([
+                { "user_id": "u1" }, { "user_id": "u2" }, { "user_id": "me" }
+            ])))
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/api/v4/users/ids"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!([
+                { "id": "u1", "username": "alice" },
+                { "id": "u2", "username": "bob" },
+                { "id": "me", "username": "me" }
+            ])))
+            .mount(&server)
+            .await;
+
+        let db: &'static Mutex<Database> =
+            Box::leak(Box::new(Mutex::new(Database::open_in_memory().unwrap())));
+        let client = MattermostClient::new(server.uri());
+        let post = json!({
+            "id": "p1", "channel_id": "gm1", "user_id": "u1", "message": "hello all", "create_at": 1000
+        });
+        handle_event(
+            &json!({ "event": "posted", "data": { "post": post.to_string() } }).to_string(),
+            "me",
+            &client,
+            db,
+        )
+        .await;
+
+        let cache = db.lock().unwrap();
+        let channels = cache.cached_channels_for_team("t1").unwrap();
+        assert_eq!(channels.len(), 1);
+        assert_eq!(channels[0].channel_type, ChannelType::Group);
+        // The server's count already includes this message, and it's unread.
+        assert_eq!(channels[0].total_msg_count, 1);
+        assert_eq!(channels[0].msg_count, 0);
+        assert_eq!(cache.cached_channel_participants("gm1").unwrap().len(), 3);
+        assert!(cache.cached_user("u2").unwrap().is_some());
     }
 }

@@ -328,6 +328,18 @@ impl MattermostClient {
             .await
     }
 
+    /// One channel on its own — for a channel that shows up live (a group
+    /// someone just started with this user) before any full list refetch.
+    pub async fn get_channel(&self, channel_id: &str) -> Result<Channel, ApiError> {
+        self.get_json(&format!("/channels/{channel_id}")).await
+    }
+
+    /// This user's read state for one channel — the single-channel form of
+    /// `get_channel_members_for_team`.
+    pub async fn get_my_channel_member(&self, channel_id: &str) -> Result<ChannelMember, ApiError> {
+        self.get_json(&format!("/channels/{channel_id}/members/me")).await
+    }
+
     /// Every member of one specific channel — used to resolve a group DM's
     /// participant list, since a GM channel's `name` (unlike a 1:1 DM's)
     /// isn't parseable into user ids, and to fill the channel's member list.
