@@ -35,6 +35,9 @@ internal sealed class JumpTargetHolder
     /// <summary>Long enough for the pictures around the target to arrive on an ordinary connection.</summary>
     private static readonly TimeSpan HoldFor = TimeSpan.FromSeconds(6);
 
+    /// <summary>Opening or closing a message brings in no pictures of its own; this only has to outlast the rows around it being rebuilt.</summary>
+    private static readonly TimeSpan HoldInPlaceFor = TimeSpan.FromSeconds(2);
+
     /// <summary>A safety net: a view that still needs correcting after this many moves is being moved by something else, and fighting it would be worse.</summary>
     private const int MaxCorrections = 60;
 
@@ -42,6 +45,8 @@ internal sealed class JumpTargetHolder
     private readonly ItemsControl _items;
 
     private object? _target;
+    /// <summary>Where the target's top is held, from the view's top edge; null to center it.</summary>
+    private double? _topAt;
     private DateTime _holdUntil;
     private int _correctionsLeft;
     private bool _correcting;
@@ -60,11 +65,32 @@ internal sealed class JumpTargetHolder
     }
 
     /// <summary>Centers this message (one of the list's items) and holds it there. Replaces any hold already running.</summary>
-    public void Hold(object target)
+    public void Hold(object target) => Start(target, topAt: null, HoldFor);
+
+    /// <summary>
+    /// Holds this message's top where it is now, through a change to its own
+    /// height that is about to happen — a long message opened or closed. With
+    /// <paramref name="keepTopInView"/>, a top that has scrolled above the
+    /// view is brought back to the view's top edge instead: closing a message
+    /// read down to its end would otherwise leave it entirely out of sight.
+    /// Call it just before the change, while the message is still on screen.
+    /// </summary>
+    public void HoldInPlace(object target, bool keepTopInView)
+    {
+        if (_items.ContainerFromItem(target) is not { } container
+            || container.TranslatePoint(default, _scroller)?.Y is not { } y)
+        {
+            return;
+        }
+        Start(target, keepTopInView ? Math.Max(y, 0) : y, HoldInPlaceFor);
+    }
+
+    private void Start(object target, double? topAt, TimeSpan holdFor)
     {
         Release();
         _target = target;
-        _holdUntil = DateTime.UtcNow + HoldFor;
+        _topAt = topAt;
+        _holdUntil = DateTime.UtcNow + holdFor;
         _correctionsLeft = MaxCorrections;
         _scroller.LayoutUpdated += OnLayoutUpdated;
         Correct();
@@ -166,8 +192,10 @@ internal sealed class JumpTargetHolder
         }
 
         var bottom = Math.Max(0, _scroller.Extent.Height - _scroller.Viewport.Height);
-        var centered = _scroller.Offset.Y + top.Value.Y - (_scroller.Viewport.Height / 2) + (container.Bounds.Height / 2);
-        var targetY = Math.Clamp(centered, 0, bottom);
+        var wanted = _topAt is { } topAt
+            ? _scroller.Offset.Y + top.Value.Y - topAt
+            : _scroller.Offset.Y + top.Value.Y - (_scroller.Viewport.Height / 2) + (container.Bounds.Height / 2);
+        var targetY = Math.Clamp(wanted, 0, bottom);
         if (Math.Abs(targetY - _scroller.Offset.Y) < 1)
         {
             return false;

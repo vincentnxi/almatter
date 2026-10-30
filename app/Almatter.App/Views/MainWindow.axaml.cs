@@ -180,8 +180,8 @@ public partial class MainWindow : Window
             // A row can still grow after it is first shown (a custom emoji's
             // picture landing); these keep a reader who is on the newest
             // message there instead of letting it slide out of view.
-            _ = new BottomFollower(MessagesScroller, StickToBottomSlack);
-            _ = new BottomFollower(ThreadScroller, StickToBottomSlack);
+            _messagesFollower = new BottomFollower(MessagesScroller, StickToBottomSlack);
+            _threadFollower = new BottomFollower(ThreadScroller, StickToBottomSlack);
 
             _jumpTarget = new JumpTargetHolder(MessagesScroller, MessagesItemsControl);
 
@@ -450,6 +450,78 @@ public partial class MainWindow : Window
             && DataContext is MainViewModel vm)
         {
             await vm.QuickReactAsync(message, emoji);
+        }
+    }
+
+    /// <summary>
+    /// "Afficher la suite" / "Réduire" under a long message. The message
+    /// changes height by hundreds of pixels on the spot, so the view is held
+    /// on it: opening shows what follows where the reader was, closing brings
+    /// back a message whose top had scrolled out of sight.
+    /// </summary>
+    private void OnMessageBodyToggleClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Control { DataContext: MessageItem message } button)
+        {
+            return;
+        }
+
+        var opening = !message.IsBodyExpanded;
+        var scroller = button.FindAncestorOfType<ScrollViewer>();
+        if (scroller == MessagesScroller)
+        {
+            if (opening)
+            {
+                _messagesFollower?.Release();
+            }
+            // Virtualized: the rows around it are re-estimated when it changes
+            // height, and only holding its row still keeps the view from
+            // jumping. The jump holder rather than the reading position
+            // keeper: it corrects once layout has settled, and a closed message
+            // whose row was recycled is brought back — measured on a headless
+            // replica, the keeper lost it every time and the view ended up
+            // elsewhere, often at the newest message.
+            _jumpTarget?.HoldInPlace(message, keepTopInView: !opening);
+            message.IsBodyExpanded = opening;
+        }
+        else if (scroller == ThreadScroller)
+        {
+            // Not virtualized: what's above stays put by itself.
+            if (opening)
+            {
+                _threadFollower?.Release();
+                message.IsBodyExpanded = true;
+                return;
+            }
+            message.IsBodyExpanded = false;
+            Dispatcher.UIThread.Post(() => ShowTopOf(button, message, scroller), DispatcherPriority.Background);
+        }
+        else
+        {
+            message.IsBodyExpanded = opening;
+        }
+    }
+
+    /// <summary>Scrolls up just enough that the message's row — its author line included — starts at the view's top edge, when its top is above it.</summary>
+    private static void ShowTopOf(Control inside, MessageItem message, ScrollViewer scroller)
+    {
+        // The row is the outermost of the unbroken run of ancestors showing this message.
+        Visual? row = null;
+        foreach (var ancestor in inside.GetVisualAncestors())
+        {
+            if (ancestor is Control { DataContext: var shown } && ReferenceEquals(shown, message))
+            {
+                row = ancestor;
+            }
+            else if (row is not null)
+            {
+                break;
+            }
+        }
+
+        if (row?.TranslatePoint(default, scroller)?.Y is { } y && y < 0)
+        {
+            scroller.Offset = new Vector(scroller.Offset.X, Math.Max(0, scroller.Offset.Y + y));
         }
     }
 
@@ -1127,6 +1199,8 @@ public partial class MainWindow : Window
 
     /// <summary>Holds the message a jump aimed at in the middle of the conversation while the rows around it settle (see JumpTargetHolder).</summary>
     private JumpTargetHolder? _jumpTarget;
+    private BottomFollower? _messagesFollower;
+    private BottomFollower? _threadFollower;
 
     /// <summary>
     /// Scrolls a specific message row into view (centered) after a "jump to

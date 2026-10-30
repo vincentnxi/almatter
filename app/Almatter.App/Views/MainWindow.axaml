@@ -205,6 +205,46 @@
                 <Border Grid.Column="2" Height="1" VerticalAlignment="Center" Background="{DynamicResource DividerStrongBrush}" />
             </Grid>
         </DataTemplate>
+
+        <!-- A message's Markdown blocks, cut short with a fade when they run
+             very long (see CollapsibleMessageBody), with the buttons that open
+             and close it. Shared by the channel list, the thread root and the
+             thread replies, like the date marker above. The buttons' click
+             goes through the window, which holds the view still around it. -->
+        <DataTemplate x:Key="MessageBodyTemplate" DataType="models:MessageItem">
+            <StackPanel>
+                <Panel>
+                    <views:CollapsibleMessageBody x:Name="Body" IsExpanded="{Binding IsBodyExpanded}">
+                        <!-- Their templates are in Window.DataTemplates. -->
+                        <ItemsControl ItemsSource="{Binding Blocks}" />
+                    </views:CollapsibleMessageBody>
+                    <Grid ColumnDefinitions="*,Auto,*" VerticalAlignment="Bottom" IsVisible="{Binding #Body.ShowsExpand}">
+                        <Border Grid.Column="0" Height="1" VerticalAlignment="Center" Background="{DynamicResource DividerStrongBrush}" />
+                        <Button Grid.Column="1" Classes="row-button body-toggle" Margin="12,0" Click="OnMessageBodyToggleClick">
+                            <Border Classes="body-toggle-pill">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <TextBlock Text="{Binding T.ShowMore, Source={x:Static loc:Loc.Instance}}" VerticalAlignment="Center" />
+                                    <Path Data="M6 9l6 6 6-6" Classes="body-toggle-chevron" />
+                                </StackPanel>
+                            </Border>
+                        </Button>
+                        <Border Grid.Column="2" Height="1" VerticalAlignment="Center" Background="{DynamicResource DividerStrongBrush}" />
+                    </Grid>
+                </Panel>
+                <Grid ColumnDefinitions="*,Auto,*" Margin="0,4,0,0" IsVisible="{Binding #Body.ShowsCollapse}">
+                    <Border Grid.Column="0" Height="1" VerticalAlignment="Center" Background="{DynamicResource DividerStrongBrush}" />
+                    <Button Grid.Column="1" Classes="row-button body-toggle" Margin="12,0" Click="OnMessageBodyToggleClick">
+                        <Border Classes="body-toggle-pill">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <TextBlock Text="{Binding T.ShowLess, Source={x:Static loc:Loc.Instance}}" VerticalAlignment="Center" />
+                                <Path Data="M6 15l6-6 6 6" Classes="body-toggle-chevron" />
+                            </StackPanel>
+                        </Border>
+                    </Button>
+                    <Border Grid.Column="2" Height="1" VerticalAlignment="Center" Background="{DynamicResource DividerStrongBrush}" />
+                </Grid>
+            </StackPanel>
+        </DataTemplate>
     </Window.Resources>
 
     <!-- How each block of a message's Markdown is drawn. Declared once here
@@ -290,6 +330,37 @@
              paints on top, so a selected row keeps its accent tint. -->
         <Style Selector="Button.sidebar-row:pointerover">
             <Setter Property="Background" Value="{DynamicResource BgHoverBrush}" />
+        </Style>
+
+        <!-- "Afficher la suite" / "Réduire" under a long message: a pill
+             between two rules, so it reads as part of the conversation's
+             furniture rather than of the message's own text. -->
+        <Style Selector="Button.body-toggle">
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="Foreground" Value="{DynamicResource AccentInkBrush}" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <Style Selector="Border.body-toggle-pill">
+            <Setter Property="Height" Value="32" />
+            <Setter Property="Padding" Value="14,0" />
+            <Setter Property="CornerRadius" Value="16" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BorderBrush" Value="{DynamicResource DividerStrongBrush}" />
+            <Setter Property="Background" Value="{DynamicResource CardBgBrush}" />
+        </Style>
+        <Style Selector="Button.body-toggle:pointerover Border.body-toggle-pill">
+            <Setter Property="Background" Value="{DynamicResource BgHoverBrush}" />
+        </Style>
+        <Style Selector="Path.body-toggle-chevron">
+            <Setter Property="Width" Value="12" />
+            <Setter Property="Height" Value="12" />
+            <Setter Property="Stretch" Value="Uniform" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="StrokeThickness" Value="2" />
+            <Setter Property="StrokeLineCap" Value="Round" />
+            <Setter Property="StrokeJoin" Value="Round" />
+            <Setter Property="Stroke" Value="{DynamicResource AccentInkBrush}" />
         </Style>
 
         <!-- Rows sit a step to the right of their section header, so the
@@ -752,8 +823,8 @@
                                                 </StackPanel>
                                             </Border>
                                         </Button>
-                                        <!-- The message's Markdown blocks; their templates are in Window.DataTemplates. -->
-                                        <ItemsControl ItemsSource="{Binding Blocks}" />
+                                        <!-- The message's Markdown blocks, cut short when very long. -->
+                                        <ContentControl Content="{Binding}" ContentTemplate="{StaticResource MessageBodyTemplate}" />
 
                                         <!-- A link to another message ("Copier le lien vers ce message"): the
                                              original, quoted, one click away. Not tied to the link-preview
@@ -1275,7 +1346,7 @@
                                                 <TextBlock Text="{Binding T.Pinned, Source={x:Static loc:Loc.Instance}}" FontSize="10.5" FontWeight="SemiBold" Foreground="{DynamicResource AccentBrush}" VerticalAlignment="Center" />
                                             </StackPanel>
                                         </StackPanel>
-                                        <ItemsControl ItemsSource="{Binding Blocks}" />
+                                        <ContentControl Content="{Binding}" ContentTemplate="{StaticResource MessageBodyTemplate}" />
 
                                         <!-- A link to another message ("Copier le lien vers ce message"): the
                                              original, quoted, one click away. Not tied to the link-preview
@@ -1398,7 +1469,7 @@
                                                         <TextBlock Text="{Binding T.Pinned, Source={x:Static loc:Loc.Instance}}" FontSize="10.5" FontWeight="SemiBold" Foreground="{DynamicResource AccentBrush}" VerticalAlignment="Center" />
                                                     </StackPanel>
                                                 </StackPanel>
-                                                <ItemsControl ItemsSource="{Binding Blocks}" />
+                                                <ContentControl Content="{Binding}" ContentTemplate="{StaticResource MessageBodyTemplate}" />
 
                                                 <!-- A link to another message ("Copier le lien vers ce message"): the
                                                      original, quoted, one click away. Not tied to the link-preview

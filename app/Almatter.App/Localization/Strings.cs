@@ -61,6 +61,10 @@ public sealed partial class Strings
     public required string Sending { get; init; }
     public required string Pinned { get; init; }
     public required string Edited { get; init; }
+    /// <summary>Under a long message cut short, to open the rest.</summary>
+    public required string ShowMore { get; init; }
+    /// <summary>Under a long message opened in full, to cut it short again.</summary>
+    public required string ShowLess { get; init; }
     public required string Open { get; init; }
     public required string Downloading { get; init; }
     public required string Download { get; init; }

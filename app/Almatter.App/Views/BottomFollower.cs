@@ -34,6 +34,14 @@ internal sealed class BottomFollower
         _scroller.ScrollChanged += OnScrollChanged;
     }
 
+    /// <summary>
+    /// Stops following for now, ahead of a change the reader asked for that
+    /// grows the content — opening a long message — so the view stays on
+    /// what they were reading. Following picks up again once they scroll
+    /// back to the end.
+    /// </summary>
+    public void Release() => _atBottom = false;
+
     private void OnScrollChanged(object? sender, ScrollChangedEventArgs e)
     {
         var bottom = Math.Max(0, _scroller.Extent.Height - _scroller.Viewport.Height);

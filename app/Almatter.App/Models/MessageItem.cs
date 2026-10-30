@@ -165,6 +165,10 @@ public sealed partial class MessageItem : ObservableObject
     [ObservableProperty]
     public partial bool IsHighlighted { get; set; }
 
+    /// <summary>The reader opened this long message in full with "Afficher la suite" — see CollapsibleMessageBody. Kept here rather than on the control, which the virtualized list hands to another message once this one scrolls away.</summary>
+    [ObservableProperty]
+    public partial bool IsBodyExpanded { get; set; }
+
     /// <summary>
     /// Fills in the picture for a custom emoji someone typed into the text.
     /// Supplied by the ViewModel, which owns the name-to-id table and the

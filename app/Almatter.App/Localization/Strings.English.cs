@@ -47,6 +47,8 @@ public sealed partial class Strings
         Sending = "Sending…",
         Pinned = "Pinned",
         Edited = "(edited)",
+        ShowMore = "Show more",
+        ShowLess = "Show less",
         Open = "Open",
         Downloading = "Downloading…",
         Download = "Download",
