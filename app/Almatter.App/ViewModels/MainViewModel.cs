@@ -426,7 +426,11 @@ public partial class MainViewModel : ViewModelBase
     public partial string? MembersError { get; set; }
 
     /// <summary>The members matching the filter box, online people first.</summary>
-    public ObservableCollection<ChannelMemberItem> ChannelMemberResults { get; } = [];
+    /// Replaced whole on every filter change: one notification for the list,
+    /// where clearing and re-adding sent one per member, per keystroke.
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(NoMemberResults))]
+    public partial IReadOnlyList<ChannelMemberItem> ChannelMemberResults { get; set; } = [];
 
     /// <summary>Shown next to the panel title — the whole channel's size, not the filtered count.</summary>
     [ObservableProperty]
@@ -1743,14 +1747,18 @@ public partial class MainViewModel : ViewModelBase
             return;
         }
 
-        var text = ComposeText.Trim();
-        if (text.Length == 0 && PendingAttachments.Count == 0)
+        if (ComposeText.Trim().Length == 0 && PendingAttachments.Count == 0)
         {
             return;
         }
 
         var attachments = PendingAttachments.ToList();
-        var fileIds = attachments.Select(a => a.FileId).ToList();
+        if (await UploadNotedAttachmentsAsync(channelId, attachments) is not { } fileIds)
+        {
+            return;
+        }
+        // Read after the uploads: whatever was typed while they ran goes out too.
+        var text = ComposeText.Trim();
         ComposeText = "";
         PendingAttachments.Clear();
         if (!await SendAsync(channelId, rootId: null, text, fileIds))
@@ -1792,14 +1800,17 @@ public partial class MainViewModel : ViewModelBase
         // ("invalid ChannelId for RootId") — after the text had been cleared.
         var channelId = _openThreadChannelId ?? _activeChannelId;
         var rootId = _openThreadRootId;
-        var text = ThreadComposeText.Trim();
-        if (channelId is null || rootId is null || (text.Length == 0 && ThreadPendingAttachments.Count == 0))
+        if (channelId is null || rootId is null || (ThreadComposeText.Trim().Length == 0 && ThreadPendingAttachments.Count == 0))
         {
             return;
         }
 
         var attachments = ThreadPendingAttachments.ToList();
-        var fileIds = attachments.Select(a => a.FileId).ToList();
+        if (await UploadNotedAttachmentsAsync(channelId, attachments) is not { } fileIds)
+        {
+            return;
+        }
+        var text = ThreadComposeText.Trim();
         ThreadComposeText = "";
         ThreadPendingAttachments.Clear();
         if (!await SendAsync(channelId, rootId, text, fileIds))
@@ -1864,6 +1875,68 @@ public partial class MainViewModel : ViewModelBase
         }
         await UploadAttachmentsAsync(channelId, paths, isThread ? ThreadPendingAttachments : PendingAttachments);
     }
+
+    /// <summary>
+    /// Files dropped on the window: only noted in the composer, not uploaded.
+    /// A drop can land anywhere — the sidebar, the settings, a channel picked
+    /// by mistake — and an upload leaves the file on the server even when
+    /// the chip is removed and nothing is sent. The upload waits for Send
+    /// (see <see cref="UploadNotedAttachmentsAsync"/>).
+    /// </summary>
+    public void NoteDroppedFiles(IReadOnlyList<string> paths, bool isThread)
+    {
+        if ((isThread ? _openThreadChannelId ?? _activeChannelId : _activeChannelId) is null)
+        {
+            return;
+        }
+        var target = isThread ? ThreadPendingAttachments : PendingAttachments;
+        foreach (var path in paths)
+        {
+            if (!target.Any(a => a.FileId is null && string.Equals(a.LocalPath, path, StringComparison.OrdinalIgnoreCase)))
+            {
+                target.Add(new PendingAttachmentItem { LocalPath = path, FileName = Path.GetFileName(path) });
+            }
+        }
+    }
+
+    /// <summary>
+    /// Uploads the noted (dropped) files among <paramref name="attachments"/>
+    /// to the channel the message is going to, and returns every file id to
+    /// send. Null when an upload failed: the error is shown and the message
+    /// isn't sent, the composer keeping its text and its files. An item is
+    /// uploaded once — a retry after a failure only sends the ones left.
+    /// </summary>
+    private async Task<List<string>?> UploadNotedAttachmentsAsync(string channelId, List<PendingAttachmentItem> attachments)
+    {
+        if (_uploadingForSend)
+        {
+            return null;
+        }
+        _uploadingForSend = true;
+        try
+        {
+            foreach (var attachment in attachments.Where(a => a.FileId is null && a.LocalPath is not null))
+            {
+                try
+                {
+                    attachment.FileId = (await _service.UploadFileAsync(_session.BaseUrl, _session.Token, channelId, attachment.LocalPath!)).Id;
+                }
+                catch (MattermostServiceException ex)
+                {
+                    ErrorMessage = ex.Message;
+                    return null;
+                }
+            }
+            return attachments.Where(a => a.FileId is not null).Select(a => a.FileId!).ToList();
+        }
+        finally
+        {
+            _uploadingForSend = false;
+        }
+    }
+
+    /// <summary>Set while a send uploads its dropped files, so a second Enter doesn't upload them twice.</summary>
+    private bool _uploadingForSend;
 
     private async Task UploadAttachmentsAsync(string channelId, IReadOnlyList<string> paths, ObservableCollection<PendingAttachmentItem> target)
     {
@@ -3475,7 +3548,7 @@ public partial class MainViewModel : ViewModelBase
         IsMembersPanelOpen = false;
         _membersChannelId = null;
         _channelMembers = [];
-        ChannelMemberResults.Clear();
+        ChannelMemberResults = [];
         ChannelMemberCount = 0;
         MembersQuery = "";
         MembersError = null;
@@ -3502,7 +3575,7 @@ public partial class MainViewModel : ViewModelBase
         if (_membersChannelId != channelId)
         {
             _channelMembers = [];
-            ChannelMemberResults.Clear();
+            ChannelMemberResults = [];
             ChannelMemberCount = 0;
         }
         _membersChannelId = channelId;
@@ -3582,14 +3655,26 @@ public partial class MainViewModel : ViewModelBase
         }
 
         // Presence is never cached, so ask for it every time; it is cosmetic and a failure just leaves everyone grey.
+        // A few batches at a time rather than one after another: a channel of
+        // thousands is dozens of batches, each a full round trip.
         try
         {
-            foreach (var chunk in userIds.Chunk(200))
+            using var slots = new SemaphoreSlim(4);
+            var batches = await Task.WhenAll(userIds.Chunk(200).Select(async chunk =>
             {
-                foreach (var status in await _service.GetStatusesAsync(_session.BaseUrl, _session.Token, chunk))
+                await slots.WaitAsync();
+                try
                 {
-                    _presenceByUserId[status.UserId] = ToPresence(status.Status);
+                    return await _service.GetStatusesAsync(_session.BaseUrl, _session.Token, chunk);
                 }
+                finally
+                {
+                    slots.Release();
+                }
+            }));
+            foreach (var status in batches.SelectMany(batch => batch))
+            {
+                _presenceByUserId[status.UserId] = ToPresence(status.Status);
             }
         }
         catch (MattermostServiceException ex)
@@ -3626,17 +3711,12 @@ public partial class MainViewModel : ViewModelBase
     private void ApplyMembersFilter()
     {
         var query = MembersQuery.Trim();
-        ChannelMemberResults.Clear();
-        foreach (var member in _channelMembers)
-        {
-            if (query.Length == 0
-                || member.DisplayName.Contains(query, StringComparison.CurrentCultureIgnoreCase)
-                || member.Username.Contains(query, StringComparison.CurrentCultureIgnoreCase))
-            {
-                ChannelMemberResults.Add(member);
-            }
-        }
-        OnPropertyChanged(nameof(NoMemberResults));
+        ChannelMemberResults = query.Length == 0
+            ? _channelMembers
+            : _channelMembers
+                .Where(member => member.DisplayName.Contains(query, StringComparison.CurrentCultureIgnoreCase)
+                    || member.Username.Contains(query, StringComparison.CurrentCultureIgnoreCase))
+                .ToList();
     }
 
     /// <summary>Clicking a member opens the conversation with them, as in the official client.</summary>

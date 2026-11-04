@@ -940,9 +940,10 @@ public partial class MainWindow : Window
         && p.X <= ThreadPanel.Bounds.Width && p.Y <= ThreadPanel.Bounds.Height;
 
     /// <summary>
-    /// Files dropped anywhere on the window become attachments, exactly as if
-    /// picked with a paperclip: of the thread reply when they land on the open
-    /// thread panel, of the channel's composer everywhere else. Folders can't
+    /// Files dropped anywhere on the window become attachments of the thread
+    /// reply when they land on the open thread panel, of the channel's
+    /// composer everywhere else. Unlike a paperclip pick they are only noted:
+    /// the upload waits for Send, since a drop can be a slip. Folders can't
     /// be attached and are skipped, like on paste.
     /// </summary>
     private void OnFilesDropped(object? sender, DragEventArgs e)
@@ -965,19 +966,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        _ = AttachDroppedFilesAsync(vm, paths, IsOverOpenThread(e));
-    }
-
-    private static async Task AttachDroppedFilesAsync(MainViewModel vm, IReadOnlyList<string> paths, bool isThread)
-    {
-        try
-        {
-            await vm.AttachPastedFilesAsync(paths, isThread);
-        }
-        catch (Exception ex)
-        {
-            Diagnostics.CrashLogger.Write("drop: attaching the dropped files failed", ex);
-        }
+        vm.NoteDroppedFiles(paths, IsOverOpenThread(e));
     }
 
     private static async Task PasteKeepingLinksAsync(Avalonia.Input.Platform.IClipboard clipboard, TextBox textBox)
