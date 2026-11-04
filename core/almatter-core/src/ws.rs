@@ -570,8 +570,16 @@ async fn handle_event(text: &str, user_id: &str, client: &MattermostClient, db: 
             }
         }
     };
-    if !channel_known {
-        cache_new_channel(&post.channel_id, client, db).await;
+    if !channel_known && claim_new_channel_fetch(&post.channel_id) {
+        // In the background: the fetch is several requests in a row (up to
+        // 50 member pages for a group), and the read loop must keep
+        // answering the server's pings and handling events meanwhile.
+        let channel_id = post.channel_id.clone();
+        let client = client.clone();
+        tokio::spawn(async move {
+            let cached = cache_new_channel(&channel_id, &client, db).await;
+            settle_new_channel_fetch(&channel_id, cached);
+        });
     }
 
     // Every message from someone else queues a notification event now, not
@@ -597,14 +605,27 @@ async fn handle_event(text: &str, user_id: &str, client: &MattermostClient, db: 
 /// notification fires but the conversation stays invisible until the next
 /// full channel refetch (a restart, in practice). Fetched after the post
 /// landed, the server's counts already include it: nothing to bump on top.
-async fn cache_new_channel(channel_id: &str, client: &MattermostClient, db: &'static Mutex<Database>) {
+/// Returns whether the channel ended up cached.
+async fn cache_new_channel(channel_id: &str, client: &MattermostClient, db: &'static Mutex<Database>) -> bool {
+    // The id comes straight from the event and goes into request paths:
+    // `../..` in it would aim this user's token at another endpoint.
+    if let Err(e) = crate::dispatch::require_plain_id(channel_id) {
+        crate::db::log("ws", &format!("ignored new channel: {e}"));
+        return false;
+    }
     let mut channel = match client.get_channel(channel_id).await {
         Ok(channel) => channel,
         Err(e) => {
             crate::db::log("ws", &format!("failed to fetch new channel {channel_id}: {e}"));
-            return;
+            return false;
         }
     };
+    // Cached under another id, the channel would stay "unknown" and every
+    // later message in it would fetch it again.
+    if channel.id != channel_id {
+        crate::db::log("ws", &format!("server answered channel {:?} for {channel_id}", channel.id));
+        return false;
+    }
     if let Ok(member) = client.get_my_channel_member(channel_id).await {
         channel.msg_count = member.msg_count;
         channel.mention_count = member.mention_count;
@@ -646,6 +667,40 @@ async fn cache_new_channel(channel_id: &str, client: &MattermostClient, db: &'st
     }
     if let Err(e) = cache.upsert_channel(&channel) {
         crate::db::log("ws", &format!("failed to cache new channel: {e}"));
+        return false;
+    }
+    true
+}
+
+/// Channels whose fetch is running, or failed at the given time. Keeps a
+/// burst of messages from starting the same fetch several times, and a
+/// channel the server won't hand over (403, archived) from being asked
+/// for again on every one of its messages.
+static NEW_CHANNEL_FETCHES: Mutex<Option<HashMap<String, Option<std::time::Instant>>>> = Mutex::new(None);
+
+/// How long a failed fetch waits before a later message may try again.
+const NEW_CHANNEL_RETRY: Duration = Duration::from_secs(5 * 60);
+
+fn claim_new_channel_fetch(channel_id: &str) -> bool {
+    let mut guard = NEW_CHANNEL_FETCHES.lock().unwrap_or_else(|e| e.into_inner());
+    let fetches = guard.get_or_insert_with(HashMap::new);
+    match fetches.get(channel_id) {
+        Some(None) => false,
+        Some(Some(failed_at)) if failed_at.elapsed() < NEW_CHANNEL_RETRY => false,
+        _ => {
+            fetches.insert(channel_id.to_string(), None);
+            true
+        }
+    }
+}
+
+fn settle_new_channel_fetch(channel_id: &str, cached: bool) {
+    let mut guard = NEW_CHANNEL_FETCHES.lock().unwrap_or_else(|e| e.into_inner());
+    let fetches = guard.get_or_insert_with(HashMap::new);
+    if cached {
+        fetches.remove(channel_id);
+    } else {
+        fetches.insert(channel_id.to_string(), Some(std::time::Instant::now()));
     }
 }
 
@@ -795,6 +850,31 @@ mod tests {
     fn converts_http_base_urls_to_websocket_urls() {
         assert_eq!(websocket_url("https://example.com"), "wss://example.com/api/v4/websocket");
         assert_eq!(websocket_url("http://localhost:8065/"), "ws://localhost:8065/api/v4/websocket");
+    }
+
+    #[tokio::test]
+    async fn a_new_channel_id_that_is_not_a_plain_id_is_never_fetched() {
+        let db: &'static Mutex<Database> =
+            Box::leak(Box::new(Mutex::new(Database::open_in_memory().unwrap())));
+        // Port 1 refuses connections: reaching the network would also be
+        // `false`, so the log line is what tells the two apart in practice;
+        // here it is enough that a traversal id is turned down.
+        let client = MattermostClient::new("http://127.0.0.1:1");
+        for bad in ["../../users/me", "a/b", "", "c1?x=1"] {
+            assert!(!cache_new_channel(bad, &client, db).await, "{bad:?}");
+        }
+    }
+
+    #[test]
+    fn a_new_channel_fetch_runs_once_and_a_failure_waits_before_retrying() {
+        let id = "claimtestchannel";
+        assert!(claim_new_channel_fetch(id));
+        assert!(!claim_new_channel_fetch(id), "already running");
+        settle_new_channel_fetch(id, false);
+        assert!(!claim_new_channel_fetch(id), "failed just now");
+        settle_new_channel_fetch(id, true);
+        assert!(claim_new_channel_fetch(id), "cached, so free again");
+        settle_new_channel_fetch(id, true);
     }
 
     #[tokio::test]
@@ -1420,6 +1500,14 @@ mod tests {
             db,
         )
         .await;
+
+        // The fetch runs in the background, off the read loop: wait for it.
+        for _ in 0..500 {
+            if !db.lock().unwrap().cached_channels_for_team("t1").unwrap().is_empty() {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
 
         let cache = db.lock().unwrap();
         let channels = cache.cached_channels_for_team("t1").unwrap();

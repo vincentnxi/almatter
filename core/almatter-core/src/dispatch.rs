@@ -1329,7 +1329,7 @@ async fn prune_cache_dir_occasionally(dir: std::path::PathBuf, budget_bytes: u64
 /// outright), so a hostile or compromised server could write whatever it
 /// answered anywhere in the user's profile — and since the app deletes and
 /// refetches a picture it can't decode, delete or overwrite files there too.
-fn require_plain_id(id: &str) -> Result<(), String> {
+pub(crate) fn require_plain_id(id: &str) -> Result<(), String> {
     if !id.is_empty() && id.chars().all(|c| c.is_ascii_alphanumeric()) {
         Ok(())
     } else {

@@ -530,6 +530,12 @@ impl Database {
     /// happened. The event always carries the whole post, so absent means
     /// "not pinned", exactly as `Post` reads it.
     ///
+    /// Link previews whose address is no longer in the edited text are
+    /// dropped: someone who edits a link out of a message (a wrong or
+    /// private one) must not leave its preview, and the fetch of its
+    /// picture, behind until the next full refetch. A preview for a link
+    /// the edit added arrives with that refetch, as before.
+    ///
     /// A no-op when the post isn't cached, which is the normal case for a
     /// channel this user has never opened.
     pub fn update_post_text(&self, post_id: &str, message: &str, edit_at: i64, is_pinned: bool) -> rusqlite::Result<()> {
@@ -537,6 +543,27 @@ impl Database {
             "UPDATE posts SET message = ?2, edit_at = ?3, is_pinned = ?4 WHERE id = ?1",
             params![post_id, message, edit_at, is_pinned],
         )?;
+        let embeds_json: Option<String> = self
+            .conn
+            .query_row("SELECT embeds_json FROM posts WHERE id = ?1", params![post_id], |row| row.get(0))
+            .optional()?
+            .flatten();
+        if let Some(embeds_json) = embeds_json {
+            if let Ok(embeds) = serde_json::from_str::<Vec<crate::models::PostEmbed>>(&embeds_json) {
+                let count = embeds.len();
+                let kept: Vec<_> = embeds
+                    .into_iter()
+                    .filter(|embed| embed.url.is_empty() || message.contains(embed.url.as_str()))
+                    .collect();
+                if kept.len() != count {
+                    let kept_json = serde_json::to_string(&kept).unwrap_or_else(|_| "[]".to_string());
+                    self.conn.execute(
+                        "UPDATE posts SET embeds_json = ?2 WHERE id = ?1",
+                        params![post_id, kept_json],
+                    )?;
+                }
+            }
+        }
         Ok(())
     }
 
@@ -619,16 +646,28 @@ impl Database {
     /// Overwrites one channel's cached member list wholesale — always
     /// follows a fresh `GET /channels/{id}/members` fetch, so (like
     /// favorites) there's nothing to reconcile incrementally.
+    /// One transaction for the whole list: a channel of a few thousand
+    /// members used to cost as many separate commits, with the database
+    /// mutex held throughout, and a crash midway left half a list. Callers
+    /// that already opened a transaction just get their statements added
+    /// to it (SQLite has no nested `BEGIN`).
     pub fn replace_channel_participants(&self, channel_id: &str, user_ids: &[String]) -> rusqlite::Result<()> {
-        self.conn
-            .execute("DELETE FROM channel_participants WHERE channel_id = ?1", params![channel_id])?;
-        for user_id in user_ids {
-            self.conn.execute(
-                "INSERT OR IGNORE INTO channel_participants (channel_id, user_id) VALUES (?1, ?2)",
-                params![channel_id, user_id],
-            )?;
+        let write = || {
+            self.conn
+                .execute("DELETE FROM channel_participants WHERE channel_id = ?1", params![channel_id])?;
+            let mut insert = self
+                .conn
+                .prepare_cached("INSERT OR IGNORE INTO channel_participants (channel_id, user_id) VALUES (?1, ?2)")?;
+            for user_id in user_ids {
+                insert.execute(params![channel_id, user_id])?;
+            }
+            Ok(())
+        };
+        if self.conn.is_autocommit() {
+            self.in_transaction(write)
+        } else {
+            write()
         }
-        Ok(())
     }
 
     pub fn cached_channel_participants(&self, channel_id: &str) -> rusqlite::Result<Vec<String>> {
@@ -1361,25 +1400,141 @@ fn data_dir() -> &'static (PathBuf, Option<std::io::Error>) {
 ///
 /// The folder is moved in one rename, since the outbox's unsent messages are
 /// in the database and can't be fetched again. If that fails (a file still
-/// open, `old` on another drive) nothing has moved: this run stays on `old`
-/// and the next one tries again, rather than starting from an empty cache
-/// that would then take over for good.
+/// open) nothing has moved: this run stays on `old` and the next one tries
+/// again, rather than starting from an empty cache that would then take over
+/// for good.
+///
+/// A rename can't cross drives, and a roaming profile redirected to a network
+/// share — the very setup this move is for — is always on another one. There
+/// the folder is copied instead (see `copy_data_dir`), then the old one
+/// deleted.
 fn settle_data_dir(old: &Path, new: &Path) -> (PathBuf, Option<std::io::Error>) {
-    if old == new || new.exists() || !old.exists() {
+    if old == new || !old.exists() {
+        return (new.to_path_buf(), None);
+    }
+    if new.exists() {
+        // A copy that couldn't delete the old folder marked it, and the
+        // next runs finish the job. An unmarked one is left alone: the new
+        // folder wins, the old one isn't merged in.
+        if old.join(MOVED_MARKER).exists() && remove_moved_dir(old) {
+            remove_empty_parents(old);
+        }
         return (new.to_path_buf(), None);
     }
     let moved = new.parent().map_or(Ok(()), std::fs::create_dir_all).and_then(|()| std::fs::rename(old, new));
     match moved {
         Ok(()) => {
-            // The two `Almatter` folders above it, now empty — `remove_dir`
-            // leaves them alone otherwise.
-            for parent in old.ancestors().skip(1).take(2) {
-                let _ = std::fs::remove_dir(parent);
-            }
+            remove_empty_parents(old);
             (new.to_path_buf(), None)
         }
+        // Another Almatter starting at the same moment moved it first.
+        Err(_) if new.exists() || !old.exists() => (new.to_path_buf(), None),
+        Err(error) if error.kind() == std::io::ErrorKind::CrossesDevices => match copy_data_dir(old, new) {
+            Ok(()) => (new.to_path_buf(), None),
+            Err(_) if new.exists() => (new.to_path_buf(), None),
+            Err(error) => (old.to_path_buf(), Some(error)),
+        },
         Err(error) => (old.to_path_buf(), Some(error)),
     }
+}
+
+/// Left in the old folder when a cross-drive move copied it but couldn't
+/// delete it all: says it is a leftover, safe to delete on a later run.
+const MOVED_MARKER: &str = "moved-to-local-folder";
+
+/// Deletes an old folder already copied over, the marker last: if anything
+/// in it can't go (a file open in another program), the marker is still
+/// there for the next run to try again. Returns whether the folder is gone.
+fn remove_moved_dir(old: &Path) -> bool {
+    let Ok(entries) = std::fs::read_dir(old) else {
+        return !old.exists();
+    };
+    let mut all_gone = true;
+    for entry in entries.flatten() {
+        if entry.file_name() == MOVED_MARKER {
+            continue;
+        }
+        let path = entry.path();
+        let gone = match entry.file_type() {
+            Ok(kind) if kind.is_dir() => std::fs::remove_dir_all(&path),
+            _ => std::fs::remove_file(&path),
+        };
+        all_gone &= gone.is_ok();
+    }
+    all_gone && std::fs::remove_dir_all(old).is_ok()
+}
+
+/// The two `Almatter` folders above the old one, now empty — `remove_dir`
+/// leaves them alone otherwise.
+fn remove_empty_parents(old: &Path) {
+    for parent in old.ancestors().skip(1).take(2) {
+        let _ = std::fs::remove_dir(parent);
+    }
+}
+
+/// Copies `old` to `new` when a rename can't. The database is held open for
+/// the whole copy, letting nothing else write to it — an Almatter still
+/// running on it refuses the move (this run stays on `old` and the next one
+/// tries again), and none can start writing to it halfway through. The copy
+/// lands in a temporary folder next to `new` and takes its name only once
+/// complete, so a crash midway leaves no half-filled `new` to take over.
+/// The old folder is deleted last; what can't be deleted is marked as a
+/// leftover for the next run.
+fn copy_data_dir(old: &Path, new: &Path) -> std::io::Result<()> {
+    let db_file = old.join("cache.sqlite3");
+    let _db_held = if db_file.exists() { Some(open_unshared(&db_file)?) } else { None };
+
+    let parent = new.parent().unwrap_or(Path::new("."));
+    let name = new.file_name().map_or_else(|| "data".into(), |n| n.to_string_lossy().into_owned());
+    let staging = parent.join(format!("{name}.moving-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&staging);
+    let copied = copy_tree(old, &staging).and_then(|()| std::fs::rename(&staging, new));
+    if let Err(error) = copied {
+        let _ = std::fs::remove_dir_all(&staging);
+        return Err(error);
+    }
+
+    drop(_db_held);
+    let _ = std::fs::write(old.join(MOVED_MARKER), b"");
+    if remove_moved_dir(old) {
+        remove_empty_parents(old);
+    }
+    Ok(())
+}
+
+/// Opens `path` so that others may read it but not write to it, or fails if
+/// someone already has it open for writing. Windows only enforces this; on
+/// Linux and macOS the old and new folders are the same, so no copy happens.
+fn open_unshared(path: &Path) -> std::io::Result<std::fs::File> {
+    let mut options = std::fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        const FILE_SHARE_READ: u32 = 0x1;
+        options.share_mode(FILE_SHARE_READ);
+    }
+    options.open(path)
+}
+
+/// Copies a folder tree, checking each file arrived whole. Links are
+/// skipped: the app never creates any here.
+fn copy_tree(from: &Path, to: &Path) -> std::io::Result<()> {
+    std::fs::create_dir_all(to)?;
+    for entry in std::fs::read_dir(from)? {
+        let entry = entry?;
+        let kind = entry.file_type()?;
+        let target = to.join(entry.file_name());
+        if kind.is_dir() {
+            copy_tree(&entry.path(), &target)?;
+        } else if kind.is_file() {
+            let copied = std::fs::copy(entry.path(), &target)?;
+            if copied != entry.metadata()?.len() {
+                return Err(std::io::Error::other(format!("{} was not copied whole", entry.path().display())));
+            }
+        }
+    }
+    Ok(())
 }
 
 fn default_db_path() -> PathBuf {
@@ -1522,6 +1677,61 @@ mod tests {
         assert_eq!(dir, old);
         assert!(error.is_some());
         assert_eq!(std::fs::read(old.join("cache.sqlite3")).unwrap(), b"db");
+    }
+
+    /// The cross-drive path, run on one drive: `copy_data_dir` is what a
+    /// failed rename falls back to.
+    #[test]
+    fn a_data_folder_copied_across_drives_keeps_unsent_messages_and_leaves_nothing_behind() {
+        let root = empty_test_dir("copy-test");
+        let old = root.join("Roaming").join("Almatter").join("Almatter").join("data");
+        let new = root.join("Local").join("Almatter").join("Almatter").join("data");
+        std::fs::create_dir_all(old.join("files").join("f1")).unwrap();
+        std::fs::write(old.join("files").join("f1").join("report.pdf"), b"attachment").unwrap();
+        {
+            let db = Database::open(&old.join("cache.sqlite3").to_string_lossy()).unwrap();
+            crate::sync::SyncEngine::new(&db).enqueue_outbox_message("l1", "c1", None, "pas encore parti", 1000).unwrap();
+        }
+        std::fs::create_dir_all(new.parent().unwrap()).unwrap();
+
+        copy_data_dir(&old, &new).unwrap();
+
+        assert_eq!(std::fs::read(new.join("files").join("f1").join("report.pdf")).unwrap(), b"attachment");
+        let db = Database::open(&new.join("cache.sqlite3").to_string_lossy()).unwrap();
+        assert_eq!(crate::sync::SyncEngine::new(&db).pending_count().unwrap(), 1);
+        assert!(!root.join("Roaming").join("Almatter").exists(), "the old folder and its parents are gone");
+        let leftovers: Vec<_> = std::fs::read_dir(new.parent().unwrap()).unwrap().flatten().map(|e| e.file_name()).collect();
+        assert_eq!(leftovers, vec![std::ffi::OsString::from("data")], "no temporary folder left");
+    }
+
+    /// An Almatter still running on the old folder holds its database open
+    /// for writing: the copy must refuse rather than carry off a cache that
+    /// is still changing.
+    #[cfg(windows)]
+    #[test]
+    fn a_data_folder_in_use_is_not_copied() {
+        let root = empty_test_dir("copy-in-use-test");
+        let (old, new) = (root.join("old"), root.join("new"));
+        std::fs::create_dir_all(&old).unwrap();
+        let db = Database::open(&old.join("cache.sqlite3").to_string_lossy()).unwrap();
+
+        assert!(copy_data_dir(&old, &new).is_err());
+        assert!(!new.exists());
+        assert!(old.join("cache.sqlite3").exists());
+        drop(db);
+    }
+
+    #[test]
+    fn a_marked_leftover_old_folder_is_deleted_on_a_later_run() {
+        let root = empty_test_dir("leftover-test");
+        let (old, new) = (root.join("old"), root.join("new"));
+        std::fs::create_dir_all(old.join("avatars")).unwrap();
+        std::fs::write(old.join("avatars").join("u1"), b"x").unwrap();
+        std::fs::write(old.join(MOVED_MARKER), b"").unwrap();
+        std::fs::create_dir_all(&new).unwrap();
+
+        assert_eq!(settle_data_dir(&old, &new).0, new);
+        assert!(!old.exists());
     }
 
     #[test]
@@ -2056,6 +2266,40 @@ mod tests {
         let data = embed.data.as_ref().unwrap();
         assert_eq!(data.title, "Example");
         assert_eq!(data.images[0].url, "https://example.com/img.png");
+    }
+
+    #[test]
+    fn an_edit_drops_the_preview_of_a_link_it_removed_and_keeps_the_rest() {
+        use crate::models::{PostEmbed, PostMetadata};
+
+        let db = Database::open_in_memory().unwrap();
+        let embed = |url: &str| PostEmbed { embed_type: "opengraph".into(), url: url.into(), data: None };
+        let post = Post {
+            id: "p1".into(),
+            channel_id: "c1".into(),
+            root_id: "".into(),
+            user_id: "u1".into(),
+            message: "https://a.example/x and https://b.example/y".into(),
+            create_at: 1000,
+            reply_count: 0,
+            edit_at: 0,
+            is_pinned: false,
+            metadata: PostMetadata {
+                embeds: vec![embed("https://a.example/x"), embed("https://b.example/y"), embed("")],
+                ..Default::default()
+            },
+        };
+        db.upsert_post(&post).unwrap();
+
+        db.update_post_text("p1", "only https://b.example/y now", 2000, false).unwrap();
+
+        let urls: Vec<String> = db.cached_posts_for_channel("c1").unwrap()[0]
+            .metadata
+            .embeds
+            .iter()
+            .map(|e| e.url.clone())
+            .collect();
+        assert_eq!(urls, vec!["https://b.example/y".to_string(), String::new()]);
     }
 
     #[test]
