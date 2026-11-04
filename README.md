@@ -76,7 +76,7 @@ Updating is the same: run the newer installer over the existing install.
 
 **Uninstalling** from Windows Settings removes the program and asks whether to also
 delete your data (saved sign-in, settings, cached messages). That data lives in
-`%LOCALAPPDATA%\Almatter` and `%APPDATA%\Almatter`.
+`%LOCALAPPDATA%\Almatter`.
 
 ## Privacy and security
 
@@ -276,7 +276,7 @@ existante.
 
 **Désinstaller** depuis les Paramètres de Windows supprime le programme et propose de
 supprimer aussi vos données (connexion enregistrée, réglages, messages en cache). Ces
-données se trouvent dans `%LOCALAPPDATA%\Almatter` et `%APPDATA%\Almatter`.
+données se trouvent dans `%LOCALAPPDATA%\Almatter`.
 
 ## Confidentialité et sécurité
 

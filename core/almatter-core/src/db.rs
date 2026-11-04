@@ -1,7 +1,7 @@
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicI64, Ordering};
-use std::sync::{Mutex, MutexGuard, PoisonError};
+use std::sync::{Mutex, MutexGuard, OnceLock, PoisonError};
 
 use rusqlite::{params, Connection, OptionalExtension};
 
@@ -141,9 +141,12 @@ impl Database {
         Ok(another_account)
     }
 
-    /// The cache file used by the app: `<platform data dir>/Almatter/cache.sqlite3`,
+    /// The cache file used by the app: `cache.sqlite3` in `app_data_dir`,
     /// falling back to a relative path if the platform data dir can't be resolved.
     pub fn open_default() -> rusqlite::Result<Self> {
+        if let Some(error) = &data_dir().1 {
+            log("cache", &format!("could not move the data folder, staying in the old one: {error}"));
+        }
         let path = default_db_path();
         if let Some(parent) = path.parent() {
             let _ = std::fs::create_dir_all(parent);
@@ -1332,9 +1335,51 @@ pub fn account_file_dirs() -> [PathBuf; 5] {
 }
 
 fn app_data_dir() -> PathBuf {
-    directories::ProjectDirs::from("com", "Almatter", "Almatter")
-        .map(|dirs| dirs.data_dir().to_path_buf())
-        .unwrap_or_else(|| PathBuf::from("."))
+    data_dir().0.clone()
+}
+
+/// The folder in use, and why it isn't the intended one if the move away from
+/// the old location failed. Settled once per run, on first use, so that every
+/// path handed out during a run agrees — and before the database opens, since
+/// `open_default` asks for it first. The failure is kept rather than logged
+/// here because `log` itself needs this folder.
+fn data_dir() -> &'static (PathBuf, Option<std::io::Error>) {
+    static DIR: OnceLock<(PathBuf, Option<std::io::Error>)> = OnceLock::new();
+    DIR.get_or_init(|| match directories::ProjectDirs::from("com", "Almatter", "Almatter") {
+        // Unit tests share the real app's paths (see `log`); they must not
+        // carry its data off.
+        Some(dirs) if cfg!(test) => (dirs.data_local_dir().to_path_buf(), None),
+        Some(dirs) => settle_data_dir(dirs.data_dir(), dirs.data_local_dir()),
+        None => (PathBuf::from("."), None),
+    })
+}
+
+/// Everything here used to live in `old`, Windows' roaming profile: on a
+/// machine that really roams, that copies messages and attachments to a
+/// server at every sign-out, and a live SQLite file with them. `new` is the
+/// local equivalent, and the same folder as `old` on Linux.
+///
+/// The folder is moved in one rename, since the outbox's unsent messages are
+/// in the database and can't be fetched again. If that fails (a file still
+/// open, `old` on another drive) nothing has moved: this run stays on `old`
+/// and the next one tries again, rather than starting from an empty cache
+/// that would then take over for good.
+fn settle_data_dir(old: &Path, new: &Path) -> (PathBuf, Option<std::io::Error>) {
+    if old == new || new.exists() || !old.exists() {
+        return (new.to_path_buf(), None);
+    }
+    let moved = new.parent().map_or(Ok(()), std::fs::create_dir_all).and_then(|()| std::fs::rename(old, new));
+    match moved {
+        Ok(()) => {
+            // The two `Almatter` folders above it, now empty — `remove_dir`
+            // leaves them alone otherwise.
+            for parent in old.ancestors().skip(1).take(2) {
+                let _ = std::fs::remove_dir(parent);
+            }
+            (new.to_path_buf(), None)
+        }
+        Err(error) => (old.to_path_buf(), Some(error)),
+    }
 }
 
 fn default_db_path() -> PathBuf {
@@ -1419,6 +1464,86 @@ pub fn log(source: &str, message: &str) {
 mod tests {
     use super::*;
     use crate::models::AuthenticatedUser;
+
+    /// An empty folder of its own, under a name unique to one test.
+    fn empty_test_dir(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("almatter-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    /// Guards the old location above all: if a library update ever moved it,
+    /// `settle_data_dir` would find nothing to bring over and users would
+    /// silently start again from an empty cache, unsent messages lost.
+    #[cfg(windows)]
+    #[test]
+    fn the_data_folders_are_the_expected_windows_ones() {
+        let dirs = directories::ProjectDirs::from("com", "Almatter", "Almatter").unwrap();
+        assert!(dirs.data_dir().ends_with(r"AppData\Roaming\Almatter\Almatter\data"), "{:?}", dirs.data_dir());
+        assert!(dirs.data_local_dir().ends_with(r"AppData\Local\Almatter\Almatter\data"), "{:?}", dirs.data_local_dir());
+    }
+
+    #[test]
+    fn the_data_folder_moves_with_unsent_messages_and_files() {
+        let root = empty_test_dir("move-test");
+        let old = root.join("Roaming").join("Almatter").join("Almatter").join("data");
+        let new = root.join("Local").join("Almatter").join("Almatter").join("data");
+        std::fs::create_dir_all(old.join("emoji")).unwrap();
+        std::fs::write(old.join("emoji").join("e1"), b"image").unwrap();
+        {
+            let db = Database::open(&old.join("cache.sqlite3").to_string_lossy()).unwrap();
+            crate::sync::SyncEngine::new(&db).enqueue_outbox_message("l1", "c1", None, "pas encore parti", 1000).unwrap();
+        }
+
+        let (dir, error) = settle_data_dir(&old, &new);
+
+        assert_eq!(dir, new);
+        assert!(error.is_none());
+        assert_eq!(std::fs::read(new.join("emoji").join("e1")).unwrap(), b"image");
+        let db = Database::open(&new.join("cache.sqlite3").to_string_lossy()).unwrap();
+        assert_eq!(crate::sync::SyncEngine::new(&db).pending_count().unwrap(), 1);
+        assert!(!root.join("Roaming").join("Almatter").exists(), "the emptied parents go too");
+        assert!(root.join("Roaming").exists(), "but nothing above them");
+    }
+
+    #[test]
+    fn a_data_folder_that_cannot_move_stays_in_use_untouched() {
+        let root = empty_test_dir("no-move-test");
+        let old = root.join("old");
+        std::fs::create_dir_all(&old).unwrap();
+        std::fs::write(old.join("cache.sqlite3"), b"db").unwrap();
+        // A file where the new folder's parent should be: the move can't happen.
+        std::fs::write(root.join("blocked"), b"").unwrap();
+        let new = root.join("blocked").join("data");
+
+        let (dir, error) = settle_data_dir(&old, &new);
+
+        assert_eq!(dir, old);
+        assert!(error.is_some());
+        assert_eq!(std::fs::read(old.join("cache.sqlite3")).unwrap(), b"db");
+    }
+
+    #[test]
+    fn a_settled_data_folder_is_left_alone() {
+        let root = empty_test_dir("settled-test");
+        let (old, new) = (root.join("old"), root.join("new"));
+        std::fs::create_dir_all(&old).unwrap();
+        std::fs::create_dir_all(&new).unwrap();
+        std::fs::write(old.join("left-behind"), b"x").unwrap();
+
+        assert_eq!(settle_data_dir(&old, &new).0, new);
+        assert!(old.join("left-behind").exists(), "an existing new folder wins, the old one isn't merged in");
+
+        // First install: nothing to move, and nothing created yet either.
+        let (fresh_old, fresh_new) = (root.join("no-old"), root.join("no-new"));
+        assert_eq!(settle_data_dir(&fresh_old, &fresh_new).0, fresh_new);
+        assert!(!fresh_new.exists());
+
+        // Linux and macOS: one folder for both, so nothing to do.
+        assert_eq!(settle_data_dir(&old, &old).0, old);
+        assert!(old.exists());
+    }
 
     #[test]
     fn opens_a_real_file_and_initializes_schema() {

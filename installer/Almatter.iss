@@ -260,9 +260,9 @@ begin
     DotNetMissing := False;
 end;
 
-// Program files go with the uninstall; user data only on request. It lives
-// in two places today: settings, session and crash log under
-// %LOCALAPPDATA%\Almatter, the Rust core's cache under %APPDATA%\Almatter.
+// Program files go with the uninstall; user data only on request. It all
+// lives under %LOCALAPPDATA%\Almatter, but the Rust core's cache stays in its
+// former home under %APPDATA%\Almatter until the app has managed to move it.
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 begin
   if (CurUninstallStep = usPostUninstall) and not UninstallSilent then
