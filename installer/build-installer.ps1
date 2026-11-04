@@ -71,19 +71,32 @@ $dotnetUrl = "https://builds.dotnet.microsoft.com/dotnet/Runtime/$dotnetVersion/
 if (-not $file -or $file.url -ne $dotnetUrl) { throw "Unexpected .NET runtime download '$($file.url)', expected $dotnetUrl" }
 if ($file.hash -notmatch '^[0-9a-fA-F]{128}$') { throw "Unexpected SHA-512 '$($file.hash)' for $dotnetUrl" }
 
-$dotnetFile = Join-Path ([IO.Path]::GetTempPath()) "almatter-dotnet-runtime-$dotnetVersion-win-x64.exe"
+# Downloaded into a folder with an unguessable name, and both hashes are taken
+# from one read of the bytes: the SHA-256 baked into Setup is then provably the
+# hash of the file whose SHA-512 matched Microsoft's list. The file is hashed
+# again after the signature check, so a swap in between is caught too.
+$dotnetDir = Join-Path ([IO.Path]::GetTempPath()) ("almatter-dotnet-" + [guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Path $dotnetDir | Out-Null
+$dotnetFile = Join-Path $dotnetDir "dotnet-runtime-$dotnetVersion-win-x64.exe"
+function Get-BytesHash([byte[]] $bytes, [string] $algorithm) {
+    $hasher = [Security.Cryptography.HashAlgorithm]::Create($algorithm)
+    try { return ([BitConverter]::ToString($hasher.ComputeHash($bytes)) -replace '-', '') }
+    finally { $hasher.Dispose() }
+}
 try {
     Invoke-WebRequest $dotnetUrl -OutFile $dotnetFile -UseBasicParsing
-    $sha512 = (Get-FileHash $dotnetFile -Algorithm SHA512).Hash
-    if ($sha512 -ne $file.hash) { throw "$dotnetUrl has SHA-512 $sha512, Microsoft lists $($file.hash)" }
+    $bytes = [IO.File]::ReadAllBytes($dotnetFile)
+    $sha512 = Get-BytesHash $bytes 'SHA512'
+    if ($sha512 -ne $file.hash.ToUpperInvariant()) { throw "$dotnetUrl has SHA-512 $sha512, Microsoft lists $($file.hash)" }
+    $dotnetSha256 = (Get-BytesHash $bytes 'SHA256').ToLowerInvariant()
     $signature = Get-AuthenticodeSignature $dotnetFile
     if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch '(^|, )O=Microsoft Corporation(,|$)') {
         throw "$dotnetUrl is not validly signed by Microsoft ($($signature.Status), $($signature.SignerCertificate.Subject))"
     }
-    $dotnetSha256 = (Get-FileHash $dotnetFile -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ((Get-FileHash $dotnetFile -Algorithm SHA512).Hash -ne $sha512) { throw "$dotnetFile changed during verification" }
 }
 finally {
-    Remove-Item $dotnetFile -ErrorAction SilentlyContinue
+    Remove-Item $dotnetDir -Recurse -Force -ErrorAction SilentlyContinue
 }
 Write-Host "   $dotnetVersion, SHA-256 $dotnetSha256"
 
