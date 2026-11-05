@@ -877,26 +877,52 @@
                                         <!-- Attached pictures, as thumbnails. Each box is sized up
                                              front from the picture's own dimensions, so the bitmap
                                              arriving later never changes the row's height. -->
-                                        <ItemsControl IsVisible="{Binding HasImageAttachments}" ItemsSource="{Binding ImageAttachments}" Margin="0,6,0,0">
+                                        <!-- The line above them folds them away (remembered across
+                                             restarts) or brings them back. -->
+                                        <Button IsVisible="{Binding HasPictures}" Classes="row-button" Margin="0,4,0,0" Padding="2,1" HorizontalAlignment="Left"
+                                                ToolTip.Tip="{Binding ImagesToggleTip}" Click="OnImagesToggleClick">
+                                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                                <Panel Width="12" Height="12" VerticalAlignment="Center">
+                                                    <Path IsVisible="{Binding !AreImagesCollapsed}" Data="M6 9l6 6 6-6"
+                                                          Stroke="{DynamicResource TextTertiaryBrush}" StrokeThickness="2" StrokeLineCap="Round" StrokeJoin="Round" Stretch="Uniform" />
+                                                    <Path IsVisible="{Binding AreImagesCollapsed}" Data="M9 6l6 6-6 6"
+                                                          Stroke="{DynamicResource TextTertiaryBrush}" StrokeThickness="2" StrokeLineCap="Round" StrokeJoin="Round" Stretch="Uniform" />
+                                                </Panel>
+                                                <TextBlock Text="{Binding ImagesToggleLabel}" FontSize="11.5" Foreground="{DynamicResource TextTertiaryBrush}"
+                                                           MaxWidth="340" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                                            </StackPanel>
+                                        </Button>
+                                        <ItemsControl IsVisible="{Binding ShowsImages}" ItemsSource="{Binding Pictures}" Margin="0,4,0,0">
                                             <ItemsControl.ItemsPanel>
                                                 <ItemsPanelTemplate>
                                                     <WrapPanel />
                                                 </ItemsPanelTemplate>
                                             </ItemsControl.ItemsPanel>
                                             <ItemsControl.ItemTemplate>
-                                                <DataTemplate DataType="models:AttachmentItem">
+                                                <DataTemplate DataType="models:PictureItem">
                                                     <!-- Two buttons side by side in a Panel rather than one
                                                          inside the other: the download button sits on the
                                                          picture's corner, shown with the row's other hover
                                                          actions. -->
-                                                    <Panel Margin="0,0,6,6" HorizontalAlignment="Left">
+                                                    <Panel Margin="0,0,6,6" HorizontalAlignment="Left"
+                                                           EffectiveViewportChanged="OnPictureViewportChanged"
+                                                           DataContextChanged="OnPictureDataContextChanged"
+                                                           DetachedFromVisualTree="OnPictureDetached">
+                                                        <!-- A GIF plays or stops on a click; any other picture opens. -->
                                                         <Button Classes="row-button" ToolTip.Tip="{Binding ThumbnailTip}"
-                                                                Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).OpenAttachmentCommand}"
+                                                                Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).ClickPictureCommand}"
                                                                 CommandParameter="{Binding}">
                                                             <Border Width="{Binding ThumbnailWidth}" Height="{Binding ThumbnailHeight}"
                                                                     Background="{DynamicResource BgPanelBrush}" CornerRadius="8" ClipToBounds="True">
                                                                 <Panel>
                                                                     <Image Source="{Binding Thumbnail}" Stretch="UniformToFill" IsVisible="{Binding Thumbnail, Converter={x:Static conv:ObjectConverters.IsNotNull}}" />
+                                                                    <Border IsVisible="{Binding ShowsGifBadge}" Background="#B3000000" CornerRadius="4" Padding="5,1"
+                                                                            Margin="6" HorizontalAlignment="Left" VerticalAlignment="Bottom">
+                                                                        <StackPanel Orientation="Horizontal" Spacing="3">
+                                                                            <Path Data="M8 5v14l11-7z" Fill="White" Width="8" Height="9" Stretch="Uniform" VerticalAlignment="Center" />
+                                                                            <TextBlock Text="GIF" FontSize="10.5" FontWeight="SemiBold" Foreground="White" VerticalAlignment="Center" />
+                                                                        </StackPanel>
+                                                                    </Border>
                                                                     <Border IsVisible="{Binding IsDownloading}" Background="#99000000">
                                                                         <TextBlock Text="{Binding T.Downloading, Source={x:Static loc:Loc.Instance}}" FontSize="11" FontStyle="Italic" Foreground="White"
                                                                                    HorizontalAlignment="Center" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
@@ -904,21 +930,46 @@
                                                                 </Panel>
                                                             </Border>
                                                         </Button>
-                                                        <Button Classes="row-button hover-reveal-btn" Width="26" Height="26" Margin="0,6,6,0"
-                                                                HorizontalAlignment="Right" VerticalAlignment="Top" ToolTip.Tip="{Binding DownloadTip}"
-                                                                Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).SaveAttachmentCommand}"
-                                                                CommandParameter="{Binding}">
-                                                            <Border CornerRadius="13" Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1" BoxShadow="{DynamicResource CardShadow}">
-                                                                <Panel>
-                                                                    <Path IsVisible="{Binding !IsJustSaved}" Data="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4 M7 10l5 5 5-5 M12 15V3"
+                                                        <!-- The corner buttons, shown with the row's other hover
+                                                             actions. A GIF's click plays it, so opening it (in the
+                                                             system's viewer, or a linked one in the browser) moves to
+                                                             a button of its own. Only an attachment can be downloaded:
+                                                             a linked picture is somebody else's address. -->
+                                                        <StackPanel Orientation="Horizontal" Spacing="4" Margin="0,6,6,0" HorizontalAlignment="Right" VerticalAlignment="Top">
+                                                            <Button IsVisible="{Binding IsGif}" Classes="row-button hover-reveal-btn" Width="26" Height="26"
+                                                                    ToolTip.Tip="{Binding T.Open, Source={x:Static loc:Loc.Instance}}"
+                                                                    Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).OpenPictureCommand}"
+                                                                    CommandParameter="{Binding}">
+                                                                <Border CornerRadius="13" Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1" BoxShadow="{DynamicResource CardShadow}">
+                                                                    <Path Data="M15 3h6v6 M10 14 21 3 M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"
                                                                           Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.5" StrokeLineCap="Round" StrokeJoin="Round"
-                                                                          Width="14" Height="14" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                                                    <Path IsVisible="{Binding IsJustSaved}" Data="M20 6 9 17l-5-5"
-                                                                          Stroke="{DynamicResource AccentBrush}" StrokeThickness="2" StrokeLineCap="Round" StrokeJoin="Round"
                                                                           Width="13" Height="13" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                                                </Panel>
-                                                            </Border>
-                                                        </Button>
+                                                                </Border>
+                                                            </Button>
+                                                            <ContentControl Content="{Binding}" IsVisible="{Binding CanSave}">
+                                                                <ContentControl.DataTemplates>
+                                                                    <DataTemplate DataType="models:AttachmentItem">
+                                                                        <Button Classes="row-button hover-reveal-btn" Width="26" Height="26" ToolTip.Tip="{Binding DownloadTip}"
+                                                                                Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).SaveAttachmentCommand}"
+                                                                                CommandParameter="{Binding}">
+                                                                            <Border CornerRadius="13" Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1" BoxShadow="{DynamicResource CardShadow}">
+                                                                                <Panel>
+                                                                                    <Path IsVisible="{Binding !IsJustSaved}" Data="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4 M7 10l5 5 5-5 M12 15V3"
+                                                                                          Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.5" StrokeLineCap="Round" StrokeJoin="Round"
+                                                                                          Width="14" Height="14" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                                                    <Path IsVisible="{Binding IsJustSaved}" Data="M20 6 9 17l-5-5"
+                                                                                          Stroke="{DynamicResource AccentBrush}" StrokeThickness="2" StrokeLineCap="Round" StrokeJoin="Round"
+                                                                                          Width="13" Height="13" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                                                </Panel>
+                                                                            </Border>
+                                                                        </Button>
+                                                                    </DataTemplate>
+                                                                    <DataTemplate DataType="models:LinkedPictureItem">
+                                                                        <Panel />
+                                                                    </DataTemplate>
+                                                                </ContentControl.DataTemplates>
+                                                            </ContentControl>
+                                                        </StackPanel>
                                                     </Panel>
                                                 </DataTemplate>
                                             </ItemsControl.ItemTemplate>

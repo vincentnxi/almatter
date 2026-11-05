@@ -129,12 +129,52 @@ public sealed partial class MessageItem : ObservableObject
     /// side, cards one under the other). Split once: a message's attachments
     /// are fixed when its row is built.
     /// </summary>
-    public IReadOnlyList<AttachmentItem> ImageAttachments => _imageAttachments ??= Attachments.Where(a => a.IsImage).ToList();
     public IReadOnlyList<AttachmentItem> FileAttachments => _fileAttachments ??= Attachments.Where(a => !a.IsImage).ToList();
-    public bool HasImageAttachments => ImageAttachments.Count > 0;
     public bool HasFileAttachments => FileAttachments.Count > 0;
 
-    private IReadOnlyList<AttachmentItem>? _imageAttachments;
+    /// <summary>Pictures the text links to — a Giphy GIF, say. Fixed when the row is built, like the attachments.</summary>
+    public IReadOnlyList<LinkedPictureItem> LinkedPictures { get; init; } = [];
+
+    /// <summary>
+    /// Linked pictures are fetched from wherever they live, so they follow the
+    /// link-preview setting; MainViewModel flips this on every message when it
+    /// changes, and the pictures appear or go at once.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(Pictures))]
+    [NotifyPropertyChangedFor(nameof(HasPictures))]
+    [NotifyPropertyChangedFor(nameof(ShowsImages))]
+    [NotifyPropertyChangedFor(nameof(ImagesToggleLabel))]
+    public partial bool ShowsLinkedPictures { get; set; } = true;
+
+    /// <summary>Everything shown as a picture under the text: attached pictures first, then linked ones.</summary>
+    public IReadOnlyList<PictureItem> Pictures => ShowsLinkedPictures
+        ? _allPictures ??= [.. Attachments.Where(a => a.IsImage), .. LinkedPictures]
+        : _attachedPictures ??= [.. Attachments.Where(a => a.IsImage)];
+
+    public bool HasPictures => Pictures.Count > 0;
+
+    private IReadOnlyList<PictureItem>? _allPictures;
+    private IReadOnlyList<PictureItem>? _attachedPictures;
+
+    /// <summary>
+    /// The reader folded this message's pictures away with the arrow above
+    /// them, leaving only that line. Remembered across restarts — see
+    /// MainViewModel.ToggleImagesCollapsed. While folded the thumbnails are
+    /// not built, so nothing is downloaded or decoded for them either.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowsImages))]
+    [NotifyPropertyChangedFor(nameof(ImagesToggleTip))]
+    public partial bool AreImagesCollapsed { get; set; }
+
+    public bool ShowsImages => HasPictures && !AreImagesCollapsed;
+
+    /// <summary>The line above the pictures: the picture's name for one, how many for several.</summary>
+    public string ImagesToggleLabel => Pictures.Count == 1 ? Pictures[0].Caption : Loc.S.ImageCount(Pictures.Count);
+
+    public string ImagesToggleTip => AreImagesCollapsed ? Loc.S.ExpandImages : Loc.S.CollapseImages;
+
     private IReadOnlyList<AttachmentItem>? _fileAttachments;
     public bool HasReactions => Reactions.Count > 0;
 
@@ -291,9 +331,15 @@ public sealed partial class MessageItem : ObservableObject
         OnPropertyChanged(nameof(PinActionLabel));
         OnPropertyChanged(nameof(PresenceLabel));
         OnPropertyChanged(nameof(ThreadReplyLabel));
+        OnPropertyChanged(nameof(ImagesToggleLabel));
+        OnPropertyChanged(nameof(ImagesToggleTip));
         foreach (var attachment in Attachments)
         {
             attachment.RefreshLanguage();
+        }
+        foreach (var picture in LinkedPictures)
+        {
+            picture.RefreshLanguage();
         }
         foreach (var reaction in Reactions)
         {

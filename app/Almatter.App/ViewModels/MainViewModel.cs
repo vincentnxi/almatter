@@ -908,6 +908,7 @@ public partial class MainViewModel : ViewModelBase
         IsFavoritesSectionExpanded = Settings.FavoritesExpanded;
         IsChannelsSectionExpanded = Settings.ChannelsExpanded;
         IsDirectMessagesSectionExpanded = Settings.DirectMessagesExpanded;
+        _collapsedImagePosts = [.. Settings.CollapsedImagePostIds];
         if (!string.IsNullOrEmpty(Settings.LastChannelId))
         {
             _activeChannelId = Settings.LastChannelId;
@@ -947,9 +948,13 @@ public partial class MainViewModel : ViewModelBase
                 OnPropertyChanged(nameof(InlineEmojiSize));
                 OnPropertyChanged(nameof(MessageLineHeight));
             }
-            else if (e.PropertyName == nameof(AppSettings.ShowLinkPreviews) && Settings.ShowLinkPreviews)
+            else if (e.PropertyName == nameof(AppSettings.ShowLinkPreviews))
             {
-                RequestSkippedLinkPreviewImages();
+                if (Settings.ShowLinkPreviews)
+                {
+                    RequestSkippedLinkPreviewImages();
+                }
+                ApplyLinkedPicturesSetting();
             }
             SettingsStore.Save(Settings);
         };
@@ -6123,6 +6128,9 @@ public partial class MainViewModel : ViewModelBase
                 DateSeparatorLabel = DateSeparatorFor(previous?.CreateAtMillis, post.CreateAt),
                 Reactions = BuildReactions(post),
                 Attachments = BuildAttachments(post),
+                LinkedPictures = BuildLinkedPictures(post),
+                ShowsLinkedPictures = Settings.ShowLinkPreviews,
+                AreImagesCollapsed = _collapsedImagePosts.Contains(post.Id),
                 IsPinned = post.IsPinned,
                 EmojiImageResolver = ResolveTextEmojiAsync,
             };
@@ -6385,22 +6393,23 @@ public partial class MainViewModel : ViewModelBase
         return new ObservableCollection<ReactionItem>(items);
     }
 
+    private static bool HasKnownSize(FileDto f) => f.HasPreviewImage && f.Width > 0 && f.Height > 0;
+
+    // A message cached before picture dimensions were kept comes back
+    // without them, and stays that way until the server is asked for it
+    // again — which, for anything older than the latest page of a
+    // conversation, is never. Its file name is then all there is to go
+    // on: a picture by its extension gets a tile of a fixed shape.
+    private static bool IsImage(FileDto f) => HasKnownSize(f)
+        || (f.Width == 0 && f.Height == 0 && !f.HasPreviewImage
+            && Path.GetExtension(f.Name).ToLowerInvariant() is ".png" or ".jpg" or ".jpeg" or ".gif" or ".webp" or ".bmp");
+
     private ObservableCollection<AttachmentItem> BuildAttachments(PostDto post)
     {
-        static bool HasKnownSize(FileDto f) => f.HasPreviewImage && f.Width > 0 && f.Height > 0;
-
-        // A message cached before picture dimensions were kept comes back
-        // without them, and stays that way until the server is asked for it
-        // again — which, for anything older than the latest page of a
-        // conversation, is never. Its file name is then all there is to go
-        // on: a picture by its extension gets a tile of a fixed shape.
-        static bool IsImage(FileDto f) => HasKnownSize(f)
-            || (f.Width == 0 && f.Height == 0 && !f.HasPreviewImage
-                && Path.GetExtension(f.Name).ToLowerInvariant() is ".png" or ".jpg" or ".jpeg" or ".gif" or ".webp" or ".bmp");
-
         // A picture on its own gets room to be looked at; several are tiles,
         // so that five photos don't push the conversation off the screen.
-        var alone = post.Metadata.Files.Count(IsImage) == 1;
+        // Linked pictures count: a photo and a GIF are two tiles.
+        var alone = post.Metadata.Files.Count(IsImage) + LinkedPictureEmbeds(post).Count == 1;
         var items = post.Metadata.Files.Select(f =>
         {
             var isImage = IsImage(f);
@@ -6413,15 +6422,85 @@ public partial class MainViewModel : ViewModelBase
                 FileName = f.Name,
                 SizeBytes = f.Size,
                 IsImage = isImage,
+                IsGif = isImage && !_unplayableGifs.ContainsKey(f.Id)
+                    && Path.GetExtension(f.Name).Equals(".gif", StringComparison.OrdinalIgnoreCase),
                 ThumbnailWidth = width,
                 ThumbnailHeight = height,
                 // Not fetched here: the thumbnail asks the first time it's
                 // actually shown (see AttachmentItem.Thumbnail).
-                ThumbnailResolver = isImage ? ResolveAttachmentThumbnailAsync : null,
+                ThumbnailResolver = isImage ? ResolvePictureThumbnailAsync : null,
             };
         });
         return new ObservableCollection<AttachmentItem>(items);
     }
+
+    /// <summary>How many linked pictures one message shows; the rest stay plain links in the text.</summary>
+    private const int MaxLinkedPicturesShown = 4;
+
+    /// <summary>
+    /// The pictures a message's text links to, as the core hands them over
+    /// (see PostMetadata in models.rs): a bare picture address is an "image"
+    /// embed, a Markdown picture a "markdown_image" one. A Markdown one is
+    /// only kept while its address is still in the text — an edit that
+    /// removed it must remove the picture too.
+    /// </summary>
+    private static List<EmbedDto> LinkedPictureEmbeds(PostDto post) => post.Metadata.Embeds
+        .Where(e => e.Url.StartsWith("https://", StringComparison.OrdinalIgnoreCase) || e.Url.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
+        .Where(e => e.Type == "image" || (e.Type == "markdown_image" && post.Message.Contains(e.Url, StringComparison.Ordinal)))
+        .DistinctBy(e => e.Url)
+        .Take(MaxLinkedPicturesShown)
+        .ToList();
+
+    private List<LinkedPictureItem> BuildLinkedPictures(PostDto post)
+    {
+        var embeds = LinkedPictureEmbeds(post);
+        if (embeds.Count == 0)
+        {
+            return [];
+        }
+        var alone = post.Metadata.Files.Count(IsImage) + embeds.Count == 1;
+        return embeds.Select(e =>
+        {
+            var image = e.Image;
+            var (width, height) = image is { Width: > 0, Height: > 0 }
+                ? ThumbnailBoxFor(image.Width, image.Height, alone)
+                : (TileThumbnailMaxWidth, TileThumbnailMaxHeight);
+            // The server read the format and frame count from the file itself;
+            // only a picture cached before those were kept falls back to its address.
+            var isGif = image is not null
+                ? image.Format.Equals("gif", StringComparison.OrdinalIgnoreCase) && image.FrameCount > 1
+                : LinkedPictureFileName(e.Url).EndsWith(".gif", StringComparison.OrdinalIgnoreCase);
+            return new LinkedPictureItem
+            {
+                Url = e.Url,
+                Name = MarkdownAltText(post.Message, e.Url) is { Length: > 0 } alt ? alt : LinkedPictureFileName(e.Url),
+                IsGif = isGif && !_unplayableGifs.ContainsKey(e.Url),
+                ThumbnailWidth = width,
+                ThumbnailHeight = height,
+                ThumbnailResolver = ResolvePictureThumbnailAsync,
+            };
+        }).ToList();
+    }
+
+    /// <summary>"Enorme GIF" in "![Enorme GIF](url)"; empty when the picture is a bare address or has no alt text.</summary>
+    private static string MarkdownAltText(string message, string url)
+    {
+        var end = message.IndexOf("](" + url + ")", StringComparison.Ordinal);
+        if (end < 0)
+        {
+            return "";
+        }
+        var start = message.LastIndexOf("![", end, StringComparison.Ordinal);
+        if (start < 0 || message.AsSpan(start + 2, end - start - 2).ContainsAny('\n', ']'))
+        {
+            return "";
+        }
+        return message.Substring(start + 2, end - start - 2).Trim();
+    }
+
+    /// <summary>The address's last part, query left off: "giphy.gif".</summary>
+    private static string LinkedPictureFileName(string url) =>
+        Uri.TryCreate(url, UriKind.Absolute, out var uri) && Path.GetFileName(uri.AbsolutePath) is { Length: > 0 } name ? name : url;
 
     /// <summary>
     /// The box a picture's thumbnail is drawn in: the picture's own shape,
@@ -6440,29 +6519,282 @@ public partial class MainViewModel : ViewModelBase
             Math.Max(ThumbnailMinSide, Math.Round(pixelHeight * scale)));
     }
 
-    private async Task ResolveAttachmentThumbnailAsync(AttachmentItem item)
+    /// <summary>How many folded messages are remembered — a few years of folding at any sensible pace, about 60 KB of settings file.</summary>
+    private const int MaxRememberedCollapsedImages = 2_000;
+
+    /// <summary>Settings.CollapsedImagePostIds as a set, for the lookup made on every message built.</summary>
+    private HashSet<string> _collapsedImagePosts = [];
+
+    /// <summary>
+    /// Bound to the arrow above a message's pictures: folds them away to that
+    /// one line, or brings them back. Remembered in the settings file, so a
+    /// picture folded once stays folded on the next launch.
+    /// </summary>
+    [RelayCommand]
+    private void ToggleImagesCollapsed(MessageItem message)
+    {
+        var collapse = !message.AreImagesCollapsed;
+        if (collapse && _playingGif is { } playing && message.Pictures.Contains(playing))
+        {
+            StopGifPlayback();
+        }
+        message.AreImagesCollapsed = collapse;
+
+        var ids = Settings.CollapsedImagePostIds.Where(id => id != message.Id).ToList();
+        if (collapse)
+        {
+            ids.Add(message.Id);
+            if (ids.Count > MaxRememberedCollapsedImages)
+            {
+                ids.RemoveRange(0, ids.Count - MaxRememberedCollapsedImages);
+            }
+        }
+        _collapsedImagePosts = [.. ids];
+        // A new list, not the same one changed: the assignment is what saves the settings.
+        Settings.CollapsedImagePostIds = ids;
+    }
+
+    /// <summary>The GIF playing right now, if any — there is only ever one.</summary>
+    private PictureItem? _playingGif;
+    private GifPlayer? _gifPlayer;
+    private CancellationTokenSource? _gifPlayback;
+
+    /// <summary>GIFs that turned out not to be playable (one frame, too large, unreadable), by file id or address: they get no badge and open like any picture from then on.</summary>
+    private readonly ConcurrentDictionary<string, bool> _unplayableGifs = new();
+
+    private static string PictureKey(PictureItem picture) => picture switch
+    {
+        AttachmentItem attachment => attachment.Id,
+        LinkedPictureItem linked => linked.Url,
+        _ => "",
+    };
+
+    /// <summary>
+    /// Bound to a click on a picture under a message. A GIF plays in place,
+    /// or stops; anything else — including a GIF that can't be played — opens
+    /// as before: an attachment in the system's viewer, a linked picture at
+    /// its address in the browser.
+    ///
+    /// An attached GIF's own file is fetched for this (its thumbnail comes
+    /// from the server's still preview of it) and kept in the same disk cache
+    /// as an opened attachment. A linked GIF is the very file its thumbnail
+    /// was decoded from, already in the link-picture cache.
+    /// </summary>
+    [RelayCommand(AllowConcurrentExecutions = true)]
+    private async Task ClickPictureAsync(PictureItem picture)
+    {
+        if (!picture.IsGif)
+        {
+            await OpenPictureAsync(picture);
+            return;
+        }
+        if (picture.IsDownloading)
+        {
+            return;
+        }
+        if (picture == _playingGif)
+        {
+            StopGifPlayback();
+            return;
+        }
+        StopGifPlayback();
+
+        picture.IsDownloading = true;
+        GifPlayer? player;
+        try
+        {
+            var path = picture switch
+            {
+                AttachmentItem attachment => await _service.GetFilePathAsync(_session.BaseUrl, _session.Token, attachment.Id, attachment.FileName),
+                LinkedPictureItem linked => await _service.GetLinkPreviewImagePathAsync(linked.Url),
+                _ => throw new InvalidOperationException("A picture of no known kind."),
+            };
+            var (width, height, scaling) = (picture.ThumbnailWidth, picture.ThumbnailHeight, DisplayScaling);
+            player = await Task.Run(() => GifPlayer.TryOpen(path, width, height, scaling));
+        }
+        catch (MattermostServiceException ex)
+        {
+            // An attachment the server refused is worth saying; a linked
+            // picture some other site wouldn't hand over is not — it opens in
+            // the browser, which will say what it has to say.
+            if (picture is AttachmentItem)
+            {
+                ErrorMessage = ex.Message;
+                return;
+            }
+            CrashLogger.Write($"gif: could not fetch {PictureKey(picture)}", ex);
+            player = null;
+        }
+        finally
+        {
+            picture.IsDownloading = false;
+        }
+
+        if (player is null)
+        {
+            _unplayableGifs[PictureKey(picture)] = true;
+            picture.IsGif = false;
+            await OpenPictureAsync(picture);
+            return;
+        }
+
+        // Another GIF may have been clicked while this one was downloading.
+        StopGifPlayback();
+        var playback = new CancellationTokenSource();
+        _playingGif = picture;
+        _gifPlayer = player;
+        _gifPlayback = playback;
+        picture.IsGifPlaying = true;
+
+        var token = playback.Token;
+        var run = Task.Run(() => player.RunAsync(
+            frame => Dispatcher.UIThread.Post(() =>
+            {
+                // A frame posted just before playback was stopped must not
+                // land after the still picture is back.
+                if (!token.IsCancellationRequested)
+                {
+                    picture.ShowFrame(frame);
+                }
+            }),
+            token));
+        _gifRun = run;
+        try
+        {
+            await run;
+        }
+        catch (Exception ex)
+        {
+            // A file damaged past some frame: it stops there, back to its still picture.
+            CrashLogger.Write($"gif: playback of {PictureKey(picture)} failed", ex);
+        }
+
+        // Ran out on its own (a GIF set to play a fixed number of times).
+        if (!token.IsCancellationRequested && _playingGif == picture)
+        {
+            StopGifPlayback();
+        }
+    }
+
+    /// <summary>Bound to the "open" button on a GIF's corner, and what a click on any other picture does.</summary>
+    [RelayCommand(AllowConcurrentExecutions = true)]
+    private async Task OpenPictureAsync(PictureItem picture)
+    {
+        switch (picture)
+        {
+            case AttachmentItem attachment:
+                await OpenAttachmentAsync(attachment);
+                break;
+            case LinkedPictureItem linked:
+                OpenInBrowser(linked.Url);
+                break;
+        }
+    }
+
+    /// <summary>The background loop of the GIF playing, so its bitmaps are only freed once it has really stopped drawing into them.</summary>
+    private Task? _gifRun;
+
+    /// <summary>
+    /// Puts the playing GIF back to its still picture and frees what playback
+    /// held. The two frame bitmaps are freed once the background loop has
+    /// ended and a moment has passed: the loop may be halfway through drawing
+    /// a frame, and the screen may still be drawing the last one shown.
+    /// Called on a second click, when another GIF starts, when the picture
+    /// scrolls out of sight or is folded away, and when the window is
+    /// minimised or sent to the tray.
+    /// </summary>
+    public void StopGifPlayback()
+    {
+        if (_playingGif is not { } picture)
+        {
+            return;
+        }
+        var player = _gifPlayer;
+        var run = _gifRun ?? Task.CompletedTask;
+        _gifPlayback?.Cancel();
+        _gifPlayback?.Dispose();
+        _gifPlayback = null;
+        _gifPlayer = null;
+        _gifRun = null;
+        _playingGif = null;
+        picture.IsGifPlaying = false;
+        picture.ShowFrame(null);
+        if (player is not null)
+        {
+            _ = ReleaseGifBuffersAsync(player, run);
+        }
+    }
+
+    private static async Task ReleaseGifBuffersAsync(GifPlayer player, Task run)
+    {
+        try
+        {
+            await run;
+        }
+        catch
+        {
+            // Already logged where playback was awaited; the bitmaps go all the same.
+        }
+        await Task.Delay(TimeSpan.FromSeconds(2));
+        player.ReleaseBuffers();
+    }
+
+    /// <summary>Called by the view when a picture leaves the screen — scrolled away, or its row handed to another message.</summary>
+    public void OnPictureOutOfSight(PictureItem picture)
+    {
+        if (picture == _playingGif)
+        {
+            StopGifPlayback();
+        }
+    }
+
+    /// <summary>Linked pictures follow the link-preview setting; switching it shows or hides them on every message at once.</summary>
+    private void ApplyLinkedPicturesSetting()
+    {
+        var show = Settings.ShowLinkPreviews;
+        if (!show && _playingGif is LinkedPictureItem)
+        {
+            StopGifPlayback();
+        }
+        foreach (var message in Messages)
+        {
+            message.ShowsLinkedPictures = show;
+        }
+    }
+
+    private async Task ResolvePictureThumbnailAsync(PictureItem item)
     {
         // Same as ResolveLinkPreviewImageAsync: the request arrives from
         // inside a binding reading Thumbnail, which must return first.
         await Task.Yield();
 
-        if (await GetAttachmentThumbnailBitmapAsync(item.Id, item.ThumbnailWidth, item.ThumbnailHeight) is { } bitmap)
+        var bitmap = item switch
+        {
+            AttachmentItem attachment => await GetPictureThumbnailBitmapAsync(
+                attachment.Id, () => _service.GetFilePreviewPathAsync(_session.BaseUrl, _session.Token, attachment.Id), item.ThumbnailWidth, item.ThumbnailHeight),
+            // A linked picture has no server-made preview: its thumbnail is
+            // decoded from the file itself — a GIF's first frame.
+            LinkedPictureItem linked when Settings.ShowLinkPreviews => await GetPictureThumbnailBitmapAsync(
+                linked.Url, () => _service.GetLinkPreviewImagePathAsync(linked.Url), item.ThumbnailWidth, item.ThumbnailHeight),
+            _ => null,
+        };
+        if (bitmap is not null)
         {
             item.Thumbnail = bitmap;
         }
     }
 
-    /// <summary>Same shape as GetLinkPreviewImageBitmapAsync, for an attached picture — cached per file id, decoded from the server's preview of it.</summary>
-    private async Task<Bitmap?> GetAttachmentThumbnailBitmapAsync(string fileId, double boxWidth, double boxHeight)
+    /// <summary>Same shape as GetLinkPreviewImageBitmapAsync, for a picture under a message — cached per file id or address, decoded to its box.</summary>
+    private async Task<Bitmap?> GetPictureThumbnailBitmapAsync(string id, Func<Task<string>> fetchPath, double boxWidth, double boxHeight)
     {
-        // The same file is always given the same box, except in the rare
+        // The same picture is always given the same box, except in the rare
         // message edited from one picture to several — hence the size in the key.
-        var key = $"{fileId}@{boxWidth}x{boxHeight}";
+        var key = $"{id}@{boxWidth}x{boxHeight}";
         if (_attachmentThumbnailCache.TryGet(key, out var cached))
         {
             return cached;
         }
-        if (_attachmentThumbnailFailures.TryGetValue(fileId, out var retryNotBefore) && DateTime.UtcNow < retryNotBefore)
+        if (_attachmentThumbnailFailures.TryGetValue(id, out var retryNotBefore) && DateTime.UtcNow < retryNotBefore)
         {
             return null;
         }
@@ -6473,7 +6805,7 @@ public partial class MainViewModel : ViewModelBase
             {
                 return cached;
             }
-            var path = await _service.GetFilePreviewPathAsync(_session.BaseUrl, _session.Token, fileId);
+            var path = await fetchPath();
             var scaling = DisplayScaling;
             Bitmap bitmap;
             try
@@ -6482,9 +6814,9 @@ public partial class MainViewModel : ViewModelBase
             }
             catch (Exception ex)
             {
-                CrashLogger.Write($"thumbnail: decode failed for {fileId} at {path}, retrying once", ex);
+                CrashLogger.Write($"thumbnail: decode failed for {id} at {path}, retrying once", ex);
                 TryDeleteFile(path);
-                path = await _service.GetFilePreviewPathAsync(_session.BaseUrl, _session.Token, fileId);
+                path = await fetchPath();
                 bitmap = await Task.Run(() => CardImageDecoder.DecodeToCover(path, boxWidth, boxHeight, scaling));
             }
             _attachmentThumbnailCache.Add(key, bitmap);
@@ -6492,13 +6824,13 @@ public partial class MainViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            // That one picture stays an empty box — still clickable, still opens the file.
-            CrashLogger.Write($"thumbnail: gave up on {fileId}", ex);
+            // That one picture stays an empty box — still clickable, still opens.
+            CrashLogger.Write($"thumbnail: gave up on {id}", ex);
             if (_attachmentThumbnailFailures.Count > 500)
             {
                 _attachmentThumbnailFailures.Clear();
             }
-            _attachmentThumbnailFailures[fileId] = DateTime.UtcNow + LinkPreviewRetryAfterFailure;
+            _attachmentThumbnailFailures[id] = DateTime.UtcNow + LinkPreviewRetryAfterFailure;
             return null;
         }
         finally

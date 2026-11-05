@@ -281,6 +281,7 @@ impl Post {
 /// Reactions and attached files ride along on the post object itself under
 /// `metadata` — no separate per-post request needed to get them.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(from = "RawPostMetadata")]
 pub struct PostMetadata {
     #[serde(default, deserialize_with = "null_as_default")]
     pub reactions: Vec<Reaction>,
@@ -292,6 +293,82 @@ pub struct PostMetadata {
     /// link-preview generation turned on.
     #[serde(default, deserialize_with = "null_as_default")]
     pub embeds: Vec<PostEmbed>,
+}
+
+/// `metadata` exactly as the server sends it. Its `images` map — the size,
+/// format and frame count of every picture the post links to, keyed by
+/// address — is folded into `embeds` on the way in (see the `From` below),
+/// so that it is cached with them in the one `embeds_json` column and reaches
+/// the app without a second shape to carry.
+#[derive(Deserialize)]
+struct RawPostMetadata {
+    #[serde(default, deserialize_with = "null_as_default")]
+    reactions: Vec<Reaction>,
+    #[serde(default, deserialize_with = "null_as_default")]
+    files: Vec<FileInfo>,
+    #[serde(default, deserialize_with = "null_as_default")]
+    embeds: Vec<PostEmbed>,
+    #[serde(default, deserialize_with = "null_as_default")]
+    images: HashMap<String, PostImage>,
+}
+
+/// How many linked pictures one post keeps. The map is the server's, but
+/// a message can link to any number of pictures, and every one kept is
+/// fetched by every reader's app once shown.
+const MAX_LINKED_IMAGES: usize = 8;
+
+impl From<RawPostMetadata> for PostMetadata {
+    /// A bare picture link already has an `"image"` embed; it gains its size.
+    /// A Markdown picture (`![GIF](https://…)`, what the official client's
+    /// GIF picker posts) has no embed at all, only its entry in `images`, and
+    /// becomes a `"markdown_image"` embed. Entries for a link preview's own
+    /// picture are left out: that picture belongs to its card.
+    fn from(raw: RawPostMetadata) -> Self {
+        let RawPostMetadata { reactions, files, mut embeds, mut images } = raw;
+        for embed in &mut embeds {
+            // Only ever filled in, never cleared: metadata read back from
+            // its own folded form has no `images` map left to take it from.
+            if embed.embed_type == "image" {
+                if let Some(image) = images.remove(&embed.url) {
+                    embed.image = Some(image);
+                }
+            }
+        }
+        let preview_pictures: Vec<String> = embeds
+            .iter()
+            .filter_map(|embed| embed.data.as_ref())
+            .flat_map(|data| data.images.iter())
+            .flat_map(|image| [image.url.clone(), image.secure_url.clone()])
+            .collect();
+        let mut markdown: Vec<(String, PostImage)> = images
+            .into_iter()
+            .filter(|(url, _)| !url.is_empty() && !preview_pictures.contains(url))
+            .collect();
+        // A map has no order; this keeps the cached JSON stable from one fetch to the next.
+        markdown.sort_by(|a, b| a.0.cmp(&b.0));
+        embeds.extend(markdown.into_iter().take(MAX_LINKED_IMAGES).map(|(url, image)| PostEmbed {
+            embed_type: "markdown_image".into(),
+            url,
+            data: None,
+            image: Some(image),
+        }));
+        PostMetadata { reactions, files, embeds }
+    }
+}
+
+/// One entry of the server's `metadata.images`.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct PostImage {
+    #[serde(default, deserialize_with = "null_as_default")]
+    pub width: i64,
+    #[serde(default, deserialize_with = "null_as_default")]
+    pub height: i64,
+    /// "gif", "png", "jpeg"… as the server read it from the file itself, not from the address.
+    #[serde(default, deserialize_with = "null_as_default")]
+    pub format: String,
+    /// More than one only for an animated picture.
+    #[serde(default, deserialize_with = "null_as_default")]
+    pub frame_count: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -336,6 +413,11 @@ pub struct PostEmbed {
     /// common) embed types don't fail this post's whole deserialization.
     #[serde(default)]
     pub data: Option<OpenGraphData>,
+    /// The picture's size and frame count, for an "image" or "markdown_image"
+    /// embed — see `PostMetadata`'s `From`. Absent from embeds cached before
+    /// it was kept, and from every other type.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub image: Option<PostImage>,
 }
 
 /// The subset of the real (much larger) Open Graph object this app
@@ -495,6 +577,60 @@ mod tests {
         assert_eq!(parsed.metadata.embeds.len(), 1);
         assert!(parsed.metadata.embeds[0].data.as_ref().unwrap().images.is_empty());
         assert_eq!(parsed.metadata.embeds[0].data.as_ref().unwrap().site_name, "Eldritch Café");
+    }
+
+    /// The shapes found on a real server: a GIF posted through the official
+    /// client's picker (Markdown, no embed), a bare GIF link ("image" embed),
+    /// and a link preview whose own picture is also in `images` and must not
+    /// turn into a second picture.
+    #[test]
+    fn linked_pictures_keep_their_size_and_frame_count() {
+        let post = serde_json::json!({
+            "id": "p1", "channel_id": "c1", "user_id": "u1",
+            "message": "![Enorme GIF](https://media3.giphy.com/a/200.gif?cid=1) https://media.giphy.com/b/giphy.gif https://example.com",
+            "create_at": 1000,
+            "metadata": {
+                "embeds": [
+                    { "type": "image", "url": "https://media.giphy.com/b/giphy.gif", "data": null },
+                    { "type": "opengraph", "url": "https://example.com",
+                      "data": { "title": "T", "images": [{ "url": "https://example.com/og.png", "secure_url": "" }] } }
+                ],
+                "images": {
+                    "https://media3.giphy.com/a/200.gif?cid=1": { "width": 356, "height": 200, "format": "gif", "frame_count": 31 },
+                    "https://media.giphy.com/b/giphy.gif": { "width": 480, "height": 270, "format": "gif", "frame_count": 12 },
+                    "https://example.com/og.png": { "width": 1200, "height": 630, "format": "png", "frame_count": 0 }
+                }
+            }
+        });
+
+        let parsed: Post = serde_json::from_value(post).unwrap();
+        let embeds = &parsed.metadata.embeds;
+        assert_eq!(embeds.len(), 3, "the preview's own picture must not become a third picture");
+
+        let bare = embeds.iter().find(|e| e.embed_type == "image").unwrap();
+        assert_eq!(bare.image.as_ref().map(|i| (i.width, i.frame_count)), Some((480, 12)));
+
+        let markdown = embeds.iter().find(|e| e.embed_type == "markdown_image").unwrap();
+        assert_eq!(markdown.url, "https://media3.giphy.com/a/200.gif?cid=1");
+        assert_eq!(markdown.image.as_ref().map(|i| (i.height, i.format.as_str())), Some((200, "gif")));
+
+        // What is cached is the folded form; reading it back must give the same thing.
+        let json = serde_json::to_string(&parsed.metadata).unwrap();
+        let again: PostMetadata = serde_json::from_str(&json).unwrap();
+        assert_eq!(again.embeds.len(), 3);
+        assert_eq!(again.embeds.iter().filter(|e| e.image.is_some()).count(), 2);
+    }
+
+    /// `"images": null`, and a map larger than anyone should post, stay harmless.
+    #[test]
+    fn linked_pictures_are_capped() {
+        let images: serde_json::Map<String, serde_json::Value> = (0..50)
+            .map(|i| (format!("https://x.example/{i:02}.gif"), serde_json::json!({ "width": 10, "height": 10, "format": "gif", "frame_count": 2 })))
+            .collect();
+        let metadata: PostMetadata = serde_json::from_value(serde_json::json!({ "images": images })).unwrap();
+        assert_eq!(metadata.embeds.len(), MAX_LINKED_IMAGES);
+        let none: PostMetadata = serde_json::from_value(serde_json::json!({ "images": null })).unwrap();
+        assert!(none.embeds.is_empty());
     }
 
     /// Mattermost's `PreviewPost`, as it rides in a message that links to

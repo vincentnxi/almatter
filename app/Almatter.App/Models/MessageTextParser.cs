@@ -318,6 +318,18 @@ public static partial class MessageTextParser
                 continue;
             }
 
+            // A Markdown picture, "![Enorme GIF](https://…)": the picture
+            // itself is shown under the text (see MainViewModel.BuildLinkedPictures),
+            // so here it is a plain link named by its alt text. "![](url)",
+            // with nothing to name it by, is the address.
+            if (c == '!' && TryReadMarkdownPicture(text, i, out var pictureLabel, out var pictureUrl, out var pictureLength))
+            {
+                FlushPlain(segments, plain, style);
+                segments.Add(new LinkSegment { Text = pictureLabel, LinkUrl = pictureUrl, Style = style });
+                i += pictureLength;
+                continue;
+            }
+
             if (c is '[' or 'h' or 'H' or '@' && LinkAtPattern().Match(text, i) is { Success: true } match)
             {
                 FlushPlain(segments, plain, style);
@@ -581,6 +593,48 @@ public static partial class MessageTextParser
     /// pair it with — "(see https://example.com/page)" loses it, while
     /// "https://en.wikipedia.org/wiki/Foo_(bar)" keeps the one that is part of it.
     /// </summary>
+    /// <summary>
+    /// "![alt](https://…)" starting at <paramref name="start"/>: read with the
+    /// same pattern as a Markdown link, one character further on. Empty alt
+    /// text, "![](https://…)", which that pattern doesn't take, is read here
+    /// by hand and named by its address.
+    /// </summary>
+    private static bool TryReadMarkdownPicture(string text, int start, out string label, out string url, out int length)
+    {
+        label = url = "";
+        length = 0;
+        if (start + 1 >= text.Length || text[start + 1] != '[')
+        {
+            return false;
+        }
+
+        if (LinkAtPattern().Match(text, start + 1) is { Success: true } match && match.Groups[1].Success)
+        {
+            label = PlainInline(match.Groups[1].Value);
+            url = match.Groups[2].Value;
+            length = 1 + match.Length;
+            return true;
+        }
+
+        if (text.AsSpan(start).StartsWith("![](", StringComparison.Ordinal))
+        {
+            var close = text.IndexOf(')', start + 4);
+            if (close < 0)
+            {
+                return false;
+            }
+            var address = text[(start + 4)..close];
+            if ((address.StartsWith("https://", StringComparison.OrdinalIgnoreCase) || address.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
+                && !address.AsSpan().ContainsAny(" \t\n<>\"("))
+            {
+                label = url = address;
+                length = close + 1 - start;
+                return true;
+            }
+        }
+        return false;
+    }
+
     private static string TrimUrlEnd(string url)
     {
         // Counted once and kept up to date as characters go, so a line of

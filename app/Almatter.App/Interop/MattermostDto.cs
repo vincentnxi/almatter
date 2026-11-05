@@ -93,6 +93,17 @@ public sealed class EmbedDto
     [JsonPropertyName("type")] public string Type { get; set; } = "";
     [JsonPropertyName("url")] public string Url { get; set; } = "";
     [JsonPropertyName("data")] public OpenGraphDataDto? Data { get; set; }
+
+    /// <summary>For an "image" or "markdown_image" embed — a picture the text links to — its size and frame count, as the server read them from the file.</summary>
+    [JsonPropertyName("image")] public EmbedImageDto? Image { get; set; }
+}
+
+public sealed class EmbedImageDto
+{
+    [JsonPropertyName("width")] public long Width { get; set; }
+    [JsonPropertyName("height")] public long Height { get; set; }
+    [JsonPropertyName("format")] public string Format { get; set; } = "";
+    [JsonPropertyName("frame_count")] public long FrameCount { get; set; }
 }
 
 public sealed class OpenGraphDataDto

@@ -51,6 +51,15 @@ public sealed partial class AppSettings : ObservableObject
     public partial List<string> FavoriteOrder { get; set; } = [];
 
     /// <summary>
+    /// Messages whose pictures the reader folded away, oldest first. Capped
+    /// (see MainViewModel.MaxRememberedCollapsedImages) so the file never
+    /// grows without end: the oldest fold is forgotten first, and that
+    /// message simply shows its pictures again.
+    /// </summary>
+    [ObservableProperty]
+    public partial List<string> CollapsedImagePostIds { get; set; } = [];
+
+    /// <summary>
     /// Softens the palette for long reading sessions — see
     /// ThemeDefinition.Softened. Applies to both themes: pure black on white
     /// and pure white on black are both tiring after a few hours.

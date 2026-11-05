@@ -10,6 +10,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
+using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
@@ -499,6 +500,64 @@ public partial class MainWindow : Window
         else
         {
             message.IsBodyExpanded = opening;
+        }
+    }
+
+    /// <summary>
+    /// The arrow above a message's pictures. Folding or unfolding changes the
+    /// row's height by up to a few hundred pixels, so the view is held on the
+    /// message the same way as for "Afficher la suite" above.
+    /// </summary>
+    private void OnImagesToggleClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Control { DataContext: MessageItem message } || DataContext is not MainViewModel vm)
+        {
+            return;
+        }
+        var collapsing = !message.AreImagesCollapsed;
+        if (!collapsing)
+        {
+            _messagesFollower?.Release();
+        }
+        _jumpTarget?.HoldInPlace(message, keepTopInView: collapsing);
+        vm.ToggleImagesCollapsedCommand.Execute(message);
+    }
+
+    /// <summary>
+    /// A playing GIF stops once it is out of sight: scrolled out of the view,
+    /// or its row taken off screen or handed to another message by the
+    /// virtualized list. The attachment last shown is kept in Tag, because
+    /// by the time the row says it now shows another one, the old one is gone
+    /// from its DataContext.
+    /// </summary>
+    private void OnPictureViewportChanged(object? sender, EffectiveViewportChangedEventArgs e)
+    {
+        if (sender is Control { DataContext: PictureItem { IsGifPlaying: true } attachment } control
+            && !e.EffectiveViewport.Intersects(new Rect(control.Bounds.Size))
+            && DataContext is MainViewModel vm)
+        {
+            vm.OnPictureOutOfSight(attachment);
+        }
+    }
+
+    private void OnPictureDataContextChanged(object? sender, EventArgs e)
+    {
+        if (sender is not Control control)
+        {
+            return;
+        }
+        if (control.Tag is PictureItem previous && !ReferenceEquals(previous, control.DataContext) && DataContext is MainViewModel vm)
+        {
+            vm.OnPictureOutOfSight(previous);
+        }
+        control.Tag = control.DataContext as PictureItem;
+    }
+
+    private void OnPictureDetached(object? sender, VisualTreeAttachmentEventArgs e)
+    {
+        if (sender is Control { DataContext: PictureItem attachment } && DataContext is MainViewModel vm)
+        {
+            vm.OnPictureOutOfSight(attachment);
         }
     }
 
@@ -1019,6 +1078,12 @@ public partial class MainWindow : Window
         {
             var inForeground = (isActive ?? IsActive) && WindowState != WindowState.Minimized;
             vm.WindowIsInForeground = inForeground;
+            // Only minimised, not merely behind another window: a GIF on a
+            // second screen can be watched without the window having focus.
+            if (WindowState == WindowState.Minimized || !IsVisible)
+            {
+                vm.StopGifPlayback();
+            }
             if (inForeground)
             {
                 _pendingMemoryTrim?.Cancel();

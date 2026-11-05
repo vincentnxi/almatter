@@ -2254,6 +2254,7 @@ mod tests {
                     images: vec![OpenGraphImage { url: "https://example.com/img.png".into(), secure_url: "".into() }],
                     ..Default::default()
                 }),
+                image: None,
             }],
             ..Default::default()
         };
@@ -2273,7 +2274,7 @@ mod tests {
         use crate::models::{PostEmbed, PostMetadata};
 
         let db = Database::open_in_memory().unwrap();
-        let embed = |url: &str| PostEmbed { embed_type: "opengraph".into(), url: url.into(), data: None };
+        let embed = |url: &str| PostEmbed { embed_type: "opengraph".into(), url: url.into(), data: None, image: None };
         let post = Post {
             id: "p1".into(),
             channel_id: "c1".into(),

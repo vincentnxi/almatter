@@ -72,6 +72,13 @@ public sealed partial class Strings
     public required string SaveAttachmentDialogTitle { get; init; }
     public required Func<string, string> SaveAttachmentFailed { get; init; }
     public required Func<int, string> ReplyCount { get; init; }
+    /// <summary>The line above several pictures in a message, which folds them away.</summary>
+    public required Func<int, string> ImageCount { get; init; }
+    public required string CollapseImages { get; init; }
+    public required string ExpandImages { get; init; }
+    /// <summary>What a click on an attached GIF does, shown in its tooltip.</summary>
+    public required string PlayGif { get; init; }
+    public required string StopGif { get; init; }
     public required string Edit { get; init; }
     public required string Delete { get; init; }
     public required string AddReaction { get; init; }
