@@ -36,6 +36,8 @@ fraction of that, and to stay usable on older machines.
   messages, a channel's member list.
 - **Attachments** — attach files, drag them onto the window, or paste images and files
   straight into the composer. Pasting from a web page keeps its links.
+- **Pictures** — a message's pictures can be folded away, GIFs play on a click (one at a
+  time), and a picture whose address is in the text (such as a Giphy GIF) shows under it.
 - **Link previews**, with a setting to turn them off.
 - **Search** messages, find a conversation by name from the sidebar (Ctrl+K), browse and
   join channels, start direct messages.
@@ -81,8 +83,9 @@ delete your data (saved sign-in, settings, cached messages). That data lives in
 ## Privacy and security
 
 - There is **no telemetry, analytics or third-party service**. Almatter talks to the
-  Mattermost server you sign in to, with one exception: a link preview's image is
-  downloaded from the linked website itself, like a browser would — never from an address
+  Mattermost server you sign in to, with one exception: the image of a link preview, and a
+  picture whose address is written in a message, are downloaded from the website that
+  hosts them, like a browser would — never from an address
   on your own computer or local network, whatever the page asks for. Turning link previews
   off in the settings stops that.
 - Your password is never stored. The session token is saved encrypted with Windows' data
@@ -233,6 +236,9 @@ rester utilisable sur des machines anciennes.
   d'un canal.
 - **Pièces jointes** — joindre des fichiers, les glisser sur la fenêtre, ou coller
   directement images et fichiers dans la zone de saisie. Un texte collé depuis une page web garde ses liens.
+- **Images** — les images d'un message peuvent être repliées, les GIF s'animent d'un clic
+  (un seul à la fois), et une image dont l'adresse figure dans le texte (un GIF Giphy,
+  par exemple) s'affiche en dessous.
 - **Aperçus de liens**, désactivables dans les réglages.
 - **Recherche** dans les messages, conversation retrouvée par son nom depuis la barre
   latérale (Ctrl+K), parcours et ajout de canaux, messages directs.
@@ -282,7 +288,8 @@ données se trouvent dans `%LOCALAPPDATA%\Almatter`.
 
 - **Aucune télémétrie, aucune mesure d'audience, aucun service tiers.** Almatter
   communique avec le serveur Mattermost auquel vous vous connectez, à une exception
-  près : l'image d'un aperçu de lien est téléchargée depuis le site du lien lui-même,
+  près : l'image d'un aperçu de lien, et une image dont l'adresse est écrite dans un
+  message, sont téléchargées depuis le site qui les héberge,
   comme le ferait un navigateur — jamais depuis une adresse de votre ordinateur ou de
   votre réseau local, quoi que la page demande. Désactiver les aperçus de liens dans les
   réglages supprime ces téléchargements.
