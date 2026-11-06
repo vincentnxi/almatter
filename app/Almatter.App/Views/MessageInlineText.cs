@@ -268,7 +268,9 @@ public sealed class MessageInlineText : SelectableTextBlock
                 break;
         }
 
-        if (segment.Style.HasFlag(TextStyle.Bold))
+        // A link keeps its normal weight inside **bold**: the colour and underline
+        // already make it stand out, and a bold underlined link reads as heavy.
+        if (segment.Style.HasFlag(TextStyle.Bold) && segment is not LinkSegment)
         {
             run.FontWeight = FontWeight.Bold;
         }
