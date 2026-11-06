@@ -22,7 +22,7 @@ desktop app is an Electron wrapper that routinely uses 500–600 MB of memory; A
 aims to do the everyday work — reading, writing, threads, search, notifications — in a
 fraction of that, and to stay usable on older machines.
 
-> **Status: early pre-release (0.11.1).** It is used daily, but expect rough edges.
+> **Status: early pre-release (0.12.0).** It is used daily, but expect rough edges.
 > The interface is available **in English and French**, switchable in the settings.
 
 ## Features
@@ -49,7 +49,8 @@ fraction of that, and to stay usable on older machines.
   only ones that make a sound, unless you ask for a sound on every message — an unread badge on the taskbar icon, a title bar that
   follows the theme.
 - **Appearance** — light and dark themes (or follow Windows), six accent colours, a
-  reduced-contrast mode, adjustable message font size, and a choice between the official
+  reduced-contrast mode, ten named colour themes (Catppuccin, Nord, Rosé Pine, Tokyo Night
+  and others), adjustable message font size, and a choice between the official
   client's Open Sans, Lato and the system UI font.
 
 ### Not supported (yet)
@@ -219,7 +220,7 @@ de mémoire. Almatter vise à assurer l'usage quotidien — lire, écrire, suivr
 chercher, recevoir les notifications — pour une fraction de cette consommation, et à
 rester utilisable sur des machines anciennes.
 
-> **État : préversion (0.11.1).** Utilisé au quotidien, mais tout n'est pas encore poli.
+> **État : préversion (0.12.0).** Utilisé au quotidien, mais tout n'est pas encore poli.
 > L'interface est disponible **en français et en anglais**, au choix dans les réglages.
 
 ## Fonctionnalités
@@ -250,7 +251,8 @@ rester utilisable sur des machines anciennes.
   réactions) marquées 🔔 et seules à faire du bruit, sauf si vous demandez un son pour tous les messages —, pastille de non-lus sur l'icône de
   la barre des tâches, barre de titre assortie au thème.
 - **Apparence** — thèmes clair et sombre (ou celui de Windows), six couleurs
-  d'accentuation, mode contraste réduit, taille du texte des messages réglable, et choix
+  d'accentuation, mode contraste réduit, dix thèmes de couleurs (Catppuccin, Nord,
+  Rosé Pine, Tokyo Night et d'autres), taille du texte des messages réglable, et choix
   entre Open Sans (la police du client officiel), Lato et la police système.
 
 ### Pas encore pris en charge
