@@ -29,6 +29,8 @@
     <Window.Resources>
         <SolidColorBrush x:Key="BgAppBrush" Color="#FCFCFD" />
         <SolidColorBrush x:Key="BgPanelBrush" Color="#F5F6F8" />
+        <SolidColorBrush x:Key="SidebarGroundBrush" Color="#F5F6F8" />
+        <SolidColorBrush x:Key="ThreadGroundBrush" Color="#FCFCFD" />
         <SolidColorBrush x:Key="BgRailBrush" Color="#EDEFF3" />
         <SolidColorBrush x:Key="BgHoverBrush" Color="#ECEEF2" />
         <SolidColorBrush x:Key="DividerBrush" Color="#E6E8EC" />
@@ -494,7 +496,10 @@
         </Style>
     </Window.Styles>
 
-    <Grid x:Name="AppGrid" Background="{DynamicResource BgAppBrush}">
+    <!-- Transparent: the window paints the solid ground (ThemeResources) and
+         GroundBackdrop the gradient, if any; painting BgApp here too would
+         only cover them. -->
+    <Grid x:Name="AppGrid" Background="Transparent">
         <Grid.ColumnDefinitions>
             <!-- Width is restored from (and saved back to) settings by the
                  code-behind; the bounds live here so a dragged splitter can
@@ -505,9 +510,12 @@
             <ColumnDefinition Width="Auto" />
         </Grid.ColumnDefinitions>
 
+        <!-- A gradient theme's ground, behind all three columns. Draws
+             nothing for the other themes. -->
+        <views:GroundBackdrop Grid.Column="0" Grid.ColumnSpan="3" Palette="{DynamicResource GroundTheme}" />
 
         <!-- SIDEBAR -->
-        <Border Grid.Column="0" Background="{DynamicResource BgPanelBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,1,0">
+        <Border Grid.Column="0" Background="{DynamicResource SidebarGroundBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,1,0">
             <Grid RowDefinitions="Auto,Auto,*,Auto">
 
                 <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="6" Margin="14,14,14,8">
@@ -1315,7 +1323,7 @@
 
         <!-- THREAD PANEL — only takes up space (an Auto-sized column) while a thread is actually open, per user request. -->
         <Border x:Name="ThreadPanel" Grid.Column="2" Width="320" IsVisible="{Binding IsThreadOpen}"
-                Background="{DynamicResource BgAppBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1,0,0,0">
+                Background="{DynamicResource ThreadGroundBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1,0,0,0">
             <Grid RowDefinitions="52,*,Auto">
                 <Border Grid.Row="0" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1" Padding="14,0">
                     <!-- The channel name takes only what's left and trims: a group

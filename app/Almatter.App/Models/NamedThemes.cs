@@ -32,6 +32,15 @@ public sealed record NamedPalette
 
     /// <summary>The "online" presence dot. Most palette files have no green; those fall back to Almatter's own.</summary>
     public string? Online { get; init; }
+
+    /// <summary>
+    /// Top and bottom of a gradient drawn behind the whole window, or null
+    /// for a plain one. When set, Window, Panel and Surface are still needed:
+    /// they are the solid colours for the places a gradient can't go (code
+    /// blocks, cards, rings around presence dots), so pick them to sit on it.
+    /// </summary>
+    public string? GroundTop { get; init; }
+    public string? GroundBottom { get; init; }
 }
 
 /// <summary>
@@ -45,8 +54,9 @@ public sealed record NamedPalette
 ///
 /// fastframe's eighth palette, Ristretto, is deliberately missing: its colours
 /// are Monokai Pro's "Ristretto" filter, whose licence forbids redistribution.
-/// The last three (Expresso, Cardamome, Crème) were designed for Almatter
-/// instead, from scratch, and are under the app's own licence.
+/// The last five (Expresso, Cardamome, Crème, and the gradient ones
+/// Crépuscule and Aube) were designed for Almatter instead, from scratch,
+/// and are under the app's own licence.
 /// </summary>
 public static class NamedThemes
 {
@@ -138,6 +148,26 @@ public static class NamedThemes
             Window = "#f7f1ea", Panel = "#efe6dc", Surface = "#e8ddd1", SurfaceHover = "#e2d6c9", SurfaceActive = "#d3c5b6",
             Outline = "#ddd0c2", Text = "#2e2520", Secondary = "#6b5d53", Dim = "#8c7d72",
             Accent = "#9a5428", OnAccent = "#fffaf4", Danger = "#b8392b", Warning = "#a86a00", Online = "#3d8a4f",
+        },
+
+        // The gradient pair: the ground fades from a cooler top to a dark
+        // bottom across the whole window. Window is the bottom; Panel is
+        // roughly what the sidebar's veil gives over the gradient's middle.
+        new()
+        {
+            Id = AppNamedTheme.Crepuscule, Name = "Crépuscule", IsDark = true,
+            GroundTop = "#3b3650", GroundBottom = "#1f1a1f",
+            Window = "#1f1a1f", Panel = "#221e2a", Surface = "#2e2938", SurfaceHover = "#36303f", SurfaceActive = "#453e50",
+            Outline = "#38323f", Text = "#efe7e6", Secondary = "#bdb2b4", Dim = "#958a8e",
+            Accent = "#f7a382", OnAccent = "#1f1a1f", Danger = "#ef6f6f", Warning = "#e8bb5c", Online = "#8fc77a",
+        },
+        new()
+        {
+            Id = AppNamedTheme.Aube, Name = "Aube", IsDark = true,
+            GroundTop = "#463440", GroundBottom = "#1e1b1f",
+            Window = "#1e1b1f", Panel = "#261e24", Surface = "#32282f", SurfaceHover = "#3a3037", SurfaceActive = "#4a3e46",
+            Outline = "#3b3138", Text = "#f0e7ea", Secondary = "#c0b2b8", Dim = "#978a90",
+            Accent = "#f4ad72", OnAccent = "#1e1b1f", Danger = "#ee6e74", Warning = "#e5c15e", Online = "#8cc483",
         },
     ];
 

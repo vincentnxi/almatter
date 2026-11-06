@@ -48,7 +48,8 @@ public sealed partial class NamedThemeOption : ObservableObject
     {
         if (Palette is { } p)
         {
-            GroundDot = ColorTokens.Solid(p.Window);
+            // A gradient theme's dot shows its gradient, top to bottom.
+            GroundDot = ColorTokens.Ground(ThemeDefinition.FromPalette(p));
             TextDot = ColorTokens.Solid(p.Text);
             AccentDot = ColorTokens.Solid(p.Accent);
         }

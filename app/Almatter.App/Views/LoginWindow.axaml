@@ -3,6 +3,7 @@
         xmlns:vm="using:Almatter.App.ViewModels"
         xmlns:conv="using:Avalonia.Data.Converters"
         xmlns:loc="using:Almatter.App.Localization"
+        xmlns:views="using:Almatter.App.Views"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d" d:DesignWidth="420" d:DesignHeight="480"
@@ -53,6 +54,10 @@
         </Style>
     </Window.Styles>
 
+    <Panel>
+    <!-- A gradient theme's ground, as in the main window. -->
+    <views:GroundBackdrop Palette="{DynamicResource GroundTheme}" />
+
     <StackPanel Margin="40" Spacing="4" VerticalAlignment="Center">
 
         <Image Source="/Assets/almatter-logo.png" Width="48" Height="48" HorizontalAlignment="Center" Margin="0,0,0,12" />
@@ -87,4 +92,5 @@
         </StackPanel>
 
     </StackPanel>
+    </Panel>
 </Window>

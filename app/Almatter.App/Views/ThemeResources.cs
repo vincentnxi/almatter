@@ -45,8 +45,17 @@ internal static class ThemeResources
         resources["BgAppBrush"] = ColorTokens.Solid(theme.BgApp);
         resources["BgPanelBrush"] = ColorTokens.Solid(theme.BgPanel);
         resources["BgRailBrush"] = ColorTokens.Solid(theme.BgRail);
-        resources["BgHoverBrush"] = ColorTokens.Solid(theme.BgHover);
-        resources["DividerBrush"] = ColorTokens.Solid(theme.Divider);
+        var gradient = theme.HasGradientGround;
+        resources["BgHoverBrush"] = ColorTokens.Solid(gradient ? ColorTokens.GradientHoverHex : theme.BgHover);
+        resources["DividerBrush"] = ColorTokens.Divider;
+
+        // The three big areas. On a gradient theme GroundBackdrop paints the
+        // gradient once behind everything; the sidebar lays a dark veil over
+        // it and the thread panel lets it through, so it runs across the
+        // whole window.
+        resources["GroundTheme"] = theme;
+        resources["SidebarGroundBrush"] = gradient ? ColorTokens.Solid(ColorTokens.GradientSidebarVeilHex) : ColorTokens.Solid(theme.BgPanel);
+        resources["ThreadGroundBrush"] = gradient ? Brushes.Transparent : ColorTokens.Solid(theme.BgApp);
         resources["DividerStrongBrush"] = ColorTokens.Solid(theme.DividerStrong);
         resources["TextPrimaryBrush"] = ColorTokens.TextPrimary;
         resources["TextSecondaryBrush"] = ColorTokens.TextSecondary;
@@ -76,6 +85,9 @@ internal static class ThemeResources
         // The window's own chrome-level colors aren't reachable through
         // DynamicResource on the Window element itself in XAML (they'd be
         // resolved against the dictionary being replaced), so set them here.
+        // A gradient theme's gradient is drawn on top of this by the window's
+        // GroundBackdrop (much cheaper than a gradient brush on the CPU);
+        // the solid colour is what shows for every other theme.
         window.Background = ColorTokens.Solid(theme.BgApp);
         window.Foreground = ColorTokens.TextPrimary;
     }

@@ -67,6 +67,15 @@ public sealed record ThemeDefinition
     public required double RowRadius { get; init; }
     public required double SurfaceRadius { get; init; }
 
+    /// <summary>
+    /// Top and bottom of a gradient behind the whole window, or both null
+    /// for the usual solid BgApp. Only some named themes have one.
+    /// </summary>
+    public string? GroundTopHex { get; init; }
+    public string? GroundBottomHex { get; init; }
+
+    public bool HasGradientGround => GroundTopHex is not null && GroundBottomHex is not null;
+
     public static readonly ThemeDefinition Light = new()
     {
         Name = "Clair",
@@ -206,6 +215,8 @@ public sealed record ThemeDefinition
             PresenceOfflineHex = p.Dim,
             RowRadius = basis.RowRadius,
             SurfaceRadius = basis.SurfaceRadius,
+            GroundTopHex = p.GroundTop,
+            GroundBottomHex = p.GroundBottom,
         };
     }
 
@@ -262,12 +273,14 @@ public sealed record ThemeDefinition
         PresenceOfflineHex = PresenceOfflineHex,
         RowRadius = RowRadius,
         SurfaceRadius = SurfaceRadius,
+        GroundTopHex = GroundTopHex is null ? null : TowardMidGrey(GroundTopHex),
+        GroundBottomHex = GroundBottomHex is null ? null : TowardMidGrey(GroundBottomHex),
     };
 
     private static string TowardMidGrey(string hex) => Mix(hex, "#808080", SurfaceSoftening);
 
     /// <summary>Blends two "#RRGGBB" strings. Alpha-prefixed values (the scrim) are never passed through here.</summary>
-    private static string Mix(string from, string to, double amount)
+    internal static string Mix(string from, string to, double amount)
     {
         static int Channel(string hex, int index) => Convert.ToInt32(hex.Substring(1 + index * 2, 2), 16);
 

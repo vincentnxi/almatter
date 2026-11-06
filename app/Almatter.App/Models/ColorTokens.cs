@@ -59,6 +59,50 @@ public static class ColorTokens
         TextTertiary = Solid(theme.TextTertiary);
         CardBg = Solid(theme.CardBg);
         Divider = Solid(theme.Divider);
+
+        // Over a gradient, a solid selection or divider would be right at one
+        // height of the window and a visible patch at another. See-through
+        // ones pick up whatever is under them.
+        if (theme.HasGradientGround)
+        {
+            AccentSoft = new SolidColorBrush(Color.FromArgb(GradientAccentSoftAlpha, accentColor.R, accentColor.G, accentColor.B));
+            Divider = Solid(GradientDividerHex);
+        }
+    }
+
+    /// <summary>About 20 % of the accent: the selected-row tint on a gradient ground.</summary>
+    public const byte GradientAccentSoftAlpha = 0x33;
+
+    /// <summary>Lines and hover on a gradient ground: a thin white veil.</summary>
+    public const string GradientDividerHex = "#17FFFFFF";
+    public const string GradientHoverHex = "#14FFFFFF";
+
+    /// <summary>The sidebar's darker veil over the gradient.</summary>
+    public const string GradientSidebarVeilHex = "#2E000000";
+
+    /// <summary>
+    /// A theme's ground as a brush, for small swatches such as the theme
+    /// menu's dots: the gradient when the theme has one (with a stop at 40 %,
+    /// as GroundBackdrop draws it), otherwise plain BgApp. Not for the window
+    /// itself: on the CPU a gradient brush that size is slow, see GroundBackdrop.
+    /// </summary>
+    public static IBrush Ground(ThemeDefinition theme)
+    {
+        if (theme.GroundTopHex is not { } top || theme.GroundBottomHex is not { } bottom)
+        {
+            return Solid(theme.BgApp);
+        }
+        return new LinearGradientBrush
+        {
+            StartPoint = new Avalonia.RelativePoint(0, 0, Avalonia.RelativeUnit.Relative),
+            EndPoint = new Avalonia.RelativePoint(0, 1, Avalonia.RelativeUnit.Relative),
+            GradientStops =
+            {
+                new GradientStop(Color.Parse(top), 0),
+                new GradientStop(Color.Parse(ThemeDefinition.Mix(top, bottom, 0.6)), 0.4),
+                new GradientStop(Color.Parse(bottom), 1),
+            },
+        };
     }
 
     private static Color Lerp(Color from, Color to, double amount)

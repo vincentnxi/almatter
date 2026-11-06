@@ -23,4 +23,6 @@ public enum AppNamedTheme
     Expresso = 8,
     Cardamome = 9,
     Creme = 10,
+    Crepuscule = 11,
+    Aube = 12,
 }
