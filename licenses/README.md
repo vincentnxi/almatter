@@ -16,3 +16,11 @@ Bundled third-party assets keep their own licences, reproduced here:
   what Almatter carries is the generated shortcode table. That list is the one
   Mattermost itself is built on, which is what makes ":smirk_cat:" draw the
   same emoji here as in the official client.
+- `theme-palettes-MIT.txt` — the colour values of seven named themes
+  (Catppuccin, Catppuccin Latte, Nord, Rosé Pine, Rosé Pine Moon, Rosé Pine
+  Dawn, Tokyo Night), taken from fastframe-theme
+  (https://github.com/crmne/fastframe) and the original schemes it adapts, all
+  MIT. No file of theirs is shipped: the values are copied into
+  `app/Almatter.App/Models/NamedThemes.cs`. fastframe's eighth palette,
+  Ristretto, is left out on purpose: its colours are Monokai Pro's, whose
+  licence forbids redistribution.

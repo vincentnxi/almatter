@@ -201,6 +201,11 @@ public sealed partial class Strings
     public required string AccentViolet { get; init; }
     public required string ReducedContrast { get; init; }
     public required string ReducedContrastHint { get; init; }
+    public required string SettingsTheme { get; init; }
+    public required string ThemeAlmatterTag { get; init; }
+    public required string ThemeHintNone { get; init; }
+    public required Func<string, string> ThemeHintActive { get; init; }
+    public required Func<string, string> ThemeLockedNote { get; init; }
     public required string SettingsFont { get; init; }
     public required string FontSystem { get; init; }
     public required string FontMattermostHint { get; init; }

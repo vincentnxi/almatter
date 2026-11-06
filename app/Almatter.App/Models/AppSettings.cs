@@ -71,6 +71,16 @@ public sealed partial class AppSettings : ObservableObject
     [ObservableProperty]
     public partial AppAccent Accent { get; set; } = AppAccent.Blue;
 
+    /// <summary>
+    /// A named theme (Nord, Expresso…), or None for Almatter's own palette.
+    /// While one is chosen it decides what ThemeMode, Accent and
+    /// ReducedContrast normally do. Those three keep their saved values all
+    /// the same, so going back to None brings the user's own look back as
+    /// they left it.
+    /// </summary>
+    [ObservableProperty]
+    public partial AppNamedTheme NamedTheme { get; set; } = AppNamedTheme.None;
+
     /// <summary>Called after the palette changes so the ticked boxes of the settings panel take the new accent.</summary>
     public void RefreshColors()
     {

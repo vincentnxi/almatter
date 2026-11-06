@@ -133,8 +133,21 @@ public sealed record ThemeDefinition
     /// palette last: only its hue is the user's choice, the shade comes from
     /// whether the palette is light or dark (see AccentPalette).
     /// </summary>
-    public static ThemeDefinition Resolve(AppThemeMode mode, bool systemPrefersDark, bool reducedContrast = false, AppAccent accent = AppAccent.Blue)
+    public static ThemeDefinition Resolve(
+        AppThemeMode mode,
+        bool systemPrefersDark,
+        bool reducedContrast = false,
+        AppAccent accent = AppAccent.Blue,
+        AppNamedTheme named = AppNamedTheme.None)
     {
+        // A named theme decides everything on its own: the mode, the accent
+        // and the softening are left out, not lost — they are still saved,
+        // and apply again once the choice goes back to None.
+        if (NamedThemes.Find(named) is { } palette)
+        {
+            return FromPalette(palette);
+        }
+
         var theme = mode switch
         {
             AppThemeMode.Light => Light,
@@ -146,6 +159,54 @@ public sealed record ThemeDefinition
             theme = theme.Softened();
         }
         return theme with { AccentHex = AccentPalette.Hex(accent, theme.IsDark) };
+    }
+
+    /// <summary>
+    /// A named theme's palette in Almatter's terms. Most tokens map one to
+    /// one; the ones a palette file has no word for are derived from it,
+    /// so that every theme gets them without anyone having to pick them:
+    ///
+    /// - the hover tint sits halfway between the panel and the palette's own
+    ///   hover colour, which keeps Almatter's rule that hovering is lighter
+    ///   than the inset fields (some palettes push their hover much further);
+    /// - cards and popovers lift a little off the window toward the text on a
+    ///   dark palette, and toward white on a light one, as Almatter's own do;
+    /// - the error banner is the danger colour washed into the window;
+    /// - shadows, radii and, unless the palette has a green, the "online"
+    ///   dot are Almatter's own for the same lightness.
+    /// </summary>
+    public static ThemeDefinition FromPalette(NamedPalette p)
+    {
+        var basis = p.IsDark ? Dark : Light;
+        return new ThemeDefinition
+        {
+            Name = p.Name,
+            IsDark = p.IsDark,
+            BgApp = p.Window,
+            BgPanel = p.Panel,
+            BgRail = p.Surface,
+            BgHover = Mix(p.Panel, p.SurfaceHover, 0.5),
+            Divider = p.Outline,
+            DividerStrong = p.SurfaceActive,
+            TextPrimary = p.Text,
+            TextSecondary = p.Secondary,
+            TextTertiary = p.Dim,
+            CardBg = p.IsDark ? Mix(p.Window, p.Text, 0.05) : Mix(p.Window, "#FFFFFF", 0.6),
+            AccentHex = p.Accent,
+            OnAccentHex = p.OnAccent,
+            DangerHex = p.Danger,
+            DangerSoftHex = Mix(p.Window, p.Danger, p.IsDark ? 0.12 : 0.08),
+            DangerBorderHex = Mix(p.Window, p.Danger, p.IsDark ? 0.32 : 0.24),
+            ScrimHex = "#B3" + p.Window[1..],
+            PopoverShadow = basis.PopoverShadow,
+            CardShadow = basis.CardShadow,
+            PresenceOnlineHex = p.Online ?? basis.PresenceOnlineHex,
+            PresenceAwayHex = p.Warning,
+            PresenceDndHex = p.Danger,
+            PresenceOfflineHex = p.Dim,
+            RowRadius = basis.RowRadius,
+            SurfaceRadius = basis.SurfaceRadius,
+        };
     }
 
     /// <summary>How far the surfaces move toward mid-grey: the light palette dims, the dark one lifts off pure black.</summary>

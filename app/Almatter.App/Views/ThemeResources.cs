@@ -26,12 +26,17 @@ internal static class ThemeResources
     {
         if (Application.Current is { } app)
         {
-            app.RequestedThemeVariant = settings.ThemeMode switch
-            {
-                AppThemeMode.Light => ThemeVariant.Light,
-                AppThemeMode.Dark => ThemeVariant.Dark,
-                _ => ThemeVariant.Default,
-            };
+            // A named theme is light or dark by nature, whatever the mode
+            // setting says. That also gives context menus the right one of
+            // their two looks: they stay system-styled on purpose (App.axaml).
+            app.RequestedThemeVariant = NamedThemes.Find(settings.NamedTheme) is { } named
+                ? (named.IsDark ? ThemeVariant.Dark : ThemeVariant.Light)
+                : settings.ThemeMode switch
+                {
+                    AppThemeMode.Light => ThemeVariant.Light,
+                    AppThemeMode.Dark => ThemeVariant.Dark,
+                    _ => ThemeVariant.Default,
+                };
         }
 
         var theme = ColorTokens.Theme;

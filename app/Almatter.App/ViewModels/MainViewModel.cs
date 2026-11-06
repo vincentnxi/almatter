@@ -807,6 +807,37 @@ public partial class MainViewModel : ViewModelBase
         new() { Accent = AppAccent.Violet },
     ];
 
+    /// <summary>The theme menu's rows: Almatter's own palette first, then every named theme.</summary>
+    public ObservableCollection<NamedThemeOption> NamedThemeOptions { get; } =
+    [
+        new() { Theme = AppNamedTheme.None },
+        .. NamedThemes.All.Select(p => new NamedThemeOption { Theme = p.Id, Palette = p }),
+    ];
+
+    /// <summary>Whether the theme menu under the THÈME heading is dropped down.</summary>
+    [ObservableProperty]
+    public partial bool IsThemeMenuOpen { get; set; }
+
+    /// <summary>
+    /// A named theme is in force. Checked against the catalogue rather than
+    /// just "not None": a saved number this version doesn't know draws
+    /// Almatter's own palette, so it must not lock the appearance settings.
+    /// </summary>
+    public bool IsNamedThemeActive => NamedThemes.Find(Settings.NamedTheme) is not null;
+
+    /// <summary>The appearance settings a named theme overrides are shown greyed out, not hidden: the user can still see what they will get back.</summary>
+    public double AppearanceOpacity => IsNamedThemeActive ? 0.42 : 1;
+
+    /// <summary>The row the closed menu shows.</summary>
+    public NamedThemeOption CurrentNamedThemeOption =>
+        NamedThemeOptions.FirstOrDefault(o => o.IsSelected) ?? NamedThemeOptions[0];
+
+    public string NamedThemeLockNote => Loc.S.ThemeLockedNote(CurrentNamedThemeOption.Name);
+
+    public string NamedThemeHint => IsNamedThemeActive
+        ? Loc.S.ThemeHintActive(CurrentNamedThemeOption.Name)
+        : Loc.S.ThemeHintNone;
+
     /// <summary>
     /// Raised whenever the theme/accent changes — MainWindow's code-behind
     /// applies the full window-resource palette, font and shape tokens in
@@ -927,7 +958,7 @@ public partial class MainViewModel : ViewModelBase
         InitializeEmojiPicker();
         Settings.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName is nameof(AppSettings.ThemeMode) or nameof(AppSettings.ReducedContrast) or nameof(AppSettings.Accent))
+            if (e.PropertyName is nameof(AppSettings.ThemeMode) or nameof(AppSettings.ReducedContrast) or nameof(AppSettings.Accent) or nameof(AppSettings.NamedTheme))
             {
                 ApplyTheme();
             }
@@ -4645,6 +4676,27 @@ public partial class MainViewModel : ViewModelBase
     private void SetAccent(AppAccent accent) => Settings.Accent = accent;
 
     [RelayCommand]
+    private void ToggleThemeMenu() => IsThemeMenuOpen = !IsThemeMenuOpen;
+
+    /// <summary>
+    /// Leaves the menu open on purpose: people rarely like the first theme
+    /// they try, and the whole window repaints behind the menu, so they can
+    /// go down the list one click at a time. A click anywhere else closes it.
+    /// </summary>
+    [RelayCommand]
+    private void SetNamedTheme(AppNamedTheme theme) => Settings.NamedTheme = theme;
+
+    // The menu is a popup of its own: left open, it would stay on screen
+    // after the settings panel it belongs to has gone.
+    partial void OnIsSettingsOpenChanged(bool value)
+    {
+        if (!value)
+        {
+            IsThemeMenuOpen = false;
+        }
+    }
+
+    [RelayCommand]
     private void SetLanguage(AppLanguage language) => Settings.Language = language;
 
     private void RefreshLanguageSelection()
@@ -4679,6 +4731,12 @@ public partial class MainViewModel : ViewModelBase
         {
             option.RefreshLanguage();
         }
+        foreach (var option in NamedThemeOptions)
+        {
+            option.RefreshLanguage();
+        }
+        OnPropertyChanged(nameof(NamedThemeLockNote));
+        OnPropertyChanged(nameof(NamedThemeHint));
         foreach (var option in FontChoiceOptions)
         {
             option.RefreshLanguage();
@@ -4748,7 +4806,7 @@ public partial class MainViewModel : ViewModelBase
     private void ApplyTheme()
     {
         ColorTokens.ApplyTheme(
-            ThemeDefinition.Resolve(Settings.ThemeMode, SystemTheme.PrefersDark, Settings.ReducedContrast, Settings.Accent));
+            ThemeDefinition.Resolve(Settings.ThemeMode, SystemTheme.PrefersDark, Settings.ReducedContrast, Settings.Accent, Settings.NamedTheme));
 
         foreach (var option in ThemeOptions)
         {
@@ -4762,6 +4820,21 @@ public partial class MainViewModel : ViewModelBase
             option.RefreshColors();
         }
         Settings.RefreshColors();
+
+        // The "Almatter" row previews the app's own palette as the user's
+        // settings make it, whichever theme is in force right now.
+        var almatterPalette = ThemeDefinition.Resolve(Settings.ThemeMode, SystemTheme.PrefersDark, Settings.ReducedContrast, Settings.Accent);
+        var selectedTheme = IsNamedThemeActive ? Settings.NamedTheme : AppNamedTheme.None;
+        foreach (var option in NamedThemeOptions)
+        {
+            option.IsSelected = option.Theme == selectedTheme;
+            option.RefreshColors(almatterPalette);
+        }
+        OnPropertyChanged(nameof(IsNamedThemeActive));
+        OnPropertyChanged(nameof(AppearanceOpacity));
+        OnPropertyChanged(nameof(CurrentNamedThemeOption));
+        OnPropertyChanged(nameof(NamedThemeLockNote));
+        OnPropertyChanged(nameof(NamedThemeHint));
 
         foreach (var option in SkinToneOptions)
         {

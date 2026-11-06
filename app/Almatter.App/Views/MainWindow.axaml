@@ -1744,6 +1744,15 @@
 
                 <StackPanel Spacing="6">
                     <TextBlock Text="{Binding T.SettingsAppearance, Source={x:Static loc:Loc.Instance}}" FontSize="10.5" FontWeight="Bold" Foreground="{DynamicResource TextTertiaryBrush}" />
+                    <!-- While a named theme is chosen it decides the mode, the
+                         accent and the contrast: those are greyed out but kept,
+                         so the user still sees what they will get back. -->
+                    <StackPanel Orientation="Horizontal" Spacing="6" IsVisible="{Binding IsNamedThemeActive}">
+                        <Path Data="M5 11h14v10H5zM8 11V7a4 4 0 0 1 8 0v4" Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="2"
+                              StrokeLineCap="Round" StrokeJoin="Round" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding NamedThemeLockNote}" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" />
+                    </StackPanel>
+                    <StackPanel Spacing="6" IsEnabled="{Binding !IsNamedThemeActive}" Opacity="{Binding AppearanceOpacity}">
                     <ItemsControl ItemsSource="{Binding ThemeOptions}">
                         <ItemsControl.ItemsPanel>
                             <ItemsPanelTemplate>
@@ -1814,6 +1823,65 @@
                             </Grid>
                         </Border>
                     </Button>
+                    </StackPanel>
+                </StackPanel>
+
+                <!-- Named themes, as a drop-down rather than a grid of tiles:
+                     the list is expected to grow, and a menu stays one line
+                     high however long it gets. Each row shows the theme's
+                     ground, text and accent as three overlapping dots. -->
+                <StackPanel Spacing="6">
+                    <TextBlock Text="{Binding T.SettingsTheme, Source={x:Static loc:Loc.Instance}}" FontSize="10.5" FontWeight="Bold" Foreground="{DynamicResource TextTertiaryBrush}" />
+                    <Button x:Name="NamedThemeButton" Classes="row-button" Command="{Binding ToggleThemeMenuCommand}">
+                        <Border Background="{DynamicResource BgRailBrush}" BorderBrush="{DynamicResource DividerStrongBrush}" BorderThickness="1"
+                                CornerRadius="{DynamicResource RowRadiusValue}" Padding="10,8">
+                            <Grid ColumnDefinitions="Auto,*,Auto" DataContext="{Binding CurrentNamedThemeOption}">
+                                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Ellipse Width="14" Height="14" Fill="{Binding GroundDot}" Stroke="{DynamicResource DividerStrongBrush}" StrokeThickness="1.5" />
+                                    <Ellipse Width="14" Height="14" Margin="-4,0,0,0" Fill="{Binding TextDot}" Stroke="{DynamicResource BgRailBrush}" StrokeThickness="1.5" />
+                                    <Ellipse Width="14" Height="14" Margin="-4,0,0,0" Fill="{Binding AccentDot}" Stroke="{DynamicResource BgRailBrush}" StrokeThickness="1.5" />
+                                </StackPanel>
+                                <TextBlock Grid.Column="1" Text="{Binding Name}" FontSize="12.5" Margin="10,0" VerticalAlignment="Center" />
+                                <Path Grid.Column="2" Data="M2 4l4 4 4-4" Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.6"
+                                      StrokeLineCap="Round" StrokeJoin="Round" Width="12" Height="12" Stretch="None" VerticalAlignment="Center" />
+                            </Grid>
+                        </Border>
+                    </Button>
+                    <Popup IsOpen="{Binding IsThemeMenuOpen, Mode=TwoWay}" PlacementTarget="{Binding #NamedThemeButton}" Placement="Bottom"
+                           VerticalOffset="4" IsLightDismissEnabled="True" Width="{Binding #NamedThemeButton.Bounds.Width}">
+                        <Border Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource DividerStrongBrush}" BorderThickness="1"
+                                CornerRadius="{DynamicResource SurfaceRadiusValue}" Padding="4">
+                            <ScrollViewer MaxHeight="300" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                                <ItemsControl ItemsSource="{Binding NamedThemeOptions}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <StackPanel Spacing="2" />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate DataType="models:NamedThemeOption">
+                                            <Button Classes="row-button"
+                                                    Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).SetNamedThemeCommand}"
+                                                    CommandParameter="{Binding Theme}">
+                                                <Border Background="{Binding RowBackground}" CornerRadius="{DynamicResource RowRadiusValue}" Padding="10,7">
+                                                    <Grid ColumnDefinitions="Auto,*,Auto">
+                                                        <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                                            <Ellipse Width="14" Height="14" Fill="{Binding GroundDot}" Stroke="{DynamicResource DividerStrongBrush}" StrokeThickness="1.5" />
+                                                            <Ellipse Width="14" Height="14" Margin="-4,0,0,0" Fill="{Binding TextDot}" Stroke="{DynamicResource CardBgBrush}" StrokeThickness="1.5" />
+                                                            <Ellipse Width="14" Height="14" Margin="-4,0,0,0" Fill="{Binding AccentDot}" Stroke="{DynamicResource CardBgBrush}" StrokeThickness="1.5" />
+                                                        </StackPanel>
+                                                        <TextBlock Grid.Column="1" Text="{Binding Name}" Foreground="{Binding TextBrush}" FontSize="12.5" Margin="10,0" VerticalAlignment="Center" />
+                                                        <TextBlock Grid.Column="2" Text="{Binding Tag}" Foreground="{Binding TagBrush}" FontSize="11" VerticalAlignment="Center" />
+                                                    </Grid>
+                                                </Border>
+                                            </Button>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                        </Border>
+                    </Popup>
+                    <TextBlock Text="{Binding NamedThemeHint}" FontSize="11.5" Foreground="{DynamicResource TextTertiaryBrush}" TextWrapping="Wrap" />
                 </StackPanel>
 
                 <StackPanel Spacing="6">

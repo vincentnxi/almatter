@@ -1,0 +1,54 @@
+Named theme palettes
+====================
+
+Seven of the named themes in Almatter's settings (Catppuccin, Catppuccin
+Latte, Nord, Rosé Pine, Rosé Pine Moon, Rosé Pine Dawn, Tokyo Night) use the
+colour values of the shared palettes of fastframe-theme, which adapts the
+original colour schemes listed below. The values are copied into
+app/Almatter.App/Models/NamedThemes.cs. Each project is under the MIT License,
+reproduced once per copyright holder below. For readability, the
+secondary text and accent colours of Catppuccin Latte and Rosé Pine Dawn are
+slightly darkened, and the secondary text of Tokyo Night and Rosé Pine Moon
+slightly lightened; every other value is as published.
+
+- fastframe-theme  https://github.com/crmne/fastframe
+  Copyright (c) 2026 Carmine Paolino
+- Catppuccin       https://github.com/catppuccin/catppuccin
+  Copyright (c) 2021 Catppuccin
+- Nord             https://github.com/nordtheme/nord
+  Copyright (c) 2016-present Sven Greb <development@svengreb.de> (https://www.svengreb.de)
+- Rosé Pine        https://github.com/rose-pine/rose-pine-theme
+  Copyright (c) 2023 Rosé Pine
+- Tokyo Night      https://github.com/tokyo-night/tokyo-night-vscode-theme
+  Copyright (c) 2018-present Enkia
+
+The three other named themes (Expresso, Cardamome, Crème) were made for
+Almatter and are under its own licence (LICENSE at the root of the repository).
+
+--------------------------------------------------------------------------------
+
+MIT License
+
+Copyright (c) 2026 Carmine Paolino
+Copyright (c) 2021 Catppuccin
+Copyright (c) 2016-present Sven Greb <development@svengreb.de> (https://www.svengreb.de)
+Copyright (c) 2023 Rosé Pine
+Copyright (c) 2018-present Enkia
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
