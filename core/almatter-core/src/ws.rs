@@ -299,7 +299,7 @@ async fn run(
         "action": "authentication_challenge",
         "data": { "token": token }
     });
-    let _ = write.send(Message::Text(auth.to_string())).await;
+    let _ = write.send(Message::Text(auth.to_string().into())).await;
 
     let (tx, mut rx) = mpsc::unbounded_channel::<String>();
     *WS_SENDER.lock().expect("ws sender mutex poisoned") = Some(tx);
@@ -368,14 +368,14 @@ async fn run(
                 // whatever proxy sits in between, and fails fast when the
                 // link is already gone — a send error here is how a
                 // half-open connection gets noticed at all.
-                if write.send(Message::Ping(Vec::new())).await.is_err() {
+                if write.send(Message::Ping(Default::default())).await.is_err() {
                     crate::db::log("ws", "heartbeat failed, connection is gone");
                     break;
                 }
             }
             outgoing = rx.recv() => {
                 match outgoing {
-                    Some(text) => { let _ = write.send(Message::Text(text)).await; }
+                    Some(text) => { let _ = write.send(Message::Text(text.into())).await; }
                     None => {} // sender side never drops while this task is alive
                 }
             }
