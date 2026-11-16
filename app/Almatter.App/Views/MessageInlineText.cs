@@ -10,6 +10,7 @@ using Avalonia.Input;
 using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
 using Avalonia.Media;
+using Avalonia.Media.TextFormatting;
 using Almatter.App.Localization;
 using Almatter.App.Models;
 
@@ -149,15 +150,54 @@ public sealed class MessageInlineText : SelectableTextBlock
         else if (change.Property == FontSizeProperty)
         {
             LineHeight = FontSize * LineHeightRatio;
-            foreach (var image in _emojiImages)
-            {
-                image.Height = FontSize * EmojiScale;
-            }
+            FitEmojiImages();
             foreach (var run in _emojiRuns)
             {
                 run.FontSize = FontSize * EmojiGlyphScale;
             }
         }
+        else if (change.Property == FontFamilyProperty)
+        {
+            FitEmojiImages();
+        }
+    }
+
+    private void FitEmojiImages()
+    {
+        if (_emojiImages.Count == 0)
+        {
+            return;
+        }
+        var margin = EmojiImageMargin();
+        foreach (var image in _emojiImages)
+        {
+            image.Height = FontSize * EmojiScale;
+            image.Margin = margin;
+        }
+    }
+
+    /// <summary>
+    /// Lets a custom emoji's picture fill its line, top to bottom, without
+    /// pushing the text down.
+    ///
+    /// Avalonia counts an embedded picture's whole height above the line's
+    /// baseline, whatever BaselineAlignment says, and with a fixed LineHeight
+    /// the line can't grow to make room: the baseline slid down past the
+    /// bottom of the line and the bottom of the letters (g, p, parentheses)
+    /// was cut off. So the picture's layout box is kept a pixel shorter than
+    /// the font's own ascent, and negative margins let the picture spill out
+    /// of that box to span the whole line. Measured on the font in use, so it
+    /// holds for each of the app's fonts and sizes.
+    /// </summary>
+    private Thickness EmojiImageMargin()
+    {
+        var typeface = new Typeface(FontFamily, FontStyle, FontWeight);
+        using var natural = new TextLayout("x", typeface, FontSize, null);
+        using var stretched = new TextLayout("x", typeface, FontSize, null, lineHeight: LineHeight);
+        // A pixel to spare: layout rounds the box's height up.
+        var box = Math.Max(0, Math.Floor(natural.TextLines[0].Baseline) - 1);
+        var top = stretched.TextLines[0].Baseline - box;
+        return new Thickness(1, -top, 1, -(FontSize * EmojiScale - top - box));
     }
 
     private void Rebuild()
@@ -174,6 +214,7 @@ public sealed class MessageInlineText : SelectableTextBlock
 
         var inlines = new InlineCollection();
         var position = 0;
+        Thickness? imageMargin = null;
 
         foreach (var segment in Segments ?? [])
         {
@@ -184,7 +225,7 @@ public sealed class MessageInlineText : SelectableTextBlock
                     Source = bitmap,
                     Stretch = Stretch.Uniform,
                     Height = FontSize * EmojiScale,
-                    Margin = new Thickness(1, 0),
+                    Margin = imageMargin ??= EmojiImageMargin(),
                 };
                 _emojiImages.Add(image);
                 inlines.Add(new InlineUIContainer(image) { BaselineAlignment = BaselineAlignment.Center });
