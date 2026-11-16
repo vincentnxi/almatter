@@ -27,11 +27,17 @@ public sealed partial class AttachmentItem : PictureItem
     public override bool CanSave => true;
 
     /// <summary>
-    /// A picture the server has a preview of: shown as a thumbnail in the
-    /// conversation rather than as a file card. Everything else — and a
-    /// picture cached before its dimensions were kept — stays a card.
+    /// A picture the server has a preview of, or a GIF of known size: shown
+    /// as a thumbnail in the conversation rather than as a file card.
+    /// Everything else stays a card.
     /// </summary>
     public bool IsImage { get; init; }
+
+    /// <summary>
+    /// The thumbnail is decoded from the file itself (a GIF's first frame)
+    /// because the server made no preview of it — as for an animated GIF.
+    /// </summary>
+    public bool ThumbnailFromOriginal { get; init; }
 
     protected override bool HasThumbnail => IsImage;
 
