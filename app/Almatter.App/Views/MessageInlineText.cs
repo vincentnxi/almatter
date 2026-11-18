@@ -24,7 +24,7 @@ namespace Almatter.App.Views;
 /// word, the word ended up alone on its own row. One control per block is
 /// also fewer controls per visible message than that was.
 ///
-/// Links are ordinary underlined text, found under the pointer by hit-testing
+/// Links are ordinary accent-coloured text (no underline), found under the pointer by hit-testing
 /// the laid-out text, which keeps them selectable along with the sentence.
 /// </summary>
 public sealed class MessageInlineText : SelectableTextBlock
@@ -260,7 +260,6 @@ public sealed class MessageInlineText : SelectableTextBlock
         {
             case LinkSegment:
                 run.Foreground = _accentBrush;
-                decorations.AddRange(Avalonia.Media.TextDecorations.Underline);
                 break;
             case MentionSegment:
                 run.Foreground = _accentBrush;
@@ -268,8 +267,8 @@ public sealed class MessageInlineText : SelectableTextBlock
                 break;
         }
 
-        // A link keeps its normal weight inside **bold**: the colour and underline
-        // already make it stand out, and a bold underlined link reads as heavy.
+        // A link keeps its normal weight inside **bold**: the accent colour
+        // already makes it stand out, and a bold link reads as heavy.
         if (segment.Style.HasFlag(TextStyle.Bold) && segment is not LinkSegment)
         {
             run.FontWeight = FontWeight.Bold;
