@@ -6466,7 +6466,12 @@ public partial class MainViewModel : ViewModelBase
         return new ObservableCollection<ReactionItem>(items);
     }
 
-    private static bool HasKnownSize(FileDto f) => f.HasPreviewImage && f.Width > 0 && f.Height > 0;
+    // Mattermost makes no preview of an animated GIF (its web app shows the
+    // file itself), yet still reports its dimensions: such a GIF is a
+    // picture all the same, its thumbnail taken from the file itself.
+    private static bool HasKnownSize(FileDto f) => (f.HasPreviewImage || IsGifName(f.Name)) && f.Width > 0 && f.Height > 0;
+
+    private static bool IsGifName(string name) => Path.GetExtension(name).Equals(".gif", StringComparison.OrdinalIgnoreCase);
 
     // A message cached before picture dimensions were kept comes back
     // without them, and stays that way until the server is asked for it
@@ -6495,8 +6500,10 @@ public partial class MainViewModel : ViewModelBase
                 FileName = f.Name,
                 SizeBytes = f.Size,
                 IsImage = isImage,
-                IsGif = isImage && !_unplayableGifs.ContainsKey(f.Id)
-                    && Path.GetExtension(f.Name).Equals(".gif", StringComparison.OrdinalIgnoreCase),
+                IsGif = isImage && !_unplayableGifs.ContainsKey(f.Id) && IsGifName(f.Name),
+                // A GIF the server made no preview of — an animated one, or
+                // one cached without that detail — is read from the file itself.
+                ThumbnailFromOriginal = isImage && !f.HasPreviewImage && IsGifName(f.Name),
                 ThumbnailWidth = width,
                 ThumbnailHeight = height,
                 // Not fetched here: the thumbnail asks the first time it's
@@ -6843,6 +6850,8 @@ public partial class MainViewModel : ViewModelBase
 
         var bitmap = item switch
         {
+            AttachmentItem { ThumbnailFromOriginal: true } attachment => await GetPictureThumbnailBitmapAsync(
+                attachment.Id, () => _service.GetFilePathAsync(_session.BaseUrl, _session.Token, attachment.Id, attachment.FileName), item.ThumbnailWidth, item.ThumbnailHeight),
             AttachmentItem attachment => await GetPictureThumbnailBitmapAsync(
                 attachment.Id, () => _service.GetFilePreviewPathAsync(_session.BaseUrl, _session.Token, attachment.Id), item.ThumbnailWidth, item.ThumbnailHeight),
             // A linked picture has no server-made preview: its thumbnail is
