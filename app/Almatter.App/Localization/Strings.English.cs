@@ -174,6 +174,8 @@ public sealed partial class Strings
         SettingsFont = "FONT",
         FontSystem = "System",
         FontMattermostHint = "“Mattermost” uses Open Sans, the official client's font.",
+        SettingsEmoji = "EMOJI",
+        EmojiTwemojiHint = "“Twemoji” shows the same emoji on every computer, flags and recent emoji included. Twemoji graphics © Twitter, Inc. and contributors, licensed under CC-BY 4.0.",
         SettingsMessageFontSize = "MESSAGE FONT SIZE",
         FontSizeSmall = "Small",
         FontSizeNormal = "Normal",

@@ -765,6 +765,12 @@ public partial class MainViewModel : ViewModelBase
         },
     ];
 
+    public ObservableCollection<EmojiStyleOption> EmojiStyleOptions { get; } =
+    [
+        new() { Style = AppEmojiStyle.System },
+        new() { Style = AppEmojiStyle.Twemoji },
+    ];
+
     public ObservableCollection<FontSizeOption> FontSizeOptions { get; } =
     [
         new() { Wording = s => s.FontSizeSmall, Size = 14 },
@@ -954,6 +960,7 @@ public partial class MainViewModel : ViewModelBase
         DirectMessages.CollectionChanged += OnSidebarListChanged;
         ApplyTheme();
         RefreshFontChoiceSelection();
+        RefreshEmojiStyleSelection();
         RefreshFontSizeSelection();
         InitializeEmojiPicker();
         Settings.PropertyChanged += (_, e) =>
@@ -966,9 +973,10 @@ public partial class MainViewModel : ViewModelBase
             {
                 ApplyLanguage();
             }
-            else if (e.PropertyName == nameof(AppSettings.FontChoice))
+            else if (e.PropertyName is nameof(AppSettings.FontChoice) or nameof(AppSettings.EmojiStyle))
             {
                 RefreshFontChoiceSelection();
+                RefreshEmojiStyleSelection();
                 // Same channel as a palette swap: MainWindow re-pushes the
                 // window resources, AppFontFamily among them.
                 ThemeResourcesChanged?.Invoke(this, EventArgs.Empty);
@@ -4741,6 +4749,10 @@ public partial class MainViewModel : ViewModelBase
         {
             option.RefreshLanguage();
         }
+        foreach (var option in EmojiStyleOptions)
+        {
+            option.RefreshLanguage();
+        }
         foreach (var option in FontSizeOptions)
         {
             option.RefreshLanguage();
@@ -4871,6 +4883,10 @@ public partial class MainViewModel : ViewModelBase
         {
             fontChoice.RefreshColors();
         }
+        foreach (var emojiStyle in EmojiStyleOptions)
+        {
+            emojiStyle.RefreshColors();
+        }
 
         ThemeResourcesChanged?.Invoke(this, EventArgs.Empty);
     }
@@ -4903,6 +4919,17 @@ public partial class MainViewModel : ViewModelBase
 
     [RelayCommand]
     private void SetFontChoice(AppFontChoice choice) => Settings.FontChoice = choice;
+
+    private void RefreshEmojiStyleSelection()
+    {
+        foreach (var option in EmojiStyleOptions)
+        {
+            option.IsSelected = option.Style == Settings.EmojiStyle;
+        }
+    }
+
+    [RelayCommand]
+    private void SetEmojiStyle(AppEmojiStyle style) => Settings.EmojiStyle = style;
 
     [RelayCommand]
     private void CloseThread()

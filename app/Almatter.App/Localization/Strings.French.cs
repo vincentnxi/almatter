@@ -176,6 +176,8 @@ public sealed partial class Strings
         SettingsFont = "POLICE",
         FontSystem = "Système",
         FontMattermostHint = "« Mattermost » utilise Open Sans, la police du client officiel.",
+        SettingsEmoji = "ÉMOJIS",
+        EmojiTwemojiHint = "« Twemoji » affiche les mêmes émojis sur tous les ordinateurs, drapeaux et émojis récents compris. Graphismes Twemoji © Twitter, Inc. et contributeurs, licence CC-BY 4.0.",
         SettingsMessageFontSize = "TAILLE DE POLICE DES MESSAGES",
         FontSizeSmall = "Petite",
         FontSizeNormal = "Normale",

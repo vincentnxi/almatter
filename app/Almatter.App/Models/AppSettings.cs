@@ -31,6 +31,10 @@ public sealed partial class AppSettings : ObservableObject
     [ObservableProperty]
     public partial AppFontChoice FontChoice { get; set; } = AppFontChoice.Mattermost;
 
+    /// <summary>The system's emoji unless changed: they are already in memory, the bundled Twemoji font adds about 2 MB.</summary>
+    [ObservableProperty]
+    public partial AppEmojiStyle EmojiStyle { get; set; } = AppEmojiStyle.System;
+
     /// <summary>
     /// The middle of the three sizes on offer, 14 / 15,5 / 17,5. The official
     /// client's 14px is the small one here: the same 14px reads smaller in

@@ -1,0 +1,107 @@
+# Builds app/Almatter.App/Assets/EmojiFont/TwemojiAlmatter.ttf, the vector
+# colour-emoji font (COLRv0) behind the "Twemoji" choice in the settings,
+# from the Twemoji images.
+#
+# Why COLRv0: on Windows, SkiaSharp draws COLRv0 fonts sharply (Segoe UI
+# Emoji is one), draws the newer COLRv1 format as nothing at all, and blurs
+# bitmap emoji fonts such as Noto's CBDT edition. Twemoji's flat artwork
+# needs no gradients, so COLRv0 reproduces it exactly.
+#
+# Run by hand from the Actions tab when Twemoji publishes a new version
+# (about once a year, after each Unicode emoji release):
+#   1. set TWEMOJI_TAG below to the new tag, and TWEMOJI_SHA256 to the hash
+#      of https://codeload.github.com/jdecked/twemoji/tar.gz/refs/tags/<tag>;
+#   2. run the workflow, download the TwemojiAlmatter artifact;
+#   3. replace the .ttf in Assets/EmojiFont and licenses/Twemoji-CC-BY-4.0.txt;
+#   4. regenerate the shortcode table (tools/generate-emoji-shortcodes.js) so
+#      the picker offers the new emoji too.
+# The build takes about 12 minutes. Nothing is published from here.
+
+name: Build Twemoji font
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  # The community fork that took over after Twitter stopped maintaining it.
+  # Pinned to a tag, and the archive to its hash: a moved tag fails the run.
+  TWEMOJI_TAG: v17.0.3
+  TWEMOJI_SHA256: a0855654b633045ae2337537e77f1bb4361162f7fcd910e613eaab1d6d9c5fca
+  NANOEMOJI_VERSION: 0.16.0
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+
+    steps:
+      - name: Download the Twemoji images
+        run: |
+          curl -sSfL -o twemoji.tar.gz "https://codeload.github.com/jdecked/twemoji/tar.gz/refs/tags/${TWEMOJI_TAG}"
+          echo "${TWEMOJI_SHA256}  twemoji.tar.gz" | sha256sum --check
+          tar -xzf twemoji.tar.gz --wildcards '*/assets/svg/*' '*/LICENSE-GRAPHICS'
+
+      # nanoemoji reads the code points from the file name, written
+      # emoji_u1f468_200d_1f469.svg; Twemoji names it 1f468-200d-1f469.svg.
+      - name: Rename them the way nanoemoji expects
+        run: |
+          mkdir -p build/svg
+          for f in twemoji-*/assets/svg/*.svg; do
+            name=$(basename "$f" .svg)
+            cp "$f" "build/svg/emoji_u${name//-/_}.svg"
+          done
+          ls build/svg | wc -l
+
+      - name: Install nanoemoji
+        run: |
+          python3 -m venv venv
+          venv/bin/pip install --quiet "nanoemoji==${NANOEMOJI_VERSION}"
+          venv/bin/pip show nanoemoji | head -2
+          # nanoemoji calls picosvg and its other helpers by name.
+          echo "$PWD/venv/bin" >> "$GITHUB_PATH"
+
+      - name: Build the font
+        working-directory: build
+        run: |
+          # Proportions copied from Segoe UI Emoji, which the app's line
+          # heights were tuned against. nanoemoji stretches each picture over
+          # ascender + |descender|; its defaults (950 / -250, width 1275, made
+          # for Noto) drew emoji 18 % taller than the text size and 25 %
+          # below the baseline, which cut off their bottom in messages.
+          # 870 / -154 is exactly one em, 15 % of it below the baseline.
+          cat > config.toml <<'EOF'
+          family = "Twemoji Almatter"
+          output_file = "TwemojiAlmatter.ttf"
+          color_format = "glyf_colr_0"
+          upem = 1024
+          ascender = 870
+          descender = -154
+          width = 1180
+
+          [axis.wght]
+          name = "Weight"
+          default = 400
+
+          [master.regular]
+          style_name = "Regular"
+          srcs = ["svg/*.svg"]
+
+          [master.regular.position]
+          wght = 400
+          EOF
+          nanoemoji config.toml
+          find . -name '*.ttf' -exec ls -l {} \;
+          cp "$(find . -name TwemojiAlmatter.ttf | head -1)" ../TwemojiAlmatter.ttf
+          cp ../twemoji-*/LICENSE-GRAPHICS ../Twemoji-LICENSE-GRAPHICS.txt
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: TwemojiAlmatter
+          path: |
+            TwemojiAlmatter.ttf
+            Twemoji-LICENSE-GRAPHICS.txt
+          if-no-files-found: error
+          retention-days: 7

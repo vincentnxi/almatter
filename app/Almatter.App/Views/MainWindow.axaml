@@ -1918,6 +1918,30 @@
                 </StackPanel>
 
                 <StackPanel Spacing="6">
+                    <TextBlock Text="{Binding T.SettingsEmoji, Source={x:Static loc:Loc.Instance}}" FontSize="10.5" FontWeight="Bold" Foreground="{DynamicResource TextTertiaryBrush}" />
+                    <ItemsControl ItemsSource="{Binding EmojiStyleOptions}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel Orientation="Horizontal" Spacing="6" />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="models:EmojiStyleOption">
+                                <Button Classes="row-button"
+                                        Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).SetEmojiStyleCommand}"
+                                        CommandParameter="{Binding Style}">
+                                    <Border Background="{Binding RowBackground}" CornerRadius="{DynamicResource RowRadiusValue}" Padding="10,7">
+                                        <TextBlock Text="{Binding Name}" Foreground="{Binding TextBrush}" FontSize="13" />
+                                    </Border>
+                                </Button>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <TextBlock Text="{Binding T.EmojiTwemojiHint, Source={x:Static loc:Loc.Instance}}"
+                               FontSize="11.5" Foreground="{DynamicResource TextTertiaryBrush}" TextWrapping="Wrap" />
+                </StackPanel>
+
+                <StackPanel Spacing="6">
                     <TextBlock Text="{Binding T.SettingsMessageFontSize, Source={x:Static loc:Loc.Instance}}" FontSize="10.5" FontWeight="Bold" Foreground="{DynamicResource TextTertiaryBrush}" />
                     <ItemsControl ItemsSource="{Binding FontSizeOptions}">
                         <ItemsControl.ItemsPanel>

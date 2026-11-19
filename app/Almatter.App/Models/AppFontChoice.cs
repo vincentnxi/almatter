@@ -43,11 +43,48 @@ public static class AppFonts
     /// </summary>
     public const string LatoStack = "avares://Almatter/Assets/Fonts#Lato,Segoe UI Variable Text,Segoe UI,Inter";
 
-    public static FontFamily Resolve(AppFontChoice choice) =>
-        FontFamily.Parse(choice switch
+    /// <summary>
+    /// Twemoji's artwork (CC-BY 4.0, see licenses/Twemoji-CC-BY-4.0.txt),
+    /// turned into a font by .github/workflows/build-twemoji-font.yml.
+    ///
+    /// Two things about it are deliberate and easy to undo by mistake:
+    ///
+    /// It lives in Assets/EmojiFont, not Assets/Fonts. Asking Avalonia for one
+    /// family of a folder loads every font in that folder and its subfolders,
+    /// so next to Open Sans it would sit in memory for everyone, even with
+    /// this style switched off.
+    ///
+    /// It is a COLRv0 font: emoji made of stacked flat-coloured shapes, the
+    /// format of Segoe UI Emoji. Tried and rejected on Avalonia 12.1.5 /
+    /// SkiaSharp 3.119: Noto's COLRv1 edition (every emoji drawn as nothing)
+    /// and its bitmap edition (visibly pixelated at message size).
+    /// </summary>
+    public const string TwemojiFamily = "avares://Almatter/Assets/EmojiFont#Twemoji Almatter";
+
+    public static FontFamily Resolve(AppFontChoice choice, AppEmojiStyle emoji = AppEmojiStyle.System) =>
+        FontFamily.Parse(WithEmoji(choice switch
         {
             AppFontChoice.System => SystemStack,
             AppFontChoice.Lato => LatoStack,
             _ => MattermostStack,
-        });
+        }, emoji));
+
+    /// <summary>
+    /// Slots the emoji font in right after the first family of the stack:
+    /// the letters still come from the chosen typeface, and whatever it lacks
+    /// is looked up in Twemoji before the system fallbacks get a chance to
+    /// answer with their own emoji. Never first: the emoji font also carries
+    /// the digits, # and * that start keycap emoji, and would take those over.
+    /// </summary>
+    private static string WithEmoji(string stack, AppEmojiStyle emoji)
+    {
+        if (emoji != AppEmojiStyle.Twemoji)
+        {
+            return stack;
+        }
+        var comma = stack.IndexOf(',');
+        return comma < 0
+            ? $"{stack},{TwemojiFamily}"
+            : $"{stack[..comma]},{TwemojiFamily}{stack[comma..]}";
+    }
 }

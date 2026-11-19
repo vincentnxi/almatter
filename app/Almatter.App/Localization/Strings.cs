@@ -209,6 +209,8 @@ public sealed partial class Strings
     public required string SettingsFont { get; init; }
     public required string FontSystem { get; init; }
     public required string FontMattermostHint { get; init; }
+    public required string SettingsEmoji { get; init; }
+    public required string EmojiTwemojiHint { get; init; }
     public required string SettingsMessageFontSize { get; init; }
     public required string FontSizeSmall { get; init; }
     public required string FontSizeNormal { get; init; }

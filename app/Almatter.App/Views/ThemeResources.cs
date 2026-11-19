@@ -80,7 +80,7 @@ internal static class ThemeResources
 
         // Not a palette token, but it travels the same path: one resource
         // the whole window inherits from, swapped live when the choice changes.
-        resources["AppFontFamily"] = AppFonts.Resolve(settings.FontChoice);
+        resources["AppFontFamily"] = AppFonts.Resolve(settings.FontChoice, settings.EmojiStyle);
 
         // The window's own chrome-level colors aren't reachable through
         // DynamicResource on the Window element itself in XAML (they'd be

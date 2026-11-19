@@ -10,6 +10,14 @@ Bundled third-party assets keep their own licences, reproduced here:
 - `Lato-OFL.txt` — Lato (`app/Almatter.App/Assets/Fonts/Lato-Regular.ttf` and
   `Lato-Bold.ttf`), SIL Open Font License 1.1. Offered as a third typeface in
   the settings.
+- `Twemoji-CC-BY-4.0.txt` — Twemoji graphics
+  (`app/Almatter.App/Assets/EmojiFont/TwemojiAlmatter.ttf`), Copyright Twitter,
+  Inc and other contributors, licensed under CC-BY 4.0
+  (https://creativecommons.org/licenses/by/4.0/). Taken from the community fork
+  https://github.com/jdecked/twemoji (tag `v17.0.3`). Changed: the SVG images
+  were converted into a COLRv0 colour font with nanoemoji, by
+  `.github/workflows/build-twemoji-font.yml`. Offered in the settings as an
+  alternative to the system's own emoji.
 - `emoji-data-MIT.txt` — emoji-data (https://github.com/iamcal/emoji-data),
   MIT. No file of it is shipped: `tools/generate-emoji-shortcodes.js` reads its
   emoji list and writes `app/Almatter.App/Models/EmojiShortcodesData.cs`, so
