@@ -866,9 +866,6 @@ public partial class MainViewModel : ViewModelBase
     public bool ShowPendingAttachments => PendingAttachments.Count > 0 || !ColorTokens.Theme.ArkStyle;
     public bool ShowThreadPendingAttachments => ThreadPendingAttachments.Count > 0 || !ColorTokens.Theme.ArkStyle;
 
-    /// <summary>The font choice: hidden under Ark, which sets its own typeface (Geist). The choice is kept.</summary>
-    public bool ShowFontChoice => !IsArkThemeActive;
-
     // The sidebar's section headings. Ark sets them as small capitals in a
     // monospaced face; TextBlock has no text-transform, so the capitals are
     // made here.
@@ -4928,7 +4925,6 @@ public partial class MainViewModel : ViewModelBase
         OnPropertyChanged(nameof(IsArkThemeActive));
         OnPropertyChanged(nameof(ShowModeAndContrast));
         OnPropertyChanged(nameof(ShowAccentOptions));
-        OnPropertyChanged(nameof(ShowFontChoice));
         OnPropertyChanged(nameof(ShowPendingAttachments));
         OnPropertyChanged(nameof(ShowThreadPendingAttachments));
         RefreshSectionHeadings();

@@ -49,7 +49,7 @@ fraction of that, and to stay usable on older machines.
   only ones that make a sound, unless you ask for a sound on every message — an unread badge on the taskbar icon, a title bar that
   follows the theme.
 - **Appearance** — light and dark themes (or follow Windows), six accent colours, a
-  reduced-contrast mode, the Ark theme (floating panels, pastel accents, Geist typefaces), twelve named colour themes (Catppuccin, Nord, Rosé Pine, Tokyo Night
+  reduced-contrast mode, the Ark theme (floating panels, pastel accents, Geist Mono labels), twelve named colour themes (Catppuccin, Nord, Rosé Pine, Tokyo Night
   and others), adjustable message font size, and a choice between the official
   client's Open Sans, Lato and the system UI font.
 
@@ -196,7 +196,7 @@ suggested approach for each OS.
 
 Almatter is released under the [MIT License](LICENSE).
 
-It bundles the Open Sans, Lato, Geist and Geist Mono fonts under the SIL Open Font License 1.1, and its emoji
+It bundles the Open Sans, Lato and Geist Mono fonts under the SIL Open Font License 1.1, and its emoji
 shortcode table is generated from emoji-data (MIT) — see [licenses/](licenses/).
 
 Almatter is an independent project, not affiliated with or endorsed by Mattermost, Inc.
@@ -251,7 +251,7 @@ rester utilisable sur des machines anciennes.
   réactions) marquées 🔔 et seules à faire du bruit, sauf si vous demandez un son pour tous les messages —, pastille de non-lus sur l'icône de
   la barre des tâches, barre de titre assortie au thème.
 - **Apparence** — thèmes clair et sombre (ou celui de Windows), six couleurs
-  d'accentuation, mode contraste réduit, le thème Ark (panneaux flottants, accents pastel, polices Geist), douze thèmes de couleurs (Catppuccin, Nord,
+  d'accentuation, mode contraste réduit, le thème Ark (panneaux flottants, accents pastel, étiquettes en Geist Mono), douze thèmes de couleurs (Catppuccin, Nord,
   Rosé Pine, Tokyo Night et d'autres), taille du texte des messages réglable, et choix
   entre Open Sans (la police du client officiel), Lato et la police système.
 
@@ -410,7 +410,7 @@ système.
 
 Almatter est distribué sous [licence MIT](LICENSE).
 
-Il embarque les polices Open Sans, Lato, Geist et Geist Mono, sous SIL Open Font License 1.1, et sa table de
+Il embarque les polices Open Sans, Lato et Geist Mono, sous SIL Open Font License 1.1, et sa table de
 raccourcis emoji est générée à partir d'emoji-data (MIT) — voir [licenses/](licenses/).
 
 Almatter est un projet indépendant, sans lien avec Mattermost, Inc. ni approuvé par

@@ -398,8 +398,7 @@
                 <StackPanel x:Name="PageText" Spacing="20" IsVisible="False">
                     <TextBlock Classes="page-title" Text="{Binding T.SettingsPageText, Source={x:Static loc:Loc.Instance}}" />
 
-                    <!-- Hidden under Ark, which sets its own typeface. -->
-                    <StackPanel Spacing="8" IsVisible="{Binding ShowFontChoice}">
+                    <StackPanel Spacing="8">
                         <StackPanel Spacing="2">
                             <TextBlock Classes="setting-label" Text="{Binding T.SettingsFont, Source={x:Static loc:Loc.Instance}}" />
                             <TextBlock Classes="setting-hint" Text="{Binding T.FontMattermostHint, Source={x:Static loc:Loc.Instance}}" />

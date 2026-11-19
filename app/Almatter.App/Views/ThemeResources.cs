@@ -248,7 +248,7 @@ internal static class ThemeResources
 
         // Not a palette token, but it travels the same path: one resource
         // the whole window inherits from, swapped live when the choice changes.
-        var appFont = AppFonts.Resolve(settings.FontChoice, settings.EmojiStyle, theme.ArkStyle);
+        var appFont = AppFonts.Resolve(settings.FontChoice, settings.EmojiStyle);
         resources["AppFontFamily"] = appFont;
 
         // Small labels (headings, times, dates): monospaced on Ark, the

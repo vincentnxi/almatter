@@ -98,8 +98,8 @@ public sealed record ThemeDefinition
     public string? WindowGroundHex { get; init; }
 
     /// <summary>
-    /// Ark's own styling beyond colours and panels: the Geist typefaces with
-    /// small monospaced labels, a light channel title, ink-coloured primary
+    /// Ark's own styling beyond colours and panels: small monospaced labels
+    /// (Geist Mono), a light channel title, ink-coloured primary
     /// buttons, the selected row as a raised card, the composer in a well,
     /// and the title bar drawn into the window (on Windows).
     /// </summary>

@@ -10,11 +10,10 @@ Bundled third-party assets keep their own licences, reproduced here:
 - `Lato-OFL.txt` — Lato (`app/Almatter.App/Assets/Fonts/Lato-Regular.ttf` and
   `Lato-Bold.ttf`), SIL Open Font License 1.1. Offered as a third typeface in
   the settings.
-- `Geist-OFL.txt` — Geist and Geist Mono (`app/Almatter.App/Assets/GeistFont/`
-  and `app/Almatter.App/Assets/GeistMonoFont/`), Copyright The Geist Project
-  Authors, SIL Open Font License 1.1, from https://github.com/vercel/geist-font
-  (release `v1.9.2`, static TTF files, unchanged). The typefaces of the Ark
-  theme: Geist for the text, Geist Mono for small labels and times.
+- `Geist-OFL.txt` — Geist Mono (`app/Almatter.App/Assets/GeistMonoFont/`),
+  Copyright The Geist Project Authors, SIL Open Font License 1.1, from
+  https://github.com/vercel/geist-font (release `v1.9.2`, static TTF files,
+  unchanged). The Ark theme's small labels and times.
 - `Twemoji-CC-BY-4.0.txt` — Twemoji graphics
   (`app/Almatter.App/Assets/EmojiFont/TwemojiAlmatter.ttf`), Copyright Twitter,
   Inc and other contributors, licensed under CC-BY 4.0

@@ -45,16 +45,13 @@ public static class AppFonts
     public const string LatoStack = "avares://Almatter/Assets/Fonts#Lato,Segoe UI Variable Text,Segoe UI,Inter";
 
     /// <summary>
-    /// The Ark theme's typefaces, bundled under the SIL OFL 1.1 (see
-    /// licenses/Geist-OFL.txt). Each in a folder of its own, outside
-    /// Assets/Fonts, for the reason given on TwemojiFamily: asking for a
-    /// family of a folder loads the whole folder, so next to Open Sans these
-    /// would sit in memory for every theme. Ark replaces the font choice;
-    /// the choice itself is kept and comes back with any other theme.
+    /// Ark's small labels: section headings, times, dates. Bundled under the
+    /// SIL OFL 1.1 (see licenses/Geist-OFL.txt), in a folder of its own,
+    /// outside Assets/Fonts, for the reason given on TwemojiFamily: asking
+    /// for a family of a folder loads the whole folder, so next to Open Sans
+    /// it would sit in memory for every theme. Ark's body text follows the
+    /// font choice like every other theme.
     /// </summary>
-    public const string ArkStack = "avares://Almatter/Assets/GeistFont#Geist,Segoe UI Variable Text,Segoe UI,Inter";
-
-    /// <summary>Ark's small labels: section headings, times, dates.</summary>
     public const string ArkMonoStack = "avares://Almatter/Assets/GeistMonoFont#Geist Mono,Cascadia Mono,Consolas";
 
     /// <summary>
@@ -96,10 +93,9 @@ public static class AppFonts
     /// The app's font for the user's settings. Also switches the Twemoji
     /// fallback on or off, so it is only for applying those settings.
     /// </summary>
-    /// <param name="arkFonts">The Ark theme is in force: its own typeface replaces the choice.</param>
-    public static FontFamily Resolve(AppFontChoice choice, AppEmojiStyle emoji, bool arkFonts = false)
+    public static FontFamily Resolve(AppFontChoice choice, AppEmojiStyle emoji)
     {
-        var stack = arkFonts ? ArkStack : StackFor(choice);
+        var stack = StackFor(choice);
         if (emoji != AppEmojiStyle.Twemoji)
         {
             EmojiFallbacks.Clear();

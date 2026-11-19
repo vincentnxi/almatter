@@ -115,8 +115,8 @@ anciennes visées par le projet.
   Inter (embarqué via `Avalonia.Fonts.Inter`) partout où Segoe est absent, donc macOS et
   Linux rendent correctement sans police à embarquer. Open Sans et Lato, les deux autres
   choix, sont embarquées dans l'app (`Assets/Fonts`) et rendent donc pareil partout ; de
-  même Geist et Geist Mono, les polices du thème Ark (`Assets/GeistFont`,
-  `Assets/GeistMonoFont`). Si un rendu vraiment natif est
+  même Geist Mono, la police des petites étiquettes du thème Ark
+  (`Assets/GeistMonoFont`). Si un rendu vraiment natif est
   souhaité plus tard, il suffira d'ajouter `-apple-system`/`Cantarell` en tête de pile :
   la police n'est déclarée qu'à deux endroits, l'attribut `FontFamily` de `MainWindow.axaml`
   et celui de `LoginWindow.axaml`, dont tout le reste hérite.
