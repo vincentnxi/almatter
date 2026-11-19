@@ -48,6 +48,7 @@ public partial class MainWindow : Window
     private bool _reorderMoveToRegular;
 
     private IDesktopNotifier? _notifier;
+    private SettingsWindow? _settingsWindow;
     private (string ChannelId, string PostId)? _pendingNotificationTarget;
 
     public MainWindow()
@@ -128,7 +129,7 @@ public partial class MainWindow : Window
         {
             if (DataContext is MainViewModel vm)
             {
-                ApplyTitleBarTheme(vm);
+                ApplyTitleBarTheme(this);
             }
         };
 
@@ -152,7 +153,7 @@ public partial class MainWindow : Window
 
             ApplyThemeResources(vm);
             vm.ThemeResourcesChanged += (_, _) => ApplyThemeResources(vm);
-            vm.ThemeResourcesChanged += (_, _) => ApplyTitleBarTheme(vm);
+            vm.ThemeResourcesChanged += (_, _) => ApplyTitleBarTheme(this);
             // Windows flipping light/dark while the app runs: under the
             // "Système" preference this re-resolves the whole palette (which
             // raises ThemeResourcesChanged, repainting everything including
@@ -166,6 +167,16 @@ public partial class MainWindow : Window
                 // and all — alive after a logout, once per sign-in.
                 Closed += (_, _) => platformSettings.ColorValuesChanged -= onColorValuesChanged;
             }
+
+            vm.SettingsRequested += (_, _) => ShowSettingsWindow(vm);
+            vm.PropertyChanged += (_, e) =>
+            {
+                // CloseSettingsCommand (Escape in the settings window).
+                if (e.PropertyName == nameof(MainViewModel.IsSettingsOpen) && !vm.IsSettingsOpen)
+                {
+                    _settingsWindow?.Close();
+                }
+            };
 
             vm.LoggedOut += (_, _) => PerformLogout();
             vm.SessionExpired += (_, _) => PerformLogout(sessionExpired: true);
@@ -1421,7 +1432,7 @@ public partial class MainWindow : Window
     /// would read as the glitch. Best-effort — an older Windows build
     /// without this DWM attribute just keeps the default title bar.
     /// </summary>
-    private void ApplyTitleBarTheme(MainViewModel vm)
+    internal static void ApplyTitleBarTheme(Window window)
     {
         // DWM is Windows' own window manager; elsewhere the title bar is the
         // desktop's to draw (see docs/PLATFORM_PORTABILITY.md).
@@ -1432,7 +1443,7 @@ public partial class MainWindow : Window
 
         try
         {
-            var handle = TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
+            var handle = window.TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
             if (handle == IntPtr.Zero)
             {
                 return;
@@ -1593,7 +1604,36 @@ public partial class MainWindow : Window
                 App.ShowLoginWindow(desktop);
             }
         }
+        _settingsWindow?.Close();
         Close();
+    }
+
+    /// <summary>
+    /// Opens the settings window, or brings it back to the front if it is
+    /// already open — there is only ever one.
+    /// </summary>
+    private void ShowSettingsWindow(MainViewModel vm)
+    {
+        if (_settingsWindow is { } open)
+        {
+            if (open.WindowState == WindowState.Minimized)
+            {
+                open.WindowState = WindowState.Normal;
+            }
+            open.Activate();
+            return;
+        }
+
+        var window = new SettingsWindow(vm);
+        // Forgotten before the flag drops, so the flag's handler doesn't
+        // try to close a window that is already gone.
+        window.Closed += (_, _) =>
+        {
+            _settingsWindow = null;
+            vm.IsSettingsOpen = false;
+        };
+        _settingsWindow = window;
+        window.Show(this);
     }
 
     /// <summary>Window.Resources entries bound via DynamicResource pick up the new palette live — see ThemeResources.</summary>

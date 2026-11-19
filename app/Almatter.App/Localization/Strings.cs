@@ -188,6 +188,10 @@ public sealed partial class Strings
     public required string SettingsTitle { get; init; }
     public required string SettingsLanguage { get; init; }
     public required string SettingsAppearance { get; init; }
+    public required string SettingsPageText { get; init; }
+    public required string SettingsPageMessages { get; init; }
+    public required string SettingsPageGeneral { get; init; }
+    public required string SettingsMode { get; init; }
     public required string ThemeSystem { get; init; }
     public required string ThemeLight { get; init; }
     public required string ThemeDark { get; init; }
@@ -215,11 +219,11 @@ public sealed partial class Strings
     public required string FontSizeSmall { get; init; }
     public required string FontSizeNormal { get; init; }
     public required string FontSizeLarge { get; init; }
-    public required string SettingsNotifications { get; init; }
     public required string SoundForAllMessages { get; init; }
     public required string SoundForAllMessagesHint { get; init; }
-    public required string SettingsLinks { get; init; }
     public required string LinkPreviews { get; init; }
+    public required string LinkPreviewsHint { get; init; }
+    public required string SettingsAccount { get; init; }
     public required string LogOut { get; init; }
 
     // ── Notifications and taskbar ────────────────────────────────────

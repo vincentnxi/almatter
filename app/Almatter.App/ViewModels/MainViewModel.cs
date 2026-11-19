@@ -362,7 +362,7 @@ public partial class MainViewModel : ViewModelBase
     public bool ShowChannelsList => IsChannelsSectionExpanded || IsSidebarFiltered;
     public bool ShowDirectMessagesList => IsDirectMessagesSectionExpanded || IsSidebarFiltered;
 
-    /// <summary>Settings panel — opened via the gear icon at the bottom of the sidebar.</summary>
+    /// <summary>Whether the settings window is open — opened via the gear icon at the bottom of the sidebar.</summary>
     [ObservableProperty]
     public partial bool IsSettingsOpen { get; set; }
 
@@ -2516,8 +2516,19 @@ public partial class MainViewModel : ViewModelBase
         });
     }
 
+    /// <summary>
+    /// The settings live in a window of their own (SettingsWindow), which the
+    /// main window opens — or, if it is already open somewhere behind, brings
+    /// back to the front — whenever this is raised.
+    /// </summary>
+    public event EventHandler? SettingsRequested;
+
     [RelayCommand]
-    private void ToggleSettings() => IsSettingsOpen = !IsSettingsOpen;
+    private void OpenSettings()
+    {
+        IsSettingsOpen = true;
+        SettingsRequested?.Invoke(this, EventArgs.Empty);
+    }
 
     [RelayCommand]
     private void CloseSettings() => IsSettingsOpen = false;
@@ -4695,7 +4706,7 @@ public partial class MainViewModel : ViewModelBase
     private void SetNamedTheme(AppNamedTheme theme) => Settings.NamedTheme = theme;
 
     // The menu is a popup of its own: left open, it would stay on screen
-    // after the settings panel it belongs to has gone.
+    // after the settings window it belongs to has gone.
     partial void OnIsSettingsOpenChanged(bool value)
     {
         if (!value)

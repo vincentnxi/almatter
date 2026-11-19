@@ -1,0 +1,537 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Almatter.App.ViewModels"
+        xmlns:models="using:Almatter.App.Models"
+        xmlns:loc="using:Almatter.App.Localization"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="680" d:DesignHeight="540"
+        x:Class="Almatter.App.Views.SettingsWindow"
+        x:DataType="vm:MainViewModel"
+        x:Name="RootWindow"
+        Icon="/Assets/almatter-logo.ico"
+        Title="{Binding T.SettingsTitle, Source={x:Static loc:Loc.Instance}}"
+        Width="680" Height="540" MinWidth="560" MinHeight="420"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False"
+        Background="{DynamicResource BgAppBrush}"
+        FontFamily="{DynamicResource AppFontFamily}"
+        FontSize="13"
+        Foreground="{DynamicResource TextPrimaryBrush}">
+
+    <Window.KeyBindings>
+        <KeyBinding Gesture="Escape" Command="{Binding CloseSettingsCommand}" />
+    </Window.KeyBindings>
+
+    <!-- Light-palette values only so the XAML previewer has something to
+         draw: the real ones are pushed in by ThemeResources.Apply from the
+         code-behind, before the window is shown and on every theme change. -->
+    <Window.Resources>
+        <SolidColorBrush x:Key="BgAppBrush" Color="#FCFCFD" />
+        <SolidColorBrush x:Key="BgPanelBrush" Color="#F5F6F8" />
+        <SolidColorBrush x:Key="BgRailBrush" Color="#EDEFF3" />
+        <SolidColorBrush x:Key="BgHoverBrush" Color="#ECEEF2" />
+        <SolidColorBrush x:Key="DividerBrush" Color="#E6E8EC" />
+        <SolidColorBrush x:Key="DividerStrongBrush" Color="#D3D7DE" />
+        <SolidColorBrush x:Key="TextPrimaryBrush" Color="#14161A" />
+        <SolidColorBrush x:Key="TextSecondaryBrush" Color="#5B626D" />
+        <SolidColorBrush x:Key="TextTertiaryBrush" Color="#8A929E" />
+        <SolidColorBrush x:Key="CardBgBrush" Color="#FFFFFF" />
+        <SolidColorBrush x:Key="AccentBrush" Color="#005FB8" />
+        <SolidColorBrush x:Key="AccentSoftBrush" Color="#E5EFF8" />
+        <SolidColorBrush x:Key="AccentInkBrush" Color="#005FB8" />
+        <SolidColorBrush x:Key="OnAccentBrush" Color="#FFFFFF" />
+        <CornerRadius x:Key="RowRadiusValue">6</CornerRadius>
+        <CornerRadius x:Key="SurfaceRadiusValue">8</CornerRadius>
+        <FontFamily x:Key="AppFontFamily">Segoe UI</FontFamily>
+
+        <!-- Same flat template as the main window's (MainWindow.axaml): no
+             Fluent hover/press tint, the row's own background is the only
+             feedback. -->
+        <ControlTemplate x:Key="FlatButtonTemplate" TargetType="Button">
+            <ContentPresenter Content="{TemplateBinding Content}"
+                              Background="{TemplateBinding Background}"
+                              CornerRadius="{TemplateBinding CornerRadius}"
+                              Padding="{TemplateBinding Padding}"
+                              HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                              VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" />
+        </ControlTemplate>
+    </Window.Resources>
+
+    <Window.Styles>
+        <Style Selector="Button.row-button">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+            <Setter Property="Template" Value="{StaticResource FlatButtonTemplate}" />
+        </Style>
+        <Style Selector="Button.swatch-button">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template" Value="{StaticResource FlatButtonTemplate}" />
+        </Style>
+
+        <!-- Left-hand navigation: one row per page, the open one tinted. -->
+        <Style Selector="Button.nav Border.nav-pill">
+            <Setter Property="Padding" Value="10,8" />
+            <Setter Property="CornerRadius" Value="{DynamicResource RowRadiusValue}" />
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="Button.nav:pointerover Border.nav-pill">
+            <Setter Property="Background" Value="{DynamicResource BgHoverBrush}" />
+        </Style>
+        <Style Selector="Button.nav.selected Border.nav-pill">
+            <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
+        </Style>
+        <Style Selector="Button.nav Path">
+            <Setter Property="Width" Value="16" />
+            <Setter Property="Height" Value="16" />
+            <Setter Property="Stretch" Value="Uniform" />
+            <Setter Property="StrokeThickness" Value="1.8" />
+            <Setter Property="StrokeLineCap" Value="Round" />
+            <Setter Property="StrokeJoin" Value="Round" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Stroke" Value="{DynamicResource TextSecondaryBrush}" />
+        </Style>
+        <Style Selector="Button.nav TextBlock">
+            <Setter Property="FontSize" Value="13.5" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Button.nav.selected Path">
+            <Setter Property="Stroke" Value="{DynamicResource AccentInkBrush}" />
+        </Style>
+        <Style Selector="Button.nav.selected TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource AccentInkBrush}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+
+        <!-- One vocabulary for every page: a title, then settings made of a
+             label, an optional explanation right under it, and the control. -->
+        <Style Selector="TextBlock.page-title">
+            <Setter Property="FontSize" Value="19" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="Margin" Value="0,0,0,4" />
+        </Style>
+        <Style Selector="TextBlock.setting-label">
+            <Setter Property="FontSize" Value="13.5" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <Style Selector="TextBlock.setting-hint">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Foreground" Value="{DynamicResource TextTertiaryBrush}" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+        <Style Selector="Border.separator">
+            <Setter Property="Height" Value="1" />
+            <Setter Property="Background" Value="{DynamicResource DividerBrush}" />
+        </Style>
+
+        <!-- Every "pick one of these" is the same segmented control, so the
+             mode, language, font, size and emoji choices all read alike. -->
+        <Style Selector="Border.segmented">
+            <Setter Property="HorizontalAlignment" Value="Left" />
+            <Setter Property="Background" Value="{DynamicResource BgPanelBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource DividerStrongBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="{DynamicResource SurfaceRadiusValue}" />
+            <Setter Property="Padding" Value="3" />
+        </Style>
+        <Style Selector="Border.segment">
+            <Setter Property="CornerRadius" Value="{DynamicResource RowRadiusValue}" />
+            <Setter Property="Padding" Value="12,6" />
+            <Setter Property="MinHeight" Value="30" />
+        </Style>
+
+        <!-- The check box at the end of an on/off row. -->
+        <Style Selector="Border.check">
+            <Setter Property="Width" Value="18" />
+            <Setter Property="Height" Value="18" />
+            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="BorderThickness" Value="1.4" />
+            <Setter Property="BorderBrush" Value="{DynamicResource DividerStrongBrush}" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Margin" Value="16,0,0,0" />
+        </Style>
+        <Style Selector="Border.check Path">
+            <Setter Property="Stroke" Value="{DynamicResource OnAccentBrush}" />
+            <Setter Property="StrokeThickness" Value="1.6" />
+            <Setter Property="StrokeLineCap" Value="Round" />
+            <Setter Property="StrokeJoin" Value="Round" />
+            <Setter Property="Width" Value="10" />
+            <Setter Property="Height" Value="10" />
+            <Setter Property="Stretch" Value="Uniform" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+    </Window.Styles>
+
+    <Grid ColumnDefinitions="190,*">
+
+        <!-- NAVIGATION -->
+        <Border Grid.Column="0" Background="{DynamicResource BgPanelBrush}"
+                BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,1,0" Padding="10,16">
+            <StackPanel Spacing="2">
+                <Button x:Name="NavAppearance" Classes="row-button nav" Tag="0" Click="OnNavClick">
+                    <Border Classes="nav-pill">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <Path Data="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z" />
+                            <TextBlock Text="{Binding T.SettingsAppearance, Source={x:Static loc:Loc.Instance}}" />
+                        </StackPanel>
+                    </Border>
+                </Button>
+                <Button x:Name="NavText" Classes="row-button nav" Tag="1" Click="OnNavClick">
+                    <Border Classes="nav-pill">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <Path Data="M4 7V4h16v3 M9 20h6 M12 4v16" />
+                            <TextBlock Text="{Binding T.SettingsPageText, Source={x:Static loc:Loc.Instance}}" />
+                        </StackPanel>
+                    </Border>
+                </Button>
+                <Button x:Name="NavMessages" Classes="row-button nav" Tag="2" Click="OnNavClick">
+                    <Border Classes="nav-pill">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <Path Data="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9 M13.7 21a2 2 0 0 1-3.4 0" />
+                            <TextBlock Text="{Binding T.SettingsPageMessages, Source={x:Static loc:Loc.Instance}}" />
+                        </StackPanel>
+                    </Border>
+                </Button>
+                <Button x:Name="NavGeneral" Classes="row-button nav" Tag="3" Click="OnNavClick">
+                    <Border Classes="nav-pill">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <Path Data="M4 21v-7 M4 10V3 M12 21v-9 M12 8V3 M20 21v-5 M20 12V3 M1 14h6 M9 8h6 M17 16h6" />
+                            <TextBlock Text="{Binding T.SettingsPageGeneral, Source={x:Static loc:Loc.Instance}}" />
+                        </StackPanel>
+                    </Border>
+                </Button>
+            </StackPanel>
+        </Border>
+
+        <!-- PAGES — only one is visible at a time (see OnNavClick). -->
+        <ScrollViewer Grid.Column="1" x:Name="PageScroller" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+            <Panel Margin="28,22,28,28" MaxWidth="520" HorizontalAlignment="Left">
+
+                <!-- ── APPARENCE ─────────────────────────────────────── -->
+                <StackPanel x:Name="PageAppearance" Spacing="20">
+                    <TextBlock Classes="page-title" Text="{Binding T.SettingsAppearance, Source={x:Static loc:Loc.Instance}}" />
+
+                    <!-- The named theme first: when one is chosen it decides
+                         everything below it, so it reads top-down. A drop-down
+                         rather than tiles because the list is expected to grow. -->
+                    <StackPanel Spacing="8">
+                        <StackPanel Spacing="2">
+                            <TextBlock Classes="setting-label" Text="{Binding T.SettingsTheme, Source={x:Static loc:Loc.Instance}}" />
+                            <TextBlock Classes="setting-hint" Text="{Binding NamedThemeHint}" />
+                        </StackPanel>
+                        <Button x:Name="NamedThemeButton" Classes="row-button" Width="280" HorizontalAlignment="Left" Command="{Binding ToggleThemeMenuCommand}">
+                            <Border Background="{DynamicResource BgPanelBrush}" BorderBrush="{DynamicResource DividerStrongBrush}" BorderThickness="1"
+                                    CornerRadius="{DynamicResource SurfaceRadiusValue}" Padding="10,8">
+                                <Grid ColumnDefinitions="Auto,*,Auto" DataContext="{Binding CurrentNamedThemeOption}">
+                                    <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                        <Ellipse Width="14" Height="14" Fill="{Binding GroundDot}" Stroke="{DynamicResource DividerStrongBrush}" StrokeThickness="1.5" />
+                                        <Ellipse Width="14" Height="14" Margin="-4,0,0,0" Fill="{Binding TextDot}" Stroke="{DynamicResource BgPanelBrush}" StrokeThickness="1.5" />
+                                        <Ellipse Width="14" Height="14" Margin="-4,0,0,0" Fill="{Binding AccentDot}" Stroke="{DynamicResource BgPanelBrush}" StrokeThickness="1.5" />
+                                    </StackPanel>
+                                    <TextBlock Grid.Column="1" Text="{Binding Name}" FontSize="13" Margin="10,0" VerticalAlignment="Center" />
+                                    <Path Grid.Column="2" Data="M2 4l4 4 4-4" Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.6"
+                                          StrokeLineCap="Round" StrokeJoin="Round" Width="12" Height="12" Stretch="None" VerticalAlignment="Center" />
+                                </Grid>
+                            </Border>
+                        </Button>
+                        <Popup IsOpen="{Binding IsThemeMenuOpen, Mode=TwoWay}" PlacementTarget="{Binding #NamedThemeButton}" Placement="Bottom"
+                               VerticalOffset="4" IsLightDismissEnabled="True" Width="{Binding #NamedThemeButton.Bounds.Width}">
+                            <Border Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource DividerStrongBrush}" BorderThickness="1"
+                                    CornerRadius="{DynamicResource SurfaceRadiusValue}" Padding="4">
+                                <ScrollViewer MaxHeight="320" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                                    <ItemsControl ItemsSource="{Binding NamedThemeOptions}">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <StackPanel Spacing="2" />
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate DataType="models:NamedThemeOption">
+                                                <Button Classes="row-button"
+                                                        Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).SetNamedThemeCommand}"
+                                                        CommandParameter="{Binding Theme}">
+                                                    <Border Background="{Binding RowBackground}" CornerRadius="{DynamicResource RowRadiusValue}" Padding="10,7">
+                                                        <Grid ColumnDefinitions="Auto,*,Auto">
+                                                            <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                                                <Ellipse Width="14" Height="14" Fill="{Binding GroundDot}" Stroke="{DynamicResource DividerStrongBrush}" StrokeThickness="1.5" />
+                                                                <Ellipse Width="14" Height="14" Margin="-4,0,0,0" Fill="{Binding TextDot}" Stroke="{DynamicResource CardBgBrush}" StrokeThickness="1.5" />
+                                                                <Ellipse Width="14" Height="14" Margin="-4,0,0,0" Fill="{Binding AccentDot}" Stroke="{DynamicResource CardBgBrush}" StrokeThickness="1.5" />
+                                                            </StackPanel>
+                                                            <TextBlock Grid.Column="1" Text="{Binding Name}" Foreground="{Binding TextBrush}" FontSize="13" Margin="10,0" VerticalAlignment="Center" />
+                                                            <TextBlock Grid.Column="2" Text="{Binding Tag}" Foreground="{Binding TagBrush}" FontSize="11" VerticalAlignment="Center" />
+                                                        </Grid>
+                                                    </Border>
+                                                </Button>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </ScrollViewer>
+                            </Border>
+                        </Popup>
+                    </StackPanel>
+
+                    <Border Classes="separator" />
+
+                    <!-- While a named theme is chosen it decides the mode, the
+                         accent and the contrast: those are greyed out but kept,
+                         so the user still sees what they will get back. -->
+                    <StackPanel Orientation="Horizontal" Spacing="7" IsVisible="{Binding IsNamedThemeActive}" Margin="0,-6,0,-6">
+                        <Path Data="M5 11h14v10H5zM8 11V7a4 4 0 0 1 8 0v4" Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="2"
+                              StrokeLineCap="Round" StrokeJoin="Round" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding NamedThemeLockNote}" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" />
+                    </StackPanel>
+
+                    <StackPanel Spacing="20" IsEnabled="{Binding !IsNamedThemeActive}" Opacity="{Binding AppearanceOpacity}">
+                        <StackPanel Spacing="8">
+                            <StackPanel Spacing="2">
+                                <TextBlock Classes="setting-label" Text="{Binding T.SettingsMode, Source={x:Static loc:Loc.Instance}}" />
+                                <TextBlock Classes="setting-hint" Text="{Binding T.ThemeSystemHint, Source={x:Static loc:Loc.Instance}}" />
+                            </StackPanel>
+                            <Border Classes="segmented">
+                                <ItemsControl ItemsSource="{Binding ThemeOptions}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <StackPanel Orientation="Horizontal" Spacing="2" />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate DataType="models:ThemeOption">
+                                            <Button Classes="row-button"
+                                                    Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).SetThemeCommand}"
+                                                    CommandParameter="{Binding Mode}">
+                                                <Border Classes="segment" Background="{Binding RowBackground}">
+                                                    <StackPanel Orientation="Horizontal" Spacing="7" VerticalAlignment="Center">
+                                                        <Path Data="{Binding IconData}" Stroke="{Binding IconBrush}" StrokeThickness="1.8"
+                                                              StrokeLineCap="Round" StrokeJoin="Round"
+                                                              Width="14" Height="14" Stretch="Uniform" VerticalAlignment="Center" />
+                                                        <TextBlock Text="{Binding Name}" Foreground="{Binding TextBrush}" FontSize="13" VerticalAlignment="Center" />
+                                                    </StackPanel>
+                                                </Border>
+                                            </Button>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </Border>
+                        </StackPanel>
+
+                        <!-- Each swatch is the color itself, in the shade the
+                             current palette gives it; the one in use wears a
+                             ring of its own color. -->
+                        <StackPanel Spacing="8">
+                            <TextBlock Classes="setting-label" Text="{Binding T.AccentLabel, Source={x:Static loc:Loc.Instance}}" />
+                            <ItemsControl ItemsSource="{Binding AccentOptions}" Margin="-1,0,0,0">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel Orientation="Horizontal" Spacing="4" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="models:AccentOption">
+                                        <Button Classes="swatch-button" Width="30" Height="30" ToolTip.Tip="{Binding Name}"
+                                                Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).SetAccentCommand}"
+                                                CommandParameter="{Binding Accent}">
+                                            <Panel>
+                                                <Ellipse Width="28" Height="28" Stroke="{Binding RingBrush}" StrokeThickness="2" />
+                                                <Ellipse Width="18" Height="18" Fill="{Binding SwatchBrush}" />
+                                            </Panel>
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+
+                        <Button Classes="row-button" Command="{Binding ToggleReducedContrastCommand}">
+                            <Grid ColumnDefinitions="*,Auto" Background="Transparent">
+                                <StackPanel Grid.Column="0" Spacing="2">
+                                    <TextBlock Classes="setting-label" Text="{Binding T.ReducedContrast, Source={x:Static loc:Loc.Instance}}" />
+                                    <TextBlock Classes="setting-hint" Text="{Binding T.ReducedContrastHint, Source={x:Static loc:Loc.Instance}}" />
+                                </StackPanel>
+                                <Border Grid.Column="1" Classes="check" Background="{Binding Settings.ReducedContrastCheckBrush}">
+                                    <Path IsVisible="{Binding Settings.ReducedContrast}" Data="M4 9l3 3 6-7" />
+                                </Border>
+                            </Grid>
+                        </Button>
+                    </StackPanel>
+                </StackPanel>
+
+                <!-- ── TEXTE ─────────────────────────────────────────── -->
+                <StackPanel x:Name="PageText" Spacing="20" IsVisible="False">
+                    <TextBlock Classes="page-title" Text="{Binding T.SettingsPageText, Source={x:Static loc:Loc.Instance}}" />
+
+                    <StackPanel Spacing="8">
+                        <StackPanel Spacing="2">
+                            <TextBlock Classes="setting-label" Text="{Binding T.SettingsFont, Source={x:Static loc:Loc.Instance}}" />
+                            <TextBlock Classes="setting-hint" Text="{Binding T.FontMattermostHint, Source={x:Static loc:Loc.Instance}}" />
+                        </StackPanel>
+                        <Border Classes="segmented">
+                            <ItemsControl ItemsSource="{Binding FontChoiceOptions}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel Orientation="Horizontal" Spacing="2" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="models:FontChoiceOption">
+                                        <Button Classes="row-button"
+                                                Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).SetFontChoiceCommand}"
+                                                CommandParameter="{Binding Choice}">
+                                            <Border Classes="segment" Background="{Binding RowBackground}">
+                                                <TextBlock Text="{Binding Name}" Foreground="{Binding TextBrush}" FontFamily="{Binding Preview}"
+                                                           FontSize="13" VerticalAlignment="Center" />
+                                            </Border>
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </Border>
+                    </StackPanel>
+
+                    <!-- Each label is drawn at the size it stands for. -->
+                    <StackPanel Spacing="8">
+                        <TextBlock Classes="setting-label" Text="{Binding T.SettingsMessageFontSize, Source={x:Static loc:Loc.Instance}}" />
+                        <Border Classes="segmented">
+                            <ItemsControl ItemsSource="{Binding FontSizeOptions}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel Orientation="Horizontal" Spacing="2" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="models:FontSizeOption">
+                                        <Button Classes="row-button"
+                                                Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).SetFontSizeCommand}"
+                                                CommandParameter="{Binding Size}">
+                                            <Border Classes="segment" Background="{Binding RowBackground}">
+                                                <TextBlock Text="{Binding Label}" Foreground="{Binding TextBrush}" FontSize="{Binding Size}" VerticalAlignment="Center" />
+                                            </Border>
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </Border>
+                    </StackPanel>
+
+                    <Border Classes="separator" />
+
+                    <StackPanel Spacing="8">
+                        <StackPanel Spacing="2">
+                            <TextBlock Classes="setting-label" Text="{Binding T.SettingsEmoji, Source={x:Static loc:Loc.Instance}}" />
+                            <TextBlock Classes="setting-hint" Text="{Binding T.EmojiTwemojiHint, Source={x:Static loc:Loc.Instance}}" />
+                        </StackPanel>
+                        <Border Classes="segmented">
+                            <ItemsControl ItemsSource="{Binding EmojiStyleOptions}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel Orientation="Horizontal" Spacing="2" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="models:EmojiStyleOption">
+                                        <Button Classes="row-button"
+                                                Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).SetEmojiStyleCommand}"
+                                                CommandParameter="{Binding Style}">
+                                            <Border Classes="segment" Background="{Binding RowBackground}">
+                                                <TextBlock Text="{Binding Name}" Foreground="{Binding TextBrush}" FontSize="13" VerticalAlignment="Center" />
+                                            </Border>
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </Border>
+                    </StackPanel>
+                </StackPanel>
+
+                <!-- ── MESSAGES ──────────────────────────────────────── -->
+                <StackPanel x:Name="PageMessages" Spacing="20" IsVisible="False">
+                    <TextBlock Classes="page-title" Text="{Binding T.SettingsPageMessages, Source={x:Static loc:Loc.Instance}}" />
+
+                    <Button Classes="row-button" Command="{Binding ToggleSoundForAllMessagesCommand}">
+                        <Grid ColumnDefinitions="*,Auto" Background="Transparent">
+                            <StackPanel Grid.Column="0" Spacing="2">
+                                <TextBlock Classes="setting-label" Text="{Binding T.SoundForAllMessages, Source={x:Static loc:Loc.Instance}}" />
+                                <TextBlock Classes="setting-hint" Text="{Binding T.SoundForAllMessagesHint, Source={x:Static loc:Loc.Instance}}" />
+                            </StackPanel>
+                            <Border Grid.Column="1" Classes="check" Background="{Binding Settings.SoundForAllMessagesCheckBrush}">
+                                <Path IsVisible="{Binding Settings.SoundForAllMessages}" Data="M4 9l3 3 6-7" />
+                            </Border>
+                        </Grid>
+                    </Button>
+
+                    <Border Classes="separator" />
+
+                    <Button Classes="row-button" Command="{Binding ToggleLinkPreviewsCommand}">
+                        <Grid ColumnDefinitions="*,Auto" Background="Transparent">
+                            <StackPanel Grid.Column="0" Spacing="2">
+                                <TextBlock Classes="setting-label" Text="{Binding T.LinkPreviews, Source={x:Static loc:Loc.Instance}}" />
+                                <TextBlock Classes="setting-hint" Text="{Binding T.LinkPreviewsHint, Source={x:Static loc:Loc.Instance}}" />
+                            </StackPanel>
+                            <Border Grid.Column="1" Classes="check" Background="{Binding Settings.LinkPreviewsCheckBrush}">
+                                <Path IsVisible="{Binding Settings.ShowLinkPreviews}" Data="M4 9l3 3 6-7" />
+                            </Border>
+                        </Grid>
+                    </Button>
+                </StackPanel>
+
+                <!-- ── GÉNÉRAL ───────────────────────────────────────── -->
+                <StackPanel x:Name="PageGeneral" Spacing="20" IsVisible="False">
+                    <TextBlock Classes="page-title" Text="{Binding T.SettingsPageGeneral, Source={x:Static loc:Loc.Instance}}" />
+
+                    <!-- Each language is named in itself, so someone who
+                         switched by mistake can still find their way back. -->
+                    <StackPanel Spacing="8">
+                        <TextBlock Classes="setting-label" Text="{Binding T.SettingsLanguage, Source={x:Static loc:Loc.Instance}}" />
+                        <Border Classes="segmented">
+                            <ItemsControl ItemsSource="{Binding LanguageOptions}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel Orientation="Horizontal" Spacing="2" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="models:LanguageOption">
+                                        <Button Classes="row-button"
+                                                Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).SetLanguageCommand}"
+                                                CommandParameter="{Binding Language}">
+                                            <Border Classes="segment" Background="{Binding RowBackground}">
+                                                <TextBlock Text="{Binding Name}" Foreground="{Binding TextBrush}" FontSize="13" VerticalAlignment="Center" />
+                                            </Border>
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </Border>
+                    </StackPanel>
+
+                    <Border Classes="separator" />
+
+                    <StackPanel Spacing="8">
+                        <StackPanel Spacing="2">
+                            <TextBlock Classes="setting-label" Text="{Binding T.SettingsAccount, Source={x:Static loc:Loc.Instance}}" />
+                            <TextBlock Classes="setting-hint" Text="{Binding CurrentUserDisplayName}" />
+                        </StackPanel>
+                        <Button Classes="row-button" HorizontalAlignment="Left" Command="{Binding LogOutCommand}">
+                            <Border BorderBrush="{DynamicResource DividerStrongBrush}" BorderThickness="1" Background="{DynamicResource BgPanelBrush}"
+                                    CornerRadius="{DynamicResource SurfaceRadiusValue}" Padding="12,7">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <Path Data="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"
+                                          Stroke="{DynamicResource DangerBrush}" StrokeThickness="1.7" StrokeLineCap="Round" StrokeJoin="Round"
+                                          Width="15" Height="15" Stretch="Uniform" VerticalAlignment="Center" />
+                                    <TextBlock Text="{Binding T.LogOut, Source={x:Static loc:Loc.Instance}}" Foreground="{DynamicResource DangerBrush}" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Border>
+                        </Button>
+                    </StackPanel>
+                </StackPanel>
+            </Panel>
+        </ScrollViewer>
+    </Grid>
+</Window>
