@@ -28,6 +28,7 @@
         <SolidColorBrush x:Key="DividerStrongBrush" Color="#D3D7DE" />
         <SolidColorBrush x:Key="TextSecondaryBrush" Color="#5B626D" />
         <SolidColorBrush x:Key="AccentBrush" Color="#005FB8" />
+        <SolidColorBrush x:Key="AccentTextBrush" Color="#005FB8" />
         <SolidColorBrush x:Key="OnAccentBrush" Color="#FFFFFF" />
         <SolidColorBrush x:Key="DangerBrush" Color="#C42B1C" />
         <SolidColorBrush x:Key="DangerSoftBrush" Color="#FBEAE8" />
@@ -50,7 +51,7 @@
         </Style>
         <Style Selector="Button.language-link:pointerover /template/ ContentPresenter">
             <Setter Property="Background" Value="Transparent" />
-            <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource AccentTextBrush}" />
         </Style>
     </Window.Styles>
 

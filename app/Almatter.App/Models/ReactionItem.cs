@@ -35,13 +35,17 @@ public sealed partial class ReactionItem : ObservableObject
     [ObservableProperty]
     public partial Bitmap? Image { get; set; }
 
-    public IBrush BorderBrush => ReactedByMe ? ColorTokens.Accent : ColorTokens.Divider;
+    public IBrush BorderBrush => ReactedByMe ? ColorTokens.ReactionMineBorder : ColorTokens.Divider;
     public IBrush TextBrush => ReactedByMe ? ColorTokens.AccentInk : ColorTokens.TextSecondary;
+
+    /// <summary>The pill's fill: none on most themes; on Ark, the accent's soft tint for yours and a quiet grey for the others.</summary>
+    public IBrush Background => ReactedByMe ? ColorTokens.ReactionMineBackground : ColorTokens.ReactionBackground;
 
     /// <summary>Called after the accent color or theme changes so an already-built reaction pill repaints in place.</summary>
     public void RefreshColors()
     {
         OnPropertyChanged(nameof(BorderBrush));
         OnPropertyChanged(nameof(TextBrush));
+        OnPropertyChanged(nameof(Background));
     }
 }

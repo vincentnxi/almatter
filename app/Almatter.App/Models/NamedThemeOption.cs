@@ -14,14 +14,14 @@ public sealed partial class NamedThemeOption : ObservableObject
 {
     public required AppNamedTheme Theme { get; init; }
 
-    /// <summary>Null for the "Almatter" row.</summary>
+    /// <summary>Null for the "Almatter" and "Ark" rows, which follow the mode rather than being one fixed palette.</summary>
     public NamedPalette? Palette { get; init; }
 
-    public string Name => Palette?.Name ?? "Almatter";
+    public string Name => Palette?.Name ?? (Theme == AppNamedTheme.Ark ? "Ark" : "Almatter");
 
-    public string Tag => Palette is null
-        ? Loc.S.ThemeAlmatterTag
-        : Palette.IsDark ? Loc.S.ThemeDark : Loc.S.ThemeLight;
+    public string Tag => Palette is not null
+        ? Palette.IsDark ? Loc.S.ThemeDark : Loc.S.ThemeLight
+        : Theme == AppNamedTheme.Ark ? Loc.S.ThemeArkTag : Loc.S.ThemeAlmatterTag;
 
     [ObservableProperty]
     public partial bool IsSelected { get; set; }
@@ -41,8 +41,9 @@ public sealed partial class NamedThemeOption : ObservableObject
 
     /// <summary>
     /// Called after the palette changes. <paramref name="almatterPalette"/> is
-    /// what the app's own palette looks like with the user's mode, accent and
-    /// contrast settings, for the "Almatter" row's dots.
+    /// what the row's palette looks like with the user's mode, accent and
+    /// contrast settings, for the "Almatter" and "Ark" rows' dots; the other
+    /// rows ignore it.
     /// </summary>
     public void RefreshColors(ThemeDefinition almatterPalette)
     {
@@ -55,7 +56,7 @@ public sealed partial class NamedThemeOption : ObservableObject
         }
         else
         {
-            GroundDot = ColorTokens.Solid(almatterPalette.BgApp);
+            GroundDot = ColorTokens.Solid(almatterPalette.WindowGroundHex ?? almatterPalette.BgApp);
             TextDot = ColorTokens.Solid(almatterPalette.TextPrimary);
             AccentDot = ColorTokens.Solid(almatterPalette.AccentHex);
         }

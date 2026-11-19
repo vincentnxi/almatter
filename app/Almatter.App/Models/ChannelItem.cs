@@ -60,7 +60,11 @@ public sealed partial class ChannelItem : ObservableObject, IChannelListItem
     public bool HasMentions => MentionCount > 0;
     public bool IsPrivate => Kind == ChannelKind.Private;
 
-    public IBrush RowBackground => IsSelected ? ColorTokens.AccentSoft : Brushes.Transparent;
+    public IBrush RowBackground => IsSelected ? ColorTokens.SelectedRow : Brushes.Transparent;
+
+    /// <summary>The selected row's outline and shadow: only under a theme that draws it as a card (Ark).</summary>
+    public IBrush RowBorderBrush => IsSelected ? ColorTokens.SelectedRowBorder : Brushes.Transparent;
+    public BoxShadows RowShadow => IsSelected ? ColorTokens.SelectedRowShadow : default;
 
     /// <summary>
     /// Three levels, not two. A channel with something waiting is at full
@@ -71,7 +75,7 @@ public sealed partial class ChannelItem : ObservableObject, IChannelListItem
     /// from shouting about what isn't.
     /// </summary>
     public IBrush NameBrush => IsSelected
-        ? ColorTokens.AccentInk
+        ? ColorTokens.SelectedRowInk
         : HasUnread ? ColorTokens.TextPrimary : ColorTokens.TextSecondary;
 
     /// <summary>
@@ -81,10 +85,12 @@ public sealed partial class ChannelItem : ObservableObject, IChannelListItem
     /// weight it always had, and only the unread ones gain.
     /// </summary>
     public IBrush IconBrush => IsSelected
-        ? ColorTokens.AccentInk
+        ? ColorTokens.SelectedRowInk
         : HasUnread ? ColorTokens.TextPrimary : ColorTokens.TextSecondary;
 
-    public FontWeight NameWeight => IsSelected || HasUnread ? FontWeight.Bold : FontWeight.Normal;
+    public FontWeight NameWeight => IsSelected || HasUnread
+        ? (ColorTokens.Theme.ArkStyle ? FontWeight.SemiBold : FontWeight.Bold)
+        : FontWeight.Normal;
 
     /// <summary>
     /// An accent dot for "something here, but nobody called your name". It
@@ -97,6 +103,9 @@ public sealed partial class ChannelItem : ObservableObject, IChannelListItem
     public void RefreshColors()
     {
         OnPropertyChanged(nameof(RowBackground));
+        OnPropertyChanged(nameof(RowBorderBrush));
+        OnPropertyChanged(nameof(RowShadow));
+        OnPropertyChanged(nameof(NameWeight));
         OnPropertyChanged(nameof(NameBrush));
         OnPropertyChanged(nameof(IconBrush));
     }
@@ -104,6 +113,9 @@ public sealed partial class ChannelItem : ObservableObject, IChannelListItem
     partial void OnIsSelectedChanged(bool value)
     {
         OnPropertyChanged(nameof(RowBackground));
+        OnPropertyChanged(nameof(RowBorderBrush));
+        OnPropertyChanged(nameof(RowShadow));
+        OnPropertyChanged(nameof(NameWeight));
         OnPropertyChanged(nameof(NameBrush));
         OnPropertyChanged(nameof(IconBrush));
         OnPropertyChanged(nameof(NameWeight));

@@ -76,6 +76,41 @@ public sealed record ThemeDefinition
 
     public bool HasGradientGround => GroundTopHex is not null && GroundBottomHex is not null;
 
+    /// <summary>
+    /// The accent as text and icons on the ground (links, mentions, "3
+    /// replies", the pin label), and as the selected row's text. Null for
+    /// the usual case where the accent itself reads as text; set when the
+    /// accent is a pastel on a light palette, which it doesn't.
+    /// </summary>
+    public string? AccentDeepHex { get; init; }
+
+    /// <summary>The selected row's tint, when the usual one (the accent nearly faded into the panel) would vanish. Null for the usual one.</summary>
+    public string? AccentSoftHex { get; init; }
+
+    /// <summary>
+    /// Panels drawn as rounded cards with a gap around them, over a ground
+    /// of their own (WindowGroundHex), rather than edge to edge with a line
+    /// between them. Only Ark has them.
+    /// </summary>
+    public bool FloatingPanels { get; init; }
+
+    /// <summary>What shows in the gaps between floating panels. Null: the window is BgApp, as usual.</summary>
+    public string? WindowGroundHex { get; init; }
+
+    /// <summary>
+    /// Ark's own styling beyond colours and panels: the Geist typefaces with
+    /// small monospaced labels, a light channel title, ink-coloured primary
+    /// buttons, the selected row as a raised card, the composer in a well,
+    /// and the title bar drawn into the window (on Windows).
+    /// </summary>
+    public bool ArkStyle { get; init; }
+
+    /// <summary>The selected sidebar row's card. Null: the usual accent tint.</summary>
+    public string? SelectedRowHex { get; init; }
+
+    /// <summary>Ark's soft shadows are on (the user's "Shadows" setting): panels, composer, header buttons and the selected row.</summary>
+    public bool CastsShadows { get; init; }
+
     public static readonly ThemeDefinition Light = new()
     {
         Name = "Clair",
@@ -137,6 +172,80 @@ public sealed record ThemeDefinition
     };
 
     /// <summary>
+    /// Ark, light: neutral greys, the panels as near-white cards floating
+    /// on a darker grey ground. The accent fields are placeholders: Resolve
+    /// lays the chosen pastel over them.
+    /// </summary>
+    public static readonly ThemeDefinition ArkLight = new()
+    {
+        Name = "Ark",
+        IsDark = false,
+        WindowGroundHex = "#E3E4E7",
+        FloatingPanels = true,
+        ArkStyle = true,
+        SelectedRowHex = "#FFFFFF",
+        BgApp = "#FCFCFD",
+        BgPanel = "#F4F5F6",
+        BgRail = "#ECEDEF",
+        BgHover = "#EEEFF1",
+        Divider = "#E0E1E5",
+        DividerStrong = "#C9CBD0",
+        TextPrimary = "#16171A",
+        TextSecondary = "#5C5F65",
+        TextTertiary = "#73767C",
+        CardBg = "#FFFFFF",
+        AccentHex = ArkAccentPalette.PastelHex(AppArkAccent.Citron),
+        OnAccentHex = ArkAccentPalette.OnPastelHex,
+        DangerHex = "#C42B1C",
+        DangerSoftHex = "#FBEAE8",
+        DangerBorderHex = "#F0C4BE",
+        ScrimHex = "#B3FCFCFD",
+        PopoverShadow = "0 8 24 0 #2E101114",
+        CardShadow = "0 2 6 0 #14101114",
+        PresenceOnlineHex = "#1F9E4A",
+        PresenceAwayHex = "#D9A521",
+        PresenceDndHex = "#C42B1C",
+        PresenceOfflineHex = "#8E9197",
+        RowRadius = 7,
+        SurfaceRadius = 10,
+    };
+
+    /// <summary>Ark, dark: anthracite cards on a near-black ground. The pastels read as text here as they are.</summary>
+    public static readonly ThemeDefinition ArkDark = new()
+    {
+        Name = "Ark",
+        IsDark = true,
+        WindowGroundHex = "#08090A",
+        FloatingPanels = true,
+        ArkStyle = true,
+        SelectedRowHex = "#2A2B30",
+        BgApp = "#1A1B1F",
+        BgPanel = "#151619",
+        BgRail = "#212226",
+        BgHover = "#1E1F23",
+        Divider = "#2A2C31",
+        DividerStrong = "#3A3D43",
+        TextPrimary = "#EDEEF0",
+        TextSecondary = "#A2A5AC",
+        TextTertiary = "#80848C",
+        CardBg = "#222328",
+        AccentHex = ArkAccentPalette.PastelHex(AppArkAccent.Citron),
+        OnAccentHex = ArkAccentPalette.OnPastelHex,
+        DangerHex = "#F06A6E",
+        DangerSoftHex = "#2E1B1C",
+        DangerBorderHex = "#5A2B2D",
+        ScrimHex = "#B31A1B1F",
+        PopoverShadow = "0 10 28 0 #B3000000",
+        CardShadow = "0 2 8 0 #80000000",
+        PresenceOnlineHex = "#5FC77A",
+        PresenceAwayHex = "#E0B04A",
+        PresenceDndHex = "#F06A6E",
+        PresenceOfflineHex = "#80848C",
+        RowRadius = 7,
+        SurfaceRadius = 10,
+    };
+
+    /// <summary>
     /// Resolves the user's preferences to an actual palette. System defers
     /// to whatever Windows currently reports. The accent is laid over the
     /// palette last: only its hue is the user's choice, the shade comes from
@@ -147,7 +256,9 @@ public sealed record ThemeDefinition
         bool systemPrefersDark,
         bool reducedContrast = false,
         AppAccent accent = AppAccent.Blue,
-        AppNamedTheme named = AppNamedTheme.None)
+        AppNamedTheme named = AppNamedTheme.None,
+        AppArkAccent arkAccent = AppArkAccent.Citron,
+        bool arkShadows = true)
     {
         // A named theme decides everything on its own: the mode, the accent
         // and the softening are left out, not lost — they are still saved,
@@ -157,12 +268,36 @@ public sealed record ThemeDefinition
             return FromPalette(palette);
         }
 
-        var theme = mode switch
+        var dark = mode switch
         {
-            AppThemeMode.Light => Light,
-            AppThemeMode.Dark => Dark,
-            _ => systemPrefersDark ? Dark : Light,
+            AppThemeMode.Light => false,
+            AppThemeMode.Dark => true,
+            _ => systemPrefersDark,
         };
+
+        // Ark follows the mode and the softening like Almatter's own
+        // palette, with its own pastel accent instead of the usual one.
+        if (named == AppNamedTheme.Ark)
+        {
+            var ark = dark ? ArkDark : ArkLight;
+            if (reducedContrast)
+            {
+                ark = ark.Softened();
+            }
+            var pastel = ArkAccentPalette.PastelHex(arkAccent);
+            return ark with
+            {
+                AccentHex = pastel,
+                OnAccentHex = ArkAccentPalette.OnPastelHex,
+                AccentDeepHex = dark ? null : ArkAccentPalette.DeepHex(arkAccent),
+                // Halfway to white: the usual 88 % fade would leave a pastel
+                // all but invisible on the light sidebar.
+                AccentSoftHex = dark ? null : Mix(pastel, "#FFFFFF", 0.45),
+                CastsShadows = arkShadows,
+            };
+        }
+
+        var theme = dark ? Dark : Light;
         if (reducedContrast)
         {
             theme = theme.Softened();
@@ -275,6 +410,13 @@ public sealed record ThemeDefinition
         SurfaceRadius = SurfaceRadius,
         GroundTopHex = GroundTopHex is null ? null : TowardMidGrey(GroundTopHex),
         GroundBottomHex = GroundBottomHex is null ? null : TowardMidGrey(GroundBottomHex),
+        AccentDeepHex = AccentDeepHex,
+        AccentSoftHex = AccentSoftHex,
+        FloatingPanels = FloatingPanels,
+        WindowGroundHex = WindowGroundHex is null ? null : TowardMidGrey(WindowGroundHex),
+        ArkStyle = ArkStyle,
+        SelectedRowHex = SelectedRowHex is null ? null : TowardMidGrey(SelectedRowHex),
+        CastsShadows = CastsShadows,
     };
 
     private static string TowardMidGrey(string hex) => Mix(hex, "#808080", SurfaceSoftening);

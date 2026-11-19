@@ -88,7 +88,7 @@ public sealed class MessageInlineText : SelectableTextBlock
 
         // Rebuilt when the theme swaps these, since a Run can't hold a
         // DynamicResource of its own.
-        this.GetResourceObservable("AccentBrush").Subscribe(new ResourceObserver(value =>
+        this.GetResourceObservable("AccentTextBrush").Subscribe(new ResourceObserver(value =>
         {
             if (!ReferenceEquals(value, _accentBrush))
             {

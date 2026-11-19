@@ -741,7 +741,7 @@ public partial class MainViewModel : ViewModelBase
     public ObservableCollection<MessageItem> ThreadReplies { get; } = [];
 
     /// <summary>The count between the thread's root and its replies.</summary>
-    public string ThreadReplyCountLabel => Loc.S.ReplyCount(ThreadReplies.Count);
+    public string ThreadReplyCountLabel => SectionHeading(Loc.S.ReplyCount(ThreadReplies.Count));
 
     /// <summary>The composer's @mention autocomplete popup — shared between the main and thread composers (only one can be focused at a time); see MentionPopupIsForThread for which one is currently showing it.</summary>
     public ObservableCollection<MentionSuggestionItem> MentionSuggestions { get; } = [];
@@ -813,10 +813,22 @@ public partial class MainViewModel : ViewModelBase
         new() { Accent = AppAccent.Violet },
     ];
 
-    /// <summary>The theme menu's rows: Almatter's own palette first, then every named theme.</summary>
+    /// <summary>Ark's pastel swatches, shown in place of AccentOptions while Ark is the theme.</summary>
+    public ObservableCollection<ArkAccentOption> ArkAccentOptions { get; } =
+    [
+        new(AppArkAccent.Citron),
+        new(AppArkAccent.Sauge),
+        new(AppArkAccent.Ciel),
+        new(AppArkAccent.Lavande),
+        new(AppArkAccent.Peche),
+        new(AppArkAccent.Rose),
+    ];
+
+    /// <summary>The theme menu's rows: Almatter's own palette first, then Ark, then every named theme.</summary>
     public ObservableCollection<NamedThemeOption> NamedThemeOptions { get; } =
     [
         new() { Theme = AppNamedTheme.None },
+        new() { Theme = AppNamedTheme.Ark },
         .. NamedThemes.All.Select(p => new NamedThemeOption { Theme = p.Id, Palette = p }),
     ];
 
@@ -825,23 +837,62 @@ public partial class MainViewModel : ViewModelBase
     public partial bool IsThemeMenuOpen { get; set; }
 
     /// <summary>
-    /// A named theme is in force. Checked against the catalogue rather than
-    /// just "not None": a saved number this version doesn't know draws
-    /// Almatter's own palette, so it must not lock the appearance settings.
+    /// A fixed-palette theme is in force (Nord, Expresso…). Checked against
+    /// the catalogue rather than just "not None": a saved number this version
+    /// doesn't know draws Almatter's own palette, so it must not hide the
+    /// appearance settings.
     /// </summary>
     public bool IsNamedThemeActive => NamedThemes.Find(Settings.NamedTheme) is not null;
 
-    /// <summary>The appearance settings a named theme overrides are shown greyed out, not hidden: the user can still see what they will get back.</summary>
-    public double AppearanceOpacity => IsNamedThemeActive ? 0.42 : 1;
+    /// <summary>Ark is the theme: it follows the mode and the contrast, with its own accents.</summary>
+    public bool IsArkThemeActive => Settings.NamedTheme == AppNamedTheme.Ark;
+
+    /// <summary>
+    /// Mode and reduced contrast are shown only when the theme uses them —
+    /// Almatter's own palette and Ark. A fixed-palette theme decides both, so
+    /// they are hidden rather than greyed out; their saved values are kept.
+    /// </summary>
+    public bool ShowModeAndContrast => !IsNamedThemeActive;
+
+    /// <summary>The usual accent swatches: only under Almatter's own palette.</summary>
+    public bool ShowAccentOptions => !IsNamedThemeActive && !IsArkThemeActive;
+
+    /// <summary>
+    /// The composers' rows of files waiting to be sent. Under Ark the row
+    /// is dropped while empty: its spacing would otherwise push the text
+    /// off the middle of the one-line composer. Every other theme keeps it,
+    /// so their composers stay exactly as tall as before.
+    /// </summary>
+    public bool ShowPendingAttachments => PendingAttachments.Count > 0 || !ColorTokens.Theme.ArkStyle;
+    public bool ShowThreadPendingAttachments => ThreadPendingAttachments.Count > 0 || !ColorTokens.Theme.ArkStyle;
+
+    /// <summary>The font choice: hidden under Ark, which sets its own typeface (Geist). The choice is kept.</summary>
+    public bool ShowFontChoice => !IsArkThemeActive;
+
+    // The sidebar's section headings. Ark sets them as small capitals in a
+    // monospaced face; TextBlock has no text-transform, so the capitals are
+    // made here.
+    public string FavoritesHeaderLabel => SectionHeading(Loc.S.FavoritesHeader);
+    public string ChannelsHeaderLabel => SectionHeading(Loc.S.ChannelsHeader);
+    public string DirectMessagesHeaderLabel => SectionHeading(Loc.S.DirectMessagesHeader);
+
+    private static string SectionHeading(string text) =>
+        ColorTokens.Theme.ArkStyle ? text.ToUpper(CultureInfo.CurrentCulture) : text;
+
+    private void RefreshSectionHeadings()
+    {
+        OnPropertyChanged(nameof(FavoritesHeaderLabel));
+        OnPropertyChanged(nameof(ChannelsHeaderLabel));
+        OnPropertyChanged(nameof(DirectMessagesHeaderLabel));
+    }
 
     /// <summary>The row the closed menu shows.</summary>
     public NamedThemeOption CurrentNamedThemeOption =>
         NamedThemeOptions.FirstOrDefault(o => o.IsSelected) ?? NamedThemeOptions[0];
 
-    public string NamedThemeLockNote => Loc.S.ThemeLockedNote(CurrentNamedThemeOption.Name);
-
-    public string NamedThemeHint => IsNamedThemeActive
-        ? Loc.S.ThemeHintActive(CurrentNamedThemeOption.Name)
+    public string NamedThemeHint =>
+        IsNamedThemeActive ? Loc.S.ThemeHintActive(CurrentNamedThemeOption.Name)
+        : IsArkThemeActive ? Loc.S.ThemeHintArk
         : Loc.S.ThemeHintNone;
 
     /// <summary>
@@ -958,6 +1009,8 @@ public partial class MainViewModel : ViewModelBase
         Channels.CollectionChanged += OnSidebarListChanged;
         FavoriteDirectMessages.CollectionChanged += OnSidebarListChanged;
         DirectMessages.CollectionChanged += OnSidebarListChanged;
+        PendingAttachments.CollectionChanged += (_, _) => OnPropertyChanged(nameof(ShowPendingAttachments));
+        ThreadPendingAttachments.CollectionChanged += (_, _) => OnPropertyChanged(nameof(ShowThreadPendingAttachments));
         ApplyTheme();
         RefreshFontChoiceSelection();
         RefreshEmojiStyleSelection();
@@ -965,7 +1018,8 @@ public partial class MainViewModel : ViewModelBase
         InitializeEmojiPicker();
         Settings.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName is nameof(AppSettings.ThemeMode) or nameof(AppSettings.ReducedContrast) or nameof(AppSettings.Accent) or nameof(AppSettings.NamedTheme))
+            if (e.PropertyName is nameof(AppSettings.ThemeMode) or nameof(AppSettings.ReducedContrast) or nameof(AppSettings.Accent)
+                or nameof(AppSettings.NamedTheme) or nameof(AppSettings.ArkAccent) or nameof(AppSettings.ArkShadows))
             {
                 ApplyTheme();
             }
@@ -4695,6 +4749,12 @@ public partial class MainViewModel : ViewModelBase
     private void SetAccent(AppAccent accent) => Settings.Accent = accent;
 
     [RelayCommand]
+    private void SetArkAccent(AppArkAccent accent) => Settings.ArkAccent = accent;
+
+    [RelayCommand]
+    private void ToggleArkShadows() => Settings.ArkShadows = !Settings.ArkShadows;
+
+    [RelayCommand]
     private void ToggleThemeMenu() => IsThemeMenuOpen = !IsThemeMenuOpen;
 
     /// <summary>
@@ -4750,12 +4810,16 @@ public partial class MainViewModel : ViewModelBase
         {
             option.RefreshLanguage();
         }
+        foreach (var option in ArkAccentOptions)
+        {
+            option.RefreshLanguage();
+        }
         foreach (var option in NamedThemeOptions)
         {
             option.RefreshLanguage();
         }
-        OnPropertyChanged(nameof(NamedThemeLockNote));
         OnPropertyChanged(nameof(NamedThemeHint));
+        RefreshSectionHeadings();
         foreach (var option in FontChoiceOptions)
         {
             option.RefreshLanguage();
@@ -4829,7 +4893,7 @@ public partial class MainViewModel : ViewModelBase
     private void ApplyTheme()
     {
         ColorTokens.ApplyTheme(
-            ThemeDefinition.Resolve(Settings.ThemeMode, SystemTheme.PrefersDark, Settings.ReducedContrast, Settings.Accent, Settings.NamedTheme));
+            ThemeDefinition.Resolve(Settings.ThemeMode, SystemTheme.PrefersDark, Settings.ReducedContrast, Settings.Accent, Settings.NamedTheme, Settings.ArkAccent, Settings.ArkShadows));
 
         foreach (var option in ThemeOptions)
         {
@@ -4842,21 +4906,35 @@ public partial class MainViewModel : ViewModelBase
             option.IsSelected = option.Accent == Settings.Accent;
             option.RefreshColors();
         }
+        foreach (var option in ArkAccentOptions)
+        {
+            option.IsSelected = option.Accent == Settings.ArkAccent;
+            option.RefreshColors();
+        }
         Settings.RefreshColors();
 
-        // The "Almatter" row previews the app's own palette as the user's
+        // The "Almatter" and "Ark" rows preview their palette as the user's
         // settings make it, whichever theme is in force right now.
         var almatterPalette = ThemeDefinition.Resolve(Settings.ThemeMode, SystemTheme.PrefersDark, Settings.ReducedContrast, Settings.Accent);
-        var selectedTheme = IsNamedThemeActive ? Settings.NamedTheme : AppNamedTheme.None;
+        var arkPalette = ThemeDefinition.Resolve(Settings.ThemeMode, SystemTheme.PrefersDark, Settings.ReducedContrast,
+            named: AppNamedTheme.Ark, arkAccent: Settings.ArkAccent);
+        var selectedTheme = IsNamedThemeActive || IsArkThemeActive ? Settings.NamedTheme : AppNamedTheme.None;
         foreach (var option in NamedThemeOptions)
         {
             option.IsSelected = option.Theme == selectedTheme;
-            option.RefreshColors(almatterPalette);
+            option.RefreshColors(option.Theme == AppNamedTheme.Ark ? arkPalette : almatterPalette);
         }
         OnPropertyChanged(nameof(IsNamedThemeActive));
-        OnPropertyChanged(nameof(AppearanceOpacity));
+        OnPropertyChanged(nameof(IsArkThemeActive));
+        OnPropertyChanged(nameof(ShowModeAndContrast));
+        OnPropertyChanged(nameof(ShowAccentOptions));
+        OnPropertyChanged(nameof(ShowFontChoice));
+        OnPropertyChanged(nameof(ShowPendingAttachments));
+        OnPropertyChanged(nameof(ShowThreadPendingAttachments));
+        RefreshSectionHeadings();
+        OnPropertyChanged(nameof(ThreadReplyCountLabel));
+        RefreshDateSeparatorLabels();
         OnPropertyChanged(nameof(CurrentNamedThemeOption));
-        OnPropertyChanged(nameof(NamedThemeLockNote));
         OnPropertyChanged(nameof(NamedThemeHint));
 
         foreach (var option in SkinToneOptions)
@@ -6008,7 +6086,11 @@ public partial class MainViewModel : ViewModelBase
     /// language in the middle of the conversation. The year is dropped for the current year, which
     /// is where nearly all reading happens.
     /// </summary>
-    private static string FormatDateSeparator(DateTime day)
+    /// <summary>The day in words, in capitals under Ark (see SectionHeading).</summary>
+    private static string FormatDateSeparator(DateTime day) =>
+        ColorTokens.Theme.ArkStyle ? WordDay(day).ToUpper(Loc.Culture) : WordDay(day);
+
+    private static string WordDay(DateTime day)
     {
         var today = DateTime.Today;
         if (day == today)

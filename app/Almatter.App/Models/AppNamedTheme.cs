@@ -25,4 +25,13 @@ public enum AppNamedTheme
     Creme = 10,
     Crepuscule = 11,
     Aube = 12,
+
+    /// <summary>
+    /// Almatter's second look of its own: neutral greys, panels that float
+    /// as rounded cards, pastel accents. Unlike the palettes above it is not
+    /// one fixed palette: it follows the light/dark mode and has its own
+    /// accent choice (see <see cref="AppArkAccent"/>), so it is not in
+    /// <see cref="NamedThemes.All"/>.
+    /// </summary>
+    Ark = 13,
 }

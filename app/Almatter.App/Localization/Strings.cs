@@ -203,13 +203,22 @@ public sealed partial class Strings
     public required string AccentAmber { get; init; }
     public required string AccentRose { get; init; }
     public required string AccentViolet { get; init; }
+    public required string AccentCitron { get; init; }
+    public required string AccentSage { get; init; }
+    public required string AccentSky { get; init; }
+    public required string AccentLavender { get; init; }
+    public required string AccentPeach { get; init; }
+    public required string AccentPink { get; init; }
     public required string ReducedContrast { get; init; }
     public required string ReducedContrastHint { get; init; }
     public required string SettingsTheme { get; init; }
     public required string ThemeAlmatterTag { get; init; }
+    public required string ThemeArkTag { get; init; }
     public required string ThemeHintNone { get; init; }
     public required Func<string, string> ThemeHintActive { get; init; }
-    public required Func<string, string> ThemeLockedNote { get; init; }
+    public required string ThemeHintArk { get; init; }
+    public required string ArkShadows { get; init; }
+    public required string ArkShadowsHint { get; init; }
     public required string SettingsFont { get; init; }
     public required string FontSystem { get; init; }
     public required string FontMattermostHint { get; init; }

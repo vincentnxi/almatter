@@ -20,6 +20,24 @@ public static class ColorTokens
     public static IBrush AccentSoft { get; private set; } = Solid("#D7E3F0");
     public static IBrush AccentInk { get; private set; } = Solid("#074581");
 
+    /// <summary>
+    /// The accent where it is text or an icon straight on the ground: links,
+    /// mentions, "3 replies", the pin label. The accent itself, except on a
+    /// palette whose accent is too pale for that (ThemeDefinition.AccentDeepHex).
+    /// </summary>
+    public static IBrush AccentText { get; private set; } = Solid(ThemeDefinition.Light.AccentHex);
+
+    /// <summary>The selected sidebar row: fill, text, outline and shadow. See ThemeDefinition.SelectedRowHex.</summary>
+    public static IBrush SelectedRow { get; private set; } = Solid("#D7E3F0");
+    public static IBrush SelectedRowInk { get; private set; } = Solid("#074581");
+    public static IBrush SelectedRowBorder { get; private set; } = Brushes.Transparent;
+    public static BoxShadows SelectedRowShadow { get; private set; }
+
+    /// <summary>Reaction pills: outlined only on most themes, tinted on Ark. See ReactionItem.</summary>
+    public static IBrush ReactionMineBorder { get; private set; } = Solid(ThemeDefinition.Light.AccentHex);
+    public static IBrush ReactionMineBackground { get; private set; } = Brushes.Transparent;
+    public static IBrush ReactionBackground { get; private set; } = Brushes.Transparent;
+
     /// <summary>Behind selected text. AccentSoft itself on a light palette; a brighter blue on a dark one.</summary>
     public static IBrush TextSelection { get; private set; } = Solid("#D7E3F0");
 
@@ -44,8 +62,36 @@ public static class ColorTokens
 
         var accentColor = Color.Parse(theme.AccentHex);
         Accent = new SolidColorBrush(accentColor);
-        AccentSoft = new SolidColorBrush(Lerp(accentColor, Color.Parse(theme.BgPanel), 0.88));
-        AccentInk = new SolidColorBrush(Lerp(accentColor, Color.Parse(theme.TextPrimary), 0.35));
+        AccentSoft = theme.AccentSoftHex is { } soft
+            ? Solid(soft)
+            : new SolidColorBrush(Lerp(accentColor, Color.Parse(theme.BgPanel), 0.88));
+
+        // A pastel accent on a light palette can't be read as text, so the
+        // palette hands over a deep shade of it for that (Ark); every other
+        // palette's accent reads as text as it is.
+        AccentInk = theme.AccentDeepHex is { } deep
+            ? Solid(deep)
+            : new SolidColorBrush(Lerp(accentColor, Color.Parse(theme.TextPrimary), 0.35));
+        AccentText = theme.AccentDeepHex is { } deepText ? Solid(deepText) : Accent;
+
+        // The selected sidebar row: the accent tint with accent-coloured
+        // text, or (Ark) a raised card in the panel's own ink.
+        SelectedRow = theme.SelectedRowHex is { } card ? Solid(card) : AccentSoft;
+        SelectedRowInk = theme.SelectedRowHex is null ? AccentInk : Solid(theme.TextPrimary);
+        SelectedRowBorder = theme.SelectedRowHex is null ? Brushes.Transparent : Solid(theme.Divider);
+        // Reactions. On a light Ark palette the pastel itself is too faint
+        // for an outline, so yours is ringed in its deep shade, at 45 %.
+        ReactionMineBorder = theme.AccentDeepHex is { } ring ? Solid("#73" + ring[1..]) : Accent;
+        ReactionMineBackground = theme.ArkStyle ? AccentSoft : Brushes.Transparent;
+        ReactionBackground = theme.ArkStyle ? Solid(theme.BgPanel) : Brushes.Transparent;
+
+        // Strong enough to lift the card off the sidebar, as in the mockup:
+        // a fine edge plus a soft fall below. Off with the "Shadows" setting.
+        SelectedRowShadow = theme.SelectedRowHex is null || !theme.CastsShadows
+            ? default
+            : BoxShadows.Parse(theme.IsDark
+                ? "0 1 2 0 #59000000, 0 6 14 -4 #8C000000"
+                : "0 1 2 0 #14101114, 0 6 14 -4 #33101114");
 
         // AccentSoft is nearly the dark background itself, fine for a whole
         // row but too faint to show which words are selected. Stopping the
