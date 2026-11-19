@@ -34,6 +34,8 @@ sealed class Program
             .WithDeveloperTools()
 #endif
             .WithInterFont()
+            // Empty unless the Twemoji emoji style is on (see AppFonts.Resolve).
+            .With(new Avalonia.Media.FontManagerOptions { FontFallbacks = Models.AppFonts.EmojiFallbacks })
             .LogToTrace();
 
     /// <summary>

@@ -751,17 +751,17 @@ public partial class MainViewModel : ViewModelBase
         new()
         {
             Choice = AppFontChoice.Mattermost,
-            Preview = AppFonts.Resolve(AppFontChoice.Mattermost),
+            Preview = AppFonts.Preview(AppFontChoice.Mattermost),
         },
         new()
         {
             Choice = AppFontChoice.System,
-            Preview = AppFonts.Resolve(AppFontChoice.System),
+            Preview = AppFonts.Preview(AppFontChoice.System),
         },
         new()
         {
             Choice = AppFontChoice.Lato,
-            Preview = AppFonts.Resolve(AppFontChoice.Lato),
+            Preview = AppFonts.Preview(AppFontChoice.Lato),
         },
     ];
 

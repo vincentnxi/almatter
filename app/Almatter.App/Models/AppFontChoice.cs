@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Avalonia.Media;
 
 namespace Almatter.App.Models;
@@ -61,30 +62,50 @@ public static class AppFonts
     /// </summary>
     public const string TwemojiFamily = "avares://Almatter/Assets/EmojiFont#Twemoji Almatter";
 
-    public static FontFamily Resolve(AppFontChoice choice, AppEmojiStyle emoji = AppEmojiStyle.System) =>
-        FontFamily.Parse(WithEmoji(choice switch
-        {
-            AppFontChoice.System => SystemStack,
-            AppFontChoice.Lato => LatoStack,
-            _ => MattermostStack,
-        }, emoji));
+    /// <summary>
+    /// Handed to Avalonia's FontManagerOptions at startup (Program.cs) and
+    /// filled or emptied by Resolve. Avalonia keeps this very list and reads
+    /// it on every character lookup, so changing it takes effect at once.
+    /// </summary>
+    public static readonly List<FontFallback> EmojiFallbacks = [];
+
+    /// <summary>The bare stack, for drawing a font's name in that font. Leaves the emoji fallback alone.</summary>
+    public static FontFamily Preview(AppFontChoice choice) => FontFamily.Parse(StackFor(choice));
+
+    private static string StackFor(AppFontChoice choice) => choice switch
+    {
+        AppFontChoice.System => SystemStack,
+        AppFontChoice.Lato => LatoStack,
+        _ => MattermostStack,
+    };
 
     /// <summary>
-    /// Slots the emoji font in right after the first family of the stack:
-    /// the letters still come from the chosen typeface, and whatever it lacks
-    /// is looked up in Twemoji before the system fallbacks get a chance to
-    /// answer with their own emoji. Never first: the emoji font also carries
-    /// the digits, # and * that start keycap emoji, and would take those over.
+    /// The app's font for the user's settings. Also switches the Twemoji
+    /// fallback on or off, so it is only for applying those settings.
     /// </summary>
-    private static string WithEmoji(string stack, AppEmojiStyle emoji)
+    public static FontFamily Resolve(AppFontChoice choice, AppEmojiStyle emoji)
     {
+        var stack = StackFor(choice);
         if (emoji != AppEmojiStyle.Twemoji)
         {
-            return stack;
+            EmojiFallbacks.Clear();
+            return FontFamily.Parse(stack);
         }
-        var comma = stack.IndexOf(',');
-        return comma < 0
-            ? $"{stack},{TwemojiFamily}"
-            : $"{stack[..comma]},{TwemojiFamily}{stack[comma..]}";
+
+        if (EmojiFallbacks.Count == 0)
+        {
+            EmojiFallbacks.Add(new FontFallback { FontFamily = new FontFamily(TwemojiFamily) });
+        }
+
+        // Twemoji is reached through EmojiFallbacks, not through the stack.
+        // Inside the stack it only works behind a bundled font: behind a
+        // system one, Avalonia hands missing characters straight to Windows
+        // (so Segoe UI Emoji answered), and behind "Segoe UI Variable Text",
+        // which it doesn't match as a family name, Twemoji became the main
+        // font and drew every space a full emoji wide. Probed on Avalonia
+        // 12.1.5. It stays named at the very end, where it is never reached,
+        // only so that the family differs from the plain one and the text
+        // already on screen is laid out again with the new fallback.
+        return FontFamily.Parse($"{stack},{TwemojiFamily}");
     }
 }
