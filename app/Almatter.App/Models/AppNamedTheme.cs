@@ -34,4 +34,12 @@ public enum AppNamedTheme
     /// <see cref="NamedThemes.All"/>.
     /// </summary>
     Ark = 13,
+
+    /// <summary>
+    /// Slate greys and a blue-violet accent, after the look of the big chat
+    /// apps. Like Ark it follows the light/dark mode and the contrast
+    /// setting, so it is not in <see cref="NamedThemes.All"/>; its accent is
+    /// its own and not a choice.
+    /// </summary>
+    Salon = 14,
 }

@@ -139,6 +139,10 @@ pub struct ChannelMember {
     pub msg_count: i64,
     #[serde(default)]
     pub mention_count: i64,
+    /// When this user last had the channel open (ms since the epoch) — what
+    /// the "new messages" marker is placed after. 0 when absent.
+    #[serde(default)]
+    pub last_viewed_at: i64,
     /// Absent on servers/responses that don't send it — treated as "not
     /// muted" rather than failing the whole member row.
     #[serde(default, deserialize_with = "null_as_default")]

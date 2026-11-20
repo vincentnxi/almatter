@@ -111,6 +111,28 @@ public sealed record ThemeDefinition
     /// <summary>Ark's soft shadows are on (the user's "Shadows" setting): panels, composer, header buttons and the selected row.</summary>
     public bool CastsShadows { get; init; }
 
+    /// <summary>
+    /// Salon's styling beyond colours: slate greys with no line between the
+    /// sidebar and the conversation, capitalised section headings, red
+    /// mention badges, a small bar left of an unread channel, tinted
+    /// mentions in messages, the composer on one line in a filled box, and
+    /// a thin title bar drawn into the window (on Windows) in the sidebar's
+    /// colour.
+    /// </summary>
+    public bool SalonStyle { get; init; }
+
+    /// <summary>The composer's fill. Null: the card colour, as usual.</summary>
+    public string? ComposerHex { get; init; }
+
+    /// <summary>The sidebar's foot (you, your status, the settings). Null: no fill of its own, as usual.</summary>
+    public string? FooterHex { get; init; }
+
+    /// <summary>The text, buttons and tools of the composer sit on one line (Ark, Salon), not the text above a row of buttons.</summary>
+    public bool OneLineComposer => ArkStyle || SalonStyle;
+
+    /// <summary>The sidebar's section headings are set in capitals (Ark, Salon).</summary>
+    public bool CapitalHeadings => ArkStyle || SalonStyle;
+
     public static readonly ThemeDefinition Light = new()
     {
         Name = "Clair",
@@ -246,6 +268,95 @@ public sealed record ThemeDefinition
     };
 
     /// <summary>
+    /// Salon, dark: slate greys, the sidebar a step darker than the
+    /// conversation and the inset fields darker still, with a blue-violet
+    /// accent. That accent is only 2,8:1 as text on the conversation, so
+    /// text and icons in it (links, mentions, "3 replies") take a lighter
+    /// shade, 5,0:1, through AccentDeepHex.
+    /// Measured on the conversation: text 11,4:1, secondary 6,5:1,
+    /// tertiary 4,5:1 (4,9:1 on the sidebar).
+    /// </summary>
+    public static readonly ThemeDefinition SalonDark = new()
+    {
+        Name = "Salon",
+        IsDark = true,
+        SalonStyle = true,
+        // The window's own ground shows only in the title bar drawn into it,
+        // which takes the sidebar's colour.
+        WindowGroundHex = "#2B2D31",
+        SelectedRowHex = "#404249",
+        ComposerHex = "#383A40",
+        FooterHex = "#232428",
+        BgApp = "#313338",
+        BgPanel = "#2B2D31",
+        BgRail = "#1E1F22",
+        BgHover = "#35373C",
+        Divider = "#1F2023",
+        DividerStrong = "#3F4147",
+        TextPrimary = "#F2F3F5",
+        TextSecondary = "#B5BAC1",
+        TextTertiary = "#949BA4",
+        CardBg = "#2B2D31",
+        AccentHex = "#5865F2",
+        OnAccentHex = "#FFFFFF",
+        AccentDeepHex = "#949CF7",
+        DangerHex = "#F23F43",
+        DangerSoftHex = "#483439",
+        DangerBorderHex = "#6F373C",
+        ScrimHex = "#B3313338",
+        PopoverShadow = "0 8 24 0 #B3000000",
+        CardShadow = "0 2 8 0 #80000000",
+        PresenceOnlineHex = "#23A55A",
+        PresenceAwayHex = "#F0B232",
+        PresenceDndHex = "#F23F43",
+        PresenceOfflineHex = "#80848E",
+        RowRadius = 4,
+        SurfaceRadius = 8,
+    };
+
+    /// <summary>
+    /// Salon, light: white conversation, pale grey sidebar. The accent
+    /// itself is 4,6:1 on white but 4,1:1 on the sidebar, so text in it
+    /// takes the deeper shade, 6,4:1 (5,8:1 on the sidebar). Secondary
+    /// text is 7,2:1 on the sidebar, tertiary 5,8:1.
+    /// </summary>
+    public static readonly ThemeDefinition SalonLight = new()
+    {
+        Name = "Salon",
+        IsDark = false,
+        SalonStyle = true,
+        WindowGroundHex = "#F2F3F5",
+        SelectedRowHex = "#D7D9DD",
+        ComposerHex = "#EBEDEF",
+        FooterHex = "#EBEDEF",
+        BgApp = "#FFFFFF",
+        BgPanel = "#F2F3F5",
+        BgRail = "#E3E5E8",
+        BgHover = "#E8E9EC",
+        Divider = "#E1E2E5",
+        DividerStrong = "#C4C9CE",
+        TextPrimary = "#060607",
+        TextSecondary = "#4E5058",
+        TextTertiary = "#5C5E66",
+        CardBg = "#FFFFFF",
+        AccentHex = "#5865F2",
+        OnAccentHex = "#FFFFFF",
+        AccentDeepHex = "#4752C4",
+        DangerHex = "#DA373C",
+        DangerSoftHex = "#FCEFEF",
+        DangerBorderHex = "#F6CFD0",
+        ScrimHex = "#B3FFFFFF",
+        PopoverShadow = "0 8 24 0 #2E060607",
+        CardShadow = "0 2 6 0 #1A060607",
+        PresenceOnlineHex = "#23A55A",
+        PresenceAwayHex = "#F0B232",
+        PresenceDndHex = "#DA373C",
+        PresenceOfflineHex = "#80848E",
+        RowRadius = 4,
+        SurfaceRadius = 8,
+    };
+
+    /// <summary>
     /// Resolves the user's preferences to an actual palette. System defers
     /// to whatever Windows currently reports. The accent is laid over the
     /// palette last: only its hue is the user's choice, the shade comes from
@@ -295,6 +406,13 @@ public sealed record ThemeDefinition
                 AccentSoftHex = dark ? null : Mix(pastel, "#FFFFFF", 0.45),
                 CastsShadows = arkShadows,
             };
+        }
+
+        // Salon follows the mode and the softening too, with its one accent.
+        if (named == AppNamedTheme.Salon)
+        {
+            var salon = dark ? SalonDark : SalonLight;
+            return reducedContrast ? salon.Softened() : salon;
         }
 
         var theme = dark ? Dark : Light;
@@ -417,6 +535,9 @@ public sealed record ThemeDefinition
         ArkStyle = ArkStyle,
         SelectedRowHex = SelectedRowHex is null ? null : TowardMidGrey(SelectedRowHex),
         CastsShadows = CastsShadows,
+        SalonStyle = SalonStyle,
+        ComposerHex = ComposerHex is null ? null : TowardMidGrey(ComposerHex),
+        FooterHex = FooterHex is null ? null : TowardMidGrey(FooterHex),
     };
 
     private static string TowardMidGrey(string hex) => Mix(hex, "#808080", SurfaceSoftening);

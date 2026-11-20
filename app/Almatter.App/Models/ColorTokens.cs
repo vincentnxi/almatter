@@ -48,6 +48,13 @@ public static class ColorTokens
     public static IBrush Divider { get; private set; } = Solid(ThemeDefinition.Light.Divider);
 
     /// <summary>
+    /// A sidebar row with nothing waiting: secondary text, or (Salon) the
+    /// quieter tertiary, so an unread row in the main text colour stands
+    /// out clearly from it.
+    /// </summary>
+    public static IBrush ReadRowInk { get; private set; } = Solid(ThemeDefinition.Light.TextSecondary);
+
+    /// <summary>
     /// Full palette swap. AccentSoft/AccentInk are lerped toward the
     /// palette's OWN panel/text colors rather than universal white/black:
     /// on the light palette that lands almost exactly where a white/black
@@ -81,9 +88,12 @@ public static class ColorTokens
         SelectedRowBorder = theme.SelectedRowHex is null ? Brushes.Transparent : Solid(theme.Divider);
         // Reactions. On a light Ark palette the pastel itself is too faint
         // for an outline, so yours is ringed in its deep shade, at 45 %.
-        ReactionMineBorder = theme.AccentDeepHex is { } ring ? Solid("#73" + ring[1..]) : Accent;
-        ReactionMineBackground = theme.ArkStyle ? AccentSoft : Brushes.Transparent;
-        ReactionBackground = theme.ArkStyle ? Solid(theme.BgPanel) : Brushes.Transparent;
+        // Salon also has a deep shade, but only for text: its accent is
+        // strong enough to outline a pill as it is.
+        ReactionMineBorder = theme.ArkStyle && theme.AccentDeepHex is { } ring ? Solid("#73" + ring[1..]) : Accent;
+        var filledReactions = theme.ArkStyle || theme.SalonStyle;
+        ReactionMineBackground = filledReactions ? AccentSoft : Brushes.Transparent;
+        ReactionBackground = filledReactions ? Solid(theme.BgPanel) : Brushes.Transparent;
 
         // Strong enough to lift the card off the sidebar, as in the mockup:
         // a fine edge plus a soft fall below. Off with the "Shadows" setting.
@@ -105,6 +115,7 @@ public static class ColorTokens
         TextTertiary = Solid(theme.TextTertiary);
         CardBg = Solid(theme.CardBg);
         Divider = Solid(theme.Divider);
+        ReadRowInk = theme.SalonStyle ? TextTertiary : TextSecondary;
 
         // Over a gradient, a solid selection or divider would be right at one
         // height of the window and a visible patch at another. See-through

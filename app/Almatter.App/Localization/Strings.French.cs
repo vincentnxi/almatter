@@ -182,6 +182,7 @@ public sealed partial class Strings
         ThemeAlmatterTag = "Vos réglages",
         ThemeArkTag = "Clair ou sombre",
         ThemeHintArk = "Ark suit le mode choisi ci-dessous, avec ses propres couleurs pastel.",
+        ThemeHintSalon = "Salon suit le mode choisi ci-dessous, avec sa propre couleur d'accent.",
         ArkShadows = "Ombres",
         ArkShadowsHint = "Détache les panneaux du fond par une ombre douce. Demande un peu plus de calcul à chaque défilement.",
         ThemeHintNone = "La plupart des thèmes fixent aussi le mode, l'accent et le contraste.",
@@ -207,6 +208,7 @@ public sealed partial class Strings
         ReactedToYourMessage = emoji => $"a réagi {emoji} à votre message",
         ReactedToQuote = (emoji, quote) => $"a réagi {emoji} à « {quote} »",
         TaskbarNewMessages = "Nouveaux messages",
+        NewMessagesMarker = "NOUVEAU",
         TaskbarNotifications = count => count == 1 ? "1 notification" : $"{count} notifications",
 
         // ── Errors ───────────────────────────────────────────────────

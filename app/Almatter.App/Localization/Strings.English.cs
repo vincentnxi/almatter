@@ -180,6 +180,7 @@ public sealed partial class Strings
         ThemeAlmatterTag = "Your settings",
         ThemeArkTag = "Light or dark",
         ThemeHintArk = "Ark follows the mode you pick below, with pastel accents of its own.",
+        ThemeHintSalon = "Salon follows the mode you pick below, with an accent color of its own.",
         ArkShadows = "Shadows",
         ArkShadowsHint = "Lifts the panels off the background with a soft shadow. A little more drawing on each scroll.",
         ThemeHintNone = "Most themes also set the mode, the accent and the contrast.",
@@ -205,6 +206,7 @@ public sealed partial class Strings
         ReactedToYourMessage = emoji => $"reacted {emoji} to your message",
         ReactedToQuote = (emoji, quote) => $"reacted {emoji} to “{quote}”",
         TaskbarNewMessages = "New messages",
+        NewMessagesMarker = "NEW",
         TaskbarNotifications = count => count == 1 ? "1 notification" : $"{count} notifications",
 
         // ── Errors ───────────────────────────────────────────────────

@@ -217,6 +217,7 @@ public sealed partial class Strings
     public required string ThemeHintNone { get; init; }
     public required Func<string, string> ThemeHintActive { get; init; }
     public required string ThemeHintArk { get; init; }
+    public required string ThemeHintSalon { get; init; }
     public required string ArkShadows { get; init; }
     public required string ArkShadowsHint { get; init; }
     public required string SettingsFont { get; init; }
@@ -240,6 +241,9 @@ public sealed partial class Strings
     public required Func<string, string> ReactedToYourMessage { get; init; }
     public required Func<string, string, string> ReactedToQuote { get; init; }
     public required string TaskbarNewMessages { get; init; }
+
+    /// <summary>The label on the red rule above the first message the reader hasn't seen. In capitals.</summary>
+    public required string NewMessagesMarker { get; init; }
     public required Func<int, string> TaskbarNotifications { get; init; }
 
     // ── Errors ───────────────────────────────────────────────────────

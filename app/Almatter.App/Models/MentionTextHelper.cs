@@ -1,3 +1,5 @@
+using System;
+
 namespace Almatter.App.Models;
 
 /// <summary>
@@ -48,6 +50,55 @@ public static class MentionTextHelper
         query = candidate;
         return true;
     }
+
+    /// <summary>
+    /// Whether a message names this user: "@username" (any case), or one of
+    /// the channel-wide mentions @channel, @all and @here — what makes the
+    /// server count it as a mention. Code (fenced blocks and `inline`) is
+    /// skipped, as Mattermost does. A trailing full stop ends the name
+    /// ("thanks @alice.") although dots are allowed inside one ("@a.b").
+    /// </summary>
+    public static bool MentionsUser(string text, string username)
+    {
+        if (string.IsNullOrEmpty(text) || string.IsNullOrEmpty(username) || !text.Contains('@'))
+        {
+            return false;
+        }
+
+        try
+        {
+            var prose = CodeSpans.Replace(text, " ");
+            foreach (System.Text.RegularExpressions.Match match in MentionToken.Matches(prose))
+            {
+                var name = match.Groups[1].Value.TrimEnd('.');
+                if (name.Equals(username, StringComparison.OrdinalIgnoreCase)
+                    || name.Equals("channel", StringComparison.OrdinalIgnoreCase)
+                    || name.Equals("all", StringComparison.OrdinalIgnoreCase)
+                    || name.Equals("here", StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+        catch (System.Text.RegularExpressions.RegexMatchTimeoutException)
+        {
+            // Not worth more than a missing tint.
+            return false;
+        }
+    }
+
+    // Both patterns are linear (no nested repetition), and a timeout caps
+    // them anyway: the text comes from other people.
+    private static readonly System.Text.RegularExpressions.Regex CodeSpans = new(
+        "```.*?(```|$)|`[^`\\n]*`",
+        System.Text.RegularExpressions.RegexOptions.Singleline | System.Text.RegularExpressions.RegexOptions.CultureInvariant,
+        TimeSpan.FromMilliseconds(200));
+
+    private static readonly System.Text.RegularExpressions.Regex MentionToken = new(
+        "(?<![A-Za-z0-9_.@-])@([A-Za-z0-9_.-]+)",
+        System.Text.RegularExpressions.RegexOptions.CultureInvariant,
+        TimeSpan.FromMilliseconds(200));
 
     /// <summary>Replaces the "@partial" token at [mentionStart, caretIndex) with "@username " — the same insertion the official client makes on accepting a suggestion.</summary>
     public static string ApplyMention(string text, int mentionStart, int caretIndex, string username, out int newCaretIndex)

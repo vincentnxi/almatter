@@ -109,6 +109,22 @@
         <BoxShadows x:Key="TypingPillShadow">0 6 20 0 #33000000</BoxShadows>
         <x:Boolean x:Key="ArkOn">False</x:Boolean>
         <x:Boolean x:Key="ArkOff">True</x:Boolean>
+        <x:Boolean x:Key="SalonOn">False</x:Boolean>
+        <x:Boolean x:Key="SalonOff">True</x:Boolean>
+        <SolidColorBrush x:Key="BadgeBrush" Color="#005FB8" />
+        <SolidColorBrush x:Key="OnBadgeBrush" Color="#FFFFFF" />
+        <SolidColorBrush x:Key="FilterBrush" Color="#FFFFFF" />
+        <Thickness x:Key="FilterBorderThickness">1</Thickness>
+        <SolidColorBrush x:Key="ComposerBrush" Color="#FFFFFF" />
+        <Thickness x:Key="ComposerFrameBorderThickness">1</Thickness>
+        <x:Double x:Key="UnreadBarWidth">0</x:Double>
+        <SolidColorBrush x:Key="NewMarkerBrush" Color="#C42B1C" />
+        <SolidColorBrush x:Key="OnNewMarkerBrush" Color="#FFFFFF" />
+        <SolidColorBrush x:Key="MentionRowBrush" Color="#24D9A521" />
+        <SolidColorBrush x:Key="MentionBarBrush" Color="#D9A521" />
+        <x:Double x:Key="WindowTitleOpacity">1</x:Double>
+        <x:Double x:Key="CaptionButtonWidth">36</x:Double>
+        <x:Double x:Key="CaptionButtonHeight">32</x:Double>
         <x:Double x:Key="SidebarRowFontSize">14.5</x:Double>
         <FontWeight x:Key="AuthorFontWeight">Bold</FontWeight>
         <FontWeight x:Key="PanelTitleFontWeight">Bold</FontWeight>
@@ -209,14 +225,22 @@
                             <Path Grid.Column="2" IsVisible="{Binding IsMuted}" ToolTip.Tip="{Binding T.ChannelMutedTip, Source={x:Static loc:Loc.Instance}}"
                                   Data="M11 5 6 9H2v6h4l5 4V5z M23 9l-6 6 M17 9l6 6" Stroke="{DynamicResource TextTertiaryBrush}" StrokeThickness="1.6"
                                   StrokeLineCap="Round" StrokeJoin="Round" Width="13" Height="13" Stretch="Uniform" VerticalAlignment="Center" Margin="6,0,0,0" />
-                            <Border Grid.Column="3" IsVisible="{Binding HasMentions}" Background="{DynamicResource AccentBrush}" BorderBrush="{DynamicResource AccentEdgeBrush}" BorderThickness="{DynamicResource AccentEdgeThickness}"
+                            <Border Grid.Column="3" IsVisible="{Binding HasMentions}" Background="{DynamicResource BadgeBrush}" BorderBrush="{DynamicResource AccentEdgeBrush}" BorderThickness="{DynamicResource AccentEdgeThickness}"
                                     CornerRadius="9" MinWidth="18" Height="18" Padding="5,0" Margin="8,0,0,0">
-                                <TextBlock Text="{Binding MentionCount}" Foreground="{DynamicResource OnAccentBrush}" FontWeight="Bold" FontSize="10.5" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                <TextBlock Text="{Binding MentionCount}" Foreground="{DynamicResource OnBadgeBrush}" FontWeight="Bold" FontSize="10.5" HorizontalAlignment="Center" VerticalAlignment="Center" />
                             </Border>
                             <!-- Something unread, but nobody called your name. Same cell as the
                                  badge above: only one of the two is ever visible. -->
-                            <Border Grid.Column="3" IsVisible="{Binding ShowUnreadDot}" Background="{DynamicResource AccentBrush}" BorderBrush="{DynamicResource AccentEdgeBrush}" BorderThickness="{DynamicResource AccentEdgeThickness}"
-                                    Width="8" Height="8" CornerRadius="4" Margin="8,0,5,0" VerticalAlignment="Center" />
+                            <Panel Grid.Column="3" IsVisible="{DynamicResource SalonOff}">
+                                <Border IsVisible="{Binding ShowUnreadDot}" Background="{DynamicResource AccentBrush}" BorderBrush="{DynamicResource AccentEdgeBrush}" BorderThickness="{DynamicResource AccentEdgeThickness}"
+                                        Width="8" Height="8" CornerRadius="4" Margin="8,0,5,0" VerticalAlignment="Center" />
+                            </Panel>
+                            <!-- Salon: a small bar on the sidebar's left edge instead, out
+                                 past the row's padding (8), the list's step (12) and the
+                                 sidebar's margin (8). Drawn outside the row: no width taken. -->
+                            <Border Grid.Column="0" Grid.ColumnSpan="4" IsVisible="{Binding HasUnread}" Background="{DynamicResource TextPrimaryBrush}"
+                                    Width="{DynamicResource UnreadBarWidth}" Height="8" CornerRadius="0,4,4,0" Margin="-28,0,0,0"
+                                    HorizontalAlignment="Left" VerticalAlignment="Center" IsHitTestVisible="False" />
                         </Grid>
                     </Border>
                     <Border Height="2" Margin="8,0" CornerRadius="1" Background="{DynamicResource AccentBrush}" IsVisible="{Binding ShowDropIndicatorBelow}" />
@@ -268,14 +292,22 @@
                             <Path Grid.Column="2" IsVisible="{Binding IsMuted}" ToolTip.Tip="{Binding T.ChannelMutedTip, Source={x:Static loc:Loc.Instance}}"
                                   Data="M11 5 6 9H2v6h4l5 4V5z M23 9l-6 6 M17 9l6 6" Stroke="{DynamicResource TextTertiaryBrush}" StrokeThickness="1.6"
                                   StrokeLineCap="Round" StrokeJoin="Round" Width="13" Height="13" Stretch="Uniform" VerticalAlignment="Center" Margin="6,0,0,0" />
-                            <Border Grid.Column="3" IsVisible="{Binding HasMentions}" Background="{DynamicResource AccentBrush}" BorderBrush="{DynamicResource AccentEdgeBrush}" BorderThickness="{DynamicResource AccentEdgeThickness}"
+                            <Border Grid.Column="3" IsVisible="{Binding HasMentions}" Background="{DynamicResource BadgeBrush}" BorderBrush="{DynamicResource AccentEdgeBrush}" BorderThickness="{DynamicResource AccentEdgeThickness}"
                                     CornerRadius="9" MinWidth="18" Height="18" Padding="5,0" Margin="8,0,0,0">
-                                <TextBlock Text="{Binding MentionCount}" Foreground="{DynamicResource OnAccentBrush}" FontWeight="Bold" FontSize="10.5" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                <TextBlock Text="{Binding MentionCount}" Foreground="{DynamicResource OnBadgeBrush}" FontWeight="Bold" FontSize="10.5" HorizontalAlignment="Center" VerticalAlignment="Center" />
                             </Border>
                             <!-- Something unread, but nobody called your name. Same cell as the
                                  badge above: only one of the two is ever visible. -->
-                            <Border Grid.Column="3" IsVisible="{Binding ShowUnreadDot}" Background="{DynamicResource AccentBrush}" BorderBrush="{DynamicResource AccentEdgeBrush}" BorderThickness="{DynamicResource AccentEdgeThickness}"
-                                    Width="8" Height="8" CornerRadius="4" Margin="8,0,5,0" VerticalAlignment="Center" />
+                            <Panel Grid.Column="3" IsVisible="{DynamicResource SalonOff}">
+                                <Border IsVisible="{Binding ShowUnreadDot}" Background="{DynamicResource AccentBrush}" BorderBrush="{DynamicResource AccentEdgeBrush}" BorderThickness="{DynamicResource AccentEdgeThickness}"
+                                        Width="8" Height="8" CornerRadius="4" Margin="8,0,5,0" VerticalAlignment="Center" />
+                            </Panel>
+                            <!-- Salon: a small bar on the sidebar's left edge instead, out
+                                 past the row's padding (8), the list's step (12) and the
+                                 sidebar's margin (8). Drawn outside the row: no width taken. -->
+                            <Border Grid.Column="0" Grid.ColumnSpan="4" IsVisible="{Binding HasUnread}" Background="{DynamicResource TextPrimaryBrush}"
+                                    Width="{DynamicResource UnreadBarWidth}" Height="8" CornerRadius="0,4,4,0" Margin="-28,0,0,0"
+                                    HorizontalAlignment="Left" VerticalAlignment="Center" IsHitTestVisible="False" />
                         </Grid>
                     </Border>
                     <Border Height="2" Margin="8,0" CornerRadius="1" Background="{DynamicResource AccentBrush}" IsVisible="{Binding ShowDropIndicatorBelow}" />
@@ -422,17 +454,27 @@
             <Setter Property="IsVisible" Value="False" />
         </Style>
 
-        <!-- Its three buttons, smaller than Fluent's, as in the Ark mockup.
-             Set here because Fluent's own size resources (CaptionButtonWidth
-             and …Height) live inside its control theme and can't be
-             overridden from outside. The height matches
-             ThemeResources.IntegratedTitleBarHeight. -->
+        <!-- Its three buttons, smaller than Fluent's, as in the Ark and Salon
+             mockups. Set here because Fluent's own size resources
+             (CaptionButtonWidth and …Height) live inside its control theme
+             and can't be overridden from outside. The sizes come from
+             ThemeResources, the height matching the title strip's. -->
         <Style Selector=":is(Button)[(WindowDecorationProperties.ElementRole)=MinimizeButton],
                         :is(Button)[(WindowDecorationProperties.ElementRole)=MaximizeButton],
                         :is(Button)[(WindowDecorationProperties.ElementRole)=CloseButton]">
-            <Setter Property="Width" Value="36" />
-            <Setter Property="Height" Value="32" />
+            <Setter Property="Width" Value="{DynamicResource CaptionButtonWidth}" />
+            <Setter Property="Height" Value="{DynamicResource CaptionButtonHeight}" />
         </Style>
+        <!-- The window's name, drawn by Avalonia at the strip's left. Salon
+             shows the team's name in the middle instead (the title strip
+             below); the window keeps its name for the taskbar. The panel's
+             name comes from Fluent's WindowDrawnDecorations template. -->
+        <!-- Opacity, not IsVisible: the template binds IsVisible itself, and
+             a template binding outranks a style. -->
+        <Style Selector="Panel#PART_TitleTextPanel">
+            <Setter Property="Opacity" Value="{DynamicResource WindowTitleOpacity}" />
+        </Style>
+
         <Style Selector=":is(Button)[(WindowDecorationProperties.ElementRole)=MinimizeButton] /template/ ContentPresenter,
                         :is(Button)[(WindowDecorationProperties.ElementRole)=MaximizeButton] /template/ ContentPresenter,
                         :is(Button)[(WindowDecorationProperties.ElementRole)=CloseButton] /template/ ContentPresenter">
@@ -508,8 +550,11 @@
              header reads as a heading and the rows as its content. The
              same step is taken off the right, so a selected row's tint
              keeps equal gaps to both edges of the sidebar. -->
+        <!-- Not clipped (an ItemsControl is by default): Salon's unread bar
+             sits out past the list's left edge, against the sidebar's. -->
         <Style Selector="ItemsControl.section-list">
             <Setter Property="Margin" Value="12,0,12,0" />
+            <Setter Property="ClipToBounds" Value="False" />
         </Style>
 
         <!-- Invisible until pointed at, then a soft accent line — the same
@@ -579,6 +624,17 @@
         <Style Selector="Border.message-row:pointerover">
             <Setter Property="Background" Value="{DynamicResource BgHoverBrush}" />
         </Style>
+        <!-- A message that names the reader: a warm tint and a bar at its
+             left. The row reaches 10 px further left for the bar, and its
+             padding (MessageItem.RowPadding) gives those 10 px back, so its
+             text stays in line with the others. -->
+        <Style Selector="Border.message-row.mention">
+            <Setter Property="Background" Value="{DynamicResource MentionRowBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource MentionBarBrush}" />
+            <Setter Property="BorderThickness" Value="2,0,0,0" />
+            <Setter Property="Margin" Value="-10,0,0,0" />
+        </Style>
+
         <!-- Last, so a highlighted (jumped-to) or being-edited row keeps its
              accent tint while the pointer is over it. -->
         <Style Selector="Border.message-row.tinted">
@@ -588,7 +644,7 @@
         <!-- The frame around each composer, outlined in the accent colour while files are dragged over the window (class set from code-behind). -->
         <Style Selector="Border.composer-frame">
             <Setter Property="BorderBrush" Value="{DynamicResource DividerStrongBrush}" />
-            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BorderThickness" Value="{DynamicResource ComposerFrameBorderThickness}" />
         </Style>
         <Style Selector="Border.composer-frame.drop-target">
             <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
@@ -659,7 +715,16 @@
              over it. -->
         <Border Grid.Column="0" Grid.ColumnSpan="3" VerticalAlignment="Top" Height="{DynamicResource TitleStripHeight}"
                 IsVisible="{DynamicResource TitleStripVisible}" Background="Transparent"
-                WindowDecorationProperties.ElementRole="TitleBar" />
+                WindowDecorationProperties.ElementRole="TitleBar">
+            <!-- Salon: the team's name in the middle, in place of Avalonia's
+                 own title at the left (hidden by a style below). -->
+            <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Center" VerticalAlignment="Center"
+                        IsVisible="{DynamicResource SalonOn}" IsHitTestVisible="False">
+                <Image Source="/Assets/almatter-logo.png" Width="14" Height="14" VerticalAlignment="Center" />
+                <TextBlock Text="{Binding TeamName}" FontSize="12.5" FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
+            </StackPanel>
+        </Border>
 
         <!-- Shadow plates: one under each floating panel, same place and
              shape, casting the panel's shadow (Ark, when shadows are on).
@@ -687,7 +752,7 @@
                 <!-- Filters the favorites, channels and DMs below by name as
                      you type (Ctrl+K to jump here). Searching message text
                      is the header's magnifier / Ctrl+F. -->
-                <Border Grid.Row="1" Margin="12,0,12,12" Padding="10,0,4,0" CornerRadius="{DynamicResource RowRadiusValue}" Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1" BoxShadow="{DynamicResource SmallCardShadow}">
+                <Border Grid.Row="1" Margin="12,0,12,12" Padding="10,0,4,0" CornerRadius="{DynamicResource RowRadiusValue}" Background="{DynamicResource FilterBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="{DynamicResource FilterBorderThickness}" BoxShadow="{DynamicResource SmallCardShadow}">
                     <Grid ColumnDefinitions="Auto,*,Auto">
                         <Canvas Grid.Column="0" Width="15" Height="15" VerticalAlignment="Center">
                             <Ellipse Width="10" Height="10" Stroke="{DynamicResource TextTertiaryBrush}" StrokeThickness="1.6" />
@@ -939,7 +1004,16 @@
                                  read as part of that message rather than as a divider. -->
                             <ContentControl IsVisible="{Binding HasDateSeparator}" Content="{Binding}"
                                             ContentTemplate="{StaticResource DateSeparatorTemplate}" />
-                            <Border Classes="message-row" Classes.tinted="{Binding IsTinted}" Opacity="{Binding BodyOpacity}" CornerRadius="{DynamicResource RowRadiusValue}" Padding="{Binding RowPadding}">
+                            <!-- "Nouveau": where the messages the reader hasn't seen yet begin. -->
+                            <Grid ColumnDefinitions="*,Auto,*" Margin="0,8,0,10" IsVisible="{Binding IsFirstUnread}">
+                                <Border Grid.Column="0" Height="1" VerticalAlignment="Center" Background="{DynamicResource NewMarkerBrush}" />
+                                <Border Grid.Column="1" Margin="8,0" Padding="6,1,6,2" CornerRadius="6" Background="{DynamicResource NewMarkerBrush}">
+                                    <TextBlock Text="{Binding T.NewMessagesMarker, Source={x:Static loc:Loc.Instance}}" FontSize="10.5" FontWeight="Bold"
+                                               LetterSpacing="0.4" Foreground="{DynamicResource OnNewMarkerBrush}" />
+                                </Border>
+                                <Border Grid.Column="2" Height="1" VerticalAlignment="Center" Background="{DynamicResource NewMarkerBrush}" />
+                            </Grid>
+                            <Border Classes="message-row" Classes.tinted="{Binding IsTinted}" Classes.mention="{Binding MentionsMe}" Opacity="{Binding BodyOpacity}" CornerRadius="{DynamicResource RowRadiusValue}" Padding="{Binding RowPadding}">
                                 <Panel>
                                 <Grid ColumnDefinitions="36,*">
                                     <Button Grid.Column="0" Classes="row-button" Width="36" Height="36" VerticalAlignment="Top" IsVisible="{Binding ShowHeader}">
@@ -1414,7 +1488,7 @@
             <!-- The well around the composer: nothing at all except on Ark, where it is a sunken tray. -->
             <Border Grid.Row="2" Margin="20,10,20,16" Background="{DynamicResource ComposerWellBrush}" BorderBrush="{DynamicResource ComposerWellBorderBrush}"
                     BorderThickness="{DynamicResource ComposerWellBorderThickness}" Padding="{DynamicResource ComposerWellPadding}" CornerRadius="{DynamicResource ComposerWellRadius}">
-            <Border x:Name="ComposerFrame" Classes="composer-frame" CornerRadius="{DynamicResource SurfaceRadiusValue}" Background="{DynamicResource CardBgBrush}" BoxShadow="{DynamicResource SmallCardShadow}">
+            <Border x:Name="ComposerFrame" Classes="composer-frame" CornerRadius="{DynamicResource SurfaceRadiusValue}" Background="{DynamicResource ComposerBrush}" BoxShadow="{DynamicResource SmallCardShadow}">
                 <StackPanel>
                     <Border IsVisible="{Binding IsEditingMessage}" Background="{DynamicResource BgPanelBrush}" CornerRadius="{DynamicResource RowRadiusValue}" Margin="10,8,10,0" Padding="10,5">
                         <Grid ColumnDefinitions="Auto,*,Auto">
@@ -1808,7 +1882,7 @@
 
                 <Border Grid.Row="2" Margin="14,10,14,14" Background="{DynamicResource ComposerWellBrush}" BorderBrush="{DynamicResource ComposerWellBorderBrush}"
                         BorderThickness="{DynamicResource ComposerWellBorderThickness}" Padding="{DynamicResource ComposerWellPadding}" CornerRadius="{DynamicResource ComposerWellRadius}">
-                <Border x:Name="ThreadComposerFrame" Classes="composer-frame" CornerRadius="{DynamicResource SurfaceRadiusValue}" Background="{DynamicResource CardBgBrush}" BoxShadow="{DynamicResource SmallCardShadow}" Padding="10,8">
+                <Border x:Name="ThreadComposerFrame" Classes="composer-frame" CornerRadius="{DynamicResource SurfaceRadiusValue}" Background="{DynamicResource ComposerBrush}" BoxShadow="{DynamicResource SmallCardShadow}" Padding="10,8">
                     <StackPanel Spacing="4">
                         <ItemsControl ItemsSource="{Binding ThreadPendingAttachments}" IsVisible="{Binding ShowThreadPendingAttachments}">
                             <ItemsControl.ItemsPanel>

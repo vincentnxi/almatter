@@ -240,6 +240,15 @@ enum Request {
         token: String,
         channel_id: String,
     },
+    /// When this user last had a channel open, from the server — asked just
+    /// before MarkChannelViewed moves it to now, so the app can mark where
+    /// the messages it hasn't seen begin. Not cached: only this moment's
+    /// value is useful.
+    GetLastViewedAt {
+        base_url: String,
+        token: String,
+        channel_id: String,
+    },
     /// Sends a message — a reply if `root_id` is set. `local_id` is the
     /// caller's own id for this attempt: it names the queued entry if the
     /// message has to go in the outbox, and is tagged onto the post itself
@@ -634,6 +643,12 @@ async fn handle(request_json: &str, db: &'static Mutex<Database>) -> Value {
                 Err(e) => Err(e.to_string()),
             }
         }
+        Request::GetLastViewedAt { base_url, token, channel_id } => MattermostClient::new(base_url)
+            .with_token(token)
+            .get_my_channel_member(&channel_id)
+            .await
+            .map(|member| json!({ "last_viewed_at": member.last_viewed_at }))
+            .map_err(|e| e.to_string()),
         Request::SendMessage { base_url, token, channel_id, root_id, local_id, message, file_ids } => {
             let client = MattermostClient::new(base_url).with_token(token);
             match client.create_post(&channel_id, &message, root_id.as_deref(), &file_ids, &local_id).await {
@@ -2131,6 +2146,35 @@ mod tests {
         .await;
 
         assert!(response.contains(r#""ok":true"#));
+    }
+
+    #[tokio::test]
+    async fn get_last_viewed_at_returns_the_servers_value() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/api/v4/channels/c1/members/me"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "channel_id": "c1", "user_id": "u1", "msg_count": 3, "mention_count": 0,
+                "last_viewed_at": 1_700_000_000_123_i64
+            })))
+            .mount(&server)
+            .await;
+
+        let db = test_db();
+        let response = dispatch(
+            &format!(
+                r#"{{"command":"get_last_viewed_at","base_url":"{}","token":"tok","channel_id":"c1"}}"#,
+                server.uri()
+            ),
+            db,
+        )
+        .await;
+
+        assert!(response.contains(r#""ok":true"#), "{response}");
+        assert!(response.contains(r#""last_viewed_at":1700000000123"#), "{response}");
     }
 
     #[tokio::test]

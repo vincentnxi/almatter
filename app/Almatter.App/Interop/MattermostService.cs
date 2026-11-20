@@ -559,6 +559,20 @@ public sealed class MattermostService
         await CallAsync<JsonObject>(request);
     }
 
+    /// <summary>When this user last had the channel open (ms since the epoch), straight from the server — ask it before MarkChannelViewedAsync, which moves it to now.</summary>
+    public async Task<long> GetLastViewedAtAsync(string baseUrl, string token, string channelId)
+    {
+        var request = new JsonObject
+        {
+            ["command"] = "get_last_viewed_at",
+            ["base_url"] = baseUrl,
+            ["token"] = token,
+            ["channel_id"] = channelId,
+        };
+        var result = await CallAsync<JsonObject>(request);
+        return result["last_viewed_at"]?.GetValue<long>() ?? 0;
+    }
+
     /// <summary>
     /// Tries to send immediately; if that fails for connectivity reasons
     /// the core queues it and this still returns normally (Queued=true,

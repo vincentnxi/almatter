@@ -77,6 +77,8 @@ public sealed class MessageInlineText : SelectableTextBlock
     private readonly List<CustomEmojiSegment> _pendingEmoji = [];
     private IBrush? _accentBrush;
     private IBrush? _codeBackgroundBrush;
+    private IBrush? _mentionBrush;
+    private IBrush? _mentionBackgroundBrush;
     private string? _pressedLink;
     private bool _showingHandCursor;
 
@@ -101,6 +103,23 @@ public sealed class MessageInlineText : SelectableTextBlock
             if (!ReferenceEquals(value, _codeBackgroundBrush))
             {
                 _codeBackgroundBrush = value as IBrush;
+                Rebuild();
+            }
+        }));
+        // Mentions: accent text, or (Salon) light text on a tint of the accent.
+        this.GetResourceObservable("MentionBrush").Subscribe(new ResourceObserver(value =>
+        {
+            if (!ReferenceEquals(value, _mentionBrush))
+            {
+                _mentionBrush = value as IBrush;
+                Rebuild();
+            }
+        }));
+        this.GetResourceObservable("MentionBackgroundBrush").Subscribe(new ResourceObserver(value =>
+        {
+            if (!ReferenceEquals(value, _mentionBackgroundBrush))
+            {
+                _mentionBackgroundBrush = value as IBrush;
                 Rebuild();
             }
         }));
@@ -303,7 +322,12 @@ public sealed class MessageInlineText : SelectableTextBlock
                 run.Foreground = _accentBrush;
                 break;
             case MentionSegment:
-                run.Foreground = _accentBrush;
+                // Before the resources arrive (a message drawn ahead of the
+                // window's theme), the accent as before.
+                run.Foreground = _mentionBrush ?? _accentBrush;
+                // No fill at all rather than a transparent one where there is
+                // no tint, so text selection shows through as it always has.
+                run.Background = _mentionBackgroundBrush is ISolidColorBrush { Color.A: 0 } ? null : _mentionBackgroundBrush;
                 run.FontWeight = FontWeight.SemiBold;
                 break;
         }

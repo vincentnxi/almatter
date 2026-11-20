@@ -74,6 +74,17 @@ public sealed partial class MessageItem : ObservableObject
     [ObservableProperty]
     public partial bool IsBeingEdited { get; set; }
 
+    /// <summary>
+    /// The first message that arrived since the user last had this channel
+    /// open: a red "Nouveau" rule is drawn above it, until the channel is
+    /// left. Set once, when the channel is opened (see MainViewModel.ApplyNewMessagesMarker).
+    /// </summary>
+    [ObservableProperty]
+    public partial bool IsFirstUnread { get; set; }
+
+    /// <summary>The message names this user (@username, @channel, @all, @here): the row is tinted, as the official clients do.</summary>
+    public bool MentionsMe { get; init; }
+
     /// <summary>Applies a server-confirmed edit — clears the cached Blocks so it re-parses the new text next time it's bound.</summary>
     public void ApplyEditedText(string newText)
     {
@@ -88,7 +99,10 @@ public sealed partial class MessageItem : ObservableObject
     public bool IsContinuation { get; init; }
 
     /// <summary>Extra breathing room above a new sender's first message so it doesn't crowd the previous person's last line — a continuation (same sender, grouped) stays snug underneath it instead.</summary>
-    public Thickness RowPadding => IsContinuation ? new Thickness(0, 4, 8, 4) : new Thickness(0, 10, 8, 4);
+    /// <remarks>A row that names the reader starts 10 px further left, for its bar
+    /// (see the "mention" style in MainWindow.axaml): 2 of border and these
+    /// 8 put its content back in line.</remarks>
+    public Thickness RowPadding => new(MentionsMe ? 8 : 0, IsContinuation ? 4 : 10, 8, 4);
 
     /// <summary>
     /// The day this message was sent ("Aujourd'hui", "Hier", "mardi 3 juin"),

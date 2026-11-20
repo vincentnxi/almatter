@@ -76,7 +76,7 @@ public sealed partial class ChannelItem : ObservableObject, IChannelListItem
     /// </summary>
     public IBrush NameBrush => IsSelected
         ? ColorTokens.SelectedRowInk
-        : HasUnread ? ColorTokens.TextPrimary : ColorTokens.TextSecondary;
+        : HasUnread ? ColorTokens.TextPrimary : ColorTokens.ReadRowInk;
 
     /// <summary>
     /// The icon rises with an unread rather than the read one dropping away.
@@ -86,10 +86,10 @@ public sealed partial class ChannelItem : ObservableObject, IChannelListItem
     /// </summary>
     public IBrush IconBrush => IsSelected
         ? ColorTokens.SelectedRowInk
-        : HasUnread ? ColorTokens.TextPrimary : ColorTokens.TextSecondary;
+        : HasUnread ? ColorTokens.TextPrimary : ColorTokens.ReadRowInk;
 
     public FontWeight NameWeight => IsSelected || HasUnread
-        ? (ColorTokens.Theme.ArkStyle ? FontWeight.SemiBold : FontWeight.Bold)
+        ? (ColorTokens.Theme.ArkStyle || ColorTokens.Theme.SalonStyle ? FontWeight.SemiBold : FontWeight.Bold)
         : FontWeight.Normal;
 
     /// <summary>

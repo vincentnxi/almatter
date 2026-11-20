@@ -829,6 +829,7 @@ public partial class MainViewModel : ViewModelBase
     [
         new() { Theme = AppNamedTheme.None },
         new() { Theme = AppNamedTheme.Ark },
+        new() { Theme = AppNamedTheme.Salon },
         .. NamedThemes.All.Select(p => new NamedThemeOption { Theme = p.Id, Palette = p }),
     ];
 
@@ -847,6 +848,9 @@ public partial class MainViewModel : ViewModelBase
     /// <summary>Ark is the theme: it follows the mode and the contrast, with its own accents.</summary>
     public bool IsArkThemeActive => Settings.NamedTheme == AppNamedTheme.Ark;
 
+    /// <summary>Salon is the theme: it follows the mode and the contrast, with its one accent.</summary>
+    public bool IsSalonThemeActive => Settings.NamedTheme == AppNamedTheme.Salon;
+
     /// <summary>
     /// Mode and reduced contrast are shown only when the theme uses them —
     /// Almatter's own palette and Ark. A fixed-palette theme decides both, so
@@ -855,7 +859,7 @@ public partial class MainViewModel : ViewModelBase
     public bool ShowModeAndContrast => !IsNamedThemeActive;
 
     /// <summary>The usual accent swatches: only under Almatter's own palette.</summary>
-    public bool ShowAccentOptions => !IsNamedThemeActive && !IsArkThemeActive;
+    public bool ShowAccentOptions => !IsNamedThemeActive && !IsArkThemeActive && !IsSalonThemeActive;
 
     /// <summary>
     /// The composers' rows of files waiting to be sent. Under Ark the row
@@ -863,18 +867,18 @@ public partial class MainViewModel : ViewModelBase
     /// off the middle of the one-line composer. Every other theme keeps it,
     /// so their composers stay exactly as tall as before.
     /// </summary>
-    public bool ShowPendingAttachments => PendingAttachments.Count > 0 || !ColorTokens.Theme.ArkStyle;
-    public bool ShowThreadPendingAttachments => ThreadPendingAttachments.Count > 0 || !ColorTokens.Theme.ArkStyle;
+    public bool ShowPendingAttachments => PendingAttachments.Count > 0 || !ColorTokens.Theme.OneLineComposer;
+    public bool ShowThreadPendingAttachments => ThreadPendingAttachments.Count > 0 || !ColorTokens.Theme.OneLineComposer;
 
     // The sidebar's section headings. Ark sets them as small capitals in a
-    // monospaced face; TextBlock has no text-transform, so the capitals are
-    // made here.
+    // monospaced face, Salon as capitals in the app's font; TextBlock has
+    // no text-transform, so the capitals are made here.
     public string FavoritesHeaderLabel => SectionHeading(Loc.S.FavoritesHeader);
     public string ChannelsHeaderLabel => SectionHeading(Loc.S.ChannelsHeader);
     public string DirectMessagesHeaderLabel => SectionHeading(Loc.S.DirectMessagesHeader);
 
     private static string SectionHeading(string text) =>
-        ColorTokens.Theme.ArkStyle ? text.ToUpper(CultureInfo.CurrentCulture) : text;
+        ColorTokens.Theme.CapitalHeadings ? text.ToUpper(CultureInfo.CurrentCulture) : text;
 
     private void RefreshSectionHeadings()
     {
@@ -890,6 +894,7 @@ public partial class MainViewModel : ViewModelBase
     public string NamedThemeHint =>
         IsNamedThemeActive ? Loc.S.ThemeHintActive(CurrentNamedThemeOption.Name)
         : IsArkThemeActive ? Loc.S.ThemeHintArk
+        : IsSalonThemeActive ? Loc.S.ThemeHintSalon
         : Loc.S.ThemeHintNone;
 
     /// <summary>
@@ -1002,6 +1007,7 @@ public partial class MainViewModel : ViewModelBase
         Loc.Instance.SetLanguage(Settings.Language);
         RefreshLanguageSelection();
         ThreadReplies.CollectionChanged += (_, _) => OnPropertyChanged(nameof(ThreadReplyCountLabel));
+        Messages.CollectionChanged += (_, _) => ApplyNewMessagesMarker();
         FavoriteChannels.CollectionChanged += OnSidebarListChanged;
         Channels.CollectionChanged += OnSidebarListChanged;
         FavoriteDirectMessages.CollectionChanged += OnSidebarListChanged;
@@ -1667,7 +1673,12 @@ public partial class MainViewModel : ViewModelBase
         ActiveChannelTopic = "";
         TypingIndicatorText = "";
         ErrorMessage = null;
-        MarkChannelViewed(channelId);
+        // Something was waiting here: find out from the server where the
+        // reader left off before marking it read, for the "Nouveau" rule.
+        var hadUnread = channel.MsgCount < channel.TotalMsgCount || channel.MentionCount > 0;
+        _unreadMarkerChannelId = channelId;
+        _unreadSince = null;
+        MarkChannelViewed(channelId, captureUnreadMarker: hadUnread);
         ComposerFocusRequested?.Invoke(this, EventArgs.Empty);
 
         IsPinnedPanelOpen = false;
@@ -4915,14 +4926,22 @@ public partial class MainViewModel : ViewModelBase
         var almatterPalette = ThemeDefinition.Resolve(Settings.ThemeMode, SystemTheme.PrefersDark, Settings.ReducedContrast, Settings.Accent);
         var arkPalette = ThemeDefinition.Resolve(Settings.ThemeMode, SystemTheme.PrefersDark, Settings.ReducedContrast,
             named: AppNamedTheme.Ark, arkAccent: Settings.ArkAccent);
-        var selectedTheme = IsNamedThemeActive || IsArkThemeActive ? Settings.NamedTheme : AppNamedTheme.None;
+        var salonPalette = ThemeDefinition.Resolve(Settings.ThemeMode, SystemTheme.PrefersDark, Settings.ReducedContrast,
+            named: AppNamedTheme.Salon);
+        var selectedTheme = IsNamedThemeActive || IsArkThemeActive || IsSalonThemeActive ? Settings.NamedTheme : AppNamedTheme.None;
         foreach (var option in NamedThemeOptions)
         {
             option.IsSelected = option.Theme == selectedTheme;
-            option.RefreshColors(option.Theme == AppNamedTheme.Ark ? arkPalette : almatterPalette);
+            option.RefreshColors(option.Theme switch
+            {
+                AppNamedTheme.Ark => arkPalette,
+                AppNamedTheme.Salon => salonPalette,
+                _ => almatterPalette,
+            });
         }
         OnPropertyChanged(nameof(IsNamedThemeActive));
         OnPropertyChanged(nameof(IsArkThemeActive));
+        OnPropertyChanged(nameof(IsSalonThemeActive));
         OnPropertyChanged(nameof(ShowModeAndContrast));
         OnPropertyChanged(nameof(ShowAccentOptions));
         OnPropertyChanged(nameof(ShowPendingAttachments));
@@ -5082,6 +5101,7 @@ public partial class MainViewModel : ViewModelBase
                 CreateAtMillis = post.CreateAt,
                 Text = post.Message,
                 IsMine = post.UserId == _session.User.Id,
+                MentionsMe = post.UserId != _session.User.Id && MentionTextHelper.MentionsUser(post.Message, _session.User.Username),
                 IsEdited = post.EditAt > 0,
                 LinkPreview = BuildLinkPreview(post),
                 LinkedMessage = BuildLinkedMessage(post, authors),
@@ -5425,7 +5445,8 @@ public partial class MainViewModel : ViewModelBase
     /// doesn't resurrect the old count) immediately, then tells the server
     /// in the background so the next real fetch agrees.
     /// </summary>
-    private void MarkChannelViewed(string channelId)
+    /// <param name="captureUnreadMarker">Ask the server when the reader last had this channel open before marking it read, to place the "Nouveau" rule (see ApplyNewMessagesMarker).</param>
+    private void MarkChannelViewed(string channelId, bool captureUnreadMarker = false)
     {
         var dto = _loadedChannels.FirstOrDefault(c => c.Id == channelId);
         if (dto is not null)
@@ -5452,7 +5473,58 @@ public partial class MainViewModel : ViewModelBase
         }
 
         RefreshUnreadAggregates();
-        _ = MarkChannelViewedOnServerAsync(channelId);
+        _ = captureUnreadMarker
+            ? CaptureUnreadMarkerThenMarkViewedAsync(channelId)
+            : MarkChannelViewedOnServerAsync(channelId);
+    }
+
+    /// <summary>The channel the "Nouveau" rule belongs to, and when its reader last had it open (ms since the epoch); null: no rule.</summary>
+    private string? _unreadMarkerChannelId;
+    private long? _unreadSince;
+
+    /// <summary>
+    /// Reads when the user last had the channel open — the server moves that
+    /// to now as soon as it is marked read, so it has to be asked first —
+    /// then marks it read. Without an answer (offline, refused) there is
+    /// simply no rule; the channel is marked read either way.
+    /// </summary>
+    private async Task CaptureUnreadMarkerThenMarkViewedAsync(string channelId)
+    {
+        try
+        {
+            var since = await _service.GetLastViewedAtAsync(_session.BaseUrl, _session.Token, channelId);
+            if (since > 0 && channelId == _activeChannelId && channelId == _unreadMarkerChannelId)
+            {
+                _unreadSince = since;
+                ApplyNewMessagesMarker();
+            }
+        }
+        catch (Exception ex)
+        {
+            CrashLogger.Write("badges", $"could not read when {channelId} was last viewed: {ex.Message}");
+        }
+        await MarkChannelViewedOnServerAsync(channelId);
+    }
+
+    /// <summary>
+    /// Puts the "Nouveau" rule above the first message someone else posted
+    /// since the reader last had the channel open, and takes it off every
+    /// other. It stays put while the channel is open, messages arriving
+    /// meanwhile included, and goes when another channel is opened. Run
+    /// whenever the message list changes, since the list can be painted
+    /// before or after the server's answer.
+    /// </summary>
+    private void ApplyNewMessagesMarker()
+    {
+        MessageItem? first = null;
+        if (_unreadSince is { } since && _unreadMarkerChannelId == _activeChannelId)
+        {
+            first = Messages.FirstOrDefault(m => m.CreateAtMillis > since && !m.IsMine && !m.IsPending);
+        }
+        foreach (var message in Messages)
+        {
+            message.IsFirstUnread = ReferenceEquals(message, first);
+        }
     }
 
     /// <summary>Raised whenever aggregate unread state (see HasUnreadRegularMessages/TotalPriorityUnreadCount) might have changed — MainWindow's code-behind uses this to update the taskbar overlay badge, since that's a Win32 handle the ViewModel has no access to.</summary>
@@ -6306,6 +6378,7 @@ public partial class MainViewModel : ViewModelBase
                 CreateAtMillis = post.CreateAt,
                 Text = post.Message,
                 IsMine = post.UserId == _session.User.Id,
+                MentionsMe = post.UserId != _session.User.Id && MentionTextHelper.MentionsUser(post.Message, _session.User.Username),
                 IsEdited = post.EditAt > 0,
                 ThreadReplyCount = (int)post.ReplyCount,
                 ThreadRootId = string.IsNullOrEmpty(post.RootId) ? null : post.RootId,
