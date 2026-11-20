@@ -226,9 +226,11 @@ public sealed partial class Strings
     public required string SettingsEmoji { get; init; }
     public required string EmojiTwemojiHint { get; init; }
     public required string SettingsMessageFontSize { get; init; }
-    public required string FontSizeSmall { get; init; }
+    /// <summary>The hint under the size picker; given min, Normale's value and max, already formatted.</summary>
+    public required Func<string, string, string, string> FontSizeRangeHint { get; init; }
     public required string FontSizeNormal { get; init; }
-    public required string FontSizeLarge { get; init; }
+    public required string FontSizeDecrease { get; init; }
+    public required string FontSizeIncrease { get; init; }
     public required string SoundForAllMessages { get; init; }
     public required string SoundForAllMessagesHint { get; init; }
     public required string LinkPreviews { get; init; }

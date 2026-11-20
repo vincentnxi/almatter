@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
 using Almatter.App.Localization;
@@ -36,14 +37,43 @@ public sealed partial class AppSettings : ObservableObject
     public partial AppEmojiStyle EmojiStyle { get; set; } = AppEmojiStyle.System;
 
     /// <summary>
-    /// The middle of the three sizes on offer, 14 / 15,5 / 17,5. The official
-    /// client's 14px is the small one here: the same 14px reads smaller in
-    /// this app, whose renderer draws text paler than a browser does. They
-    /// used to be 13 / 14,5 / 16,5; SettingsStore moves a saved old value
-    /// onto its new equivalent.
+    /// "Normale". The official client's 14px reads smaller in this app, whose
+    /// renderer draws text paler than a browser does, hence 15,5.
+    /// </summary>
+    public const double DefaultMessageFontSize = 15.5;
+
+    /// <summary>
+    /// Bounds of the size picker. Below 12 messages stop being comfortably
+    /// readable; above 22 a line of text holds only a few words and the
+    /// fixed-size parts of a message (avatar, name row) look out of scale.
+    /// </summary>
+    public const double MinMessageFontSize = 12;
+    public const double MaxMessageFontSize = 22;
+    public const double MessageFontSizeStep = 0.5;
+
+    /// <summary>
+    /// Snaps any value — a hand-edited settings.json included — onto the
+    /// half-point grid between the bounds; garbage falls back to Normale.
+    /// </summary>
+    public static double ClampMessageFontSize(double size)
+    {
+        if (double.IsNaN(size) || double.IsInfinity(size))
+        {
+            return DefaultMessageFontSize;
+        }
+        var snapped = Math.Round(size / MessageFontSizeStep, MidpointRounding.AwayFromZero) * MessageFontSizeStep;
+        return Math.Clamp(snapped, MinMessageFontSize, MaxMessageFontSize);
+    }
+
+    /// <summary>
+    /// The message text size, picked in half-point steps between
+    /// <see cref="MinMessageFontSize"/> and <see cref="MaxMessageFontSize"/>.
+    /// It used to be one of three pills (Petite 14 / Normale 15,5 / Grande
+    /// 17,5, earlier 13 / 14,5 / 16,5); any of those saved values is still a
+    /// valid size and is kept as is.
     /// </summary>
     [ObservableProperty]
-    public partial double MessageFontSize { get; set; } = 15.5;
+    public partial double MessageFontSize { get; set; } = DefaultMessageFontSize;
 
     /// <summary>
     /// Channel/DM ids in the order the user dragged them within Favoris —

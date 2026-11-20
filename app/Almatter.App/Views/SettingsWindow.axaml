@@ -148,6 +148,33 @@
             <Setter Property="MinHeight" Value="30" />
         </Style>
 
+        <!-- The size picker's − and + : hover tint, greyed out at a bound. -->
+        <Style Selector="Button.stepper Path">
+            <Setter Property="Width" Value="12" />
+            <Setter Property="Height" Value="12" />
+            <Setter Property="Stretch" Value="Uniform" />
+            <Setter Property="StrokeThickness" Value="1.8" />
+            <Setter Property="StrokeLineCap" Value="Round" />
+            <Setter Property="Stroke" Value="{DynamicResource TextPrimaryBrush}" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Button.stepper Border.segment">
+            <Setter Property="Padding" Value="10,6" />
+        </Style>
+        <Style Selector="Button.stepper:pointerover Border.segment">
+            <Setter Property="Background" Value="{DynamicResource BgHoverBrush}" />
+        </Style>
+        <Style Selector="Button.stepper:disabled">
+            <Setter Property="Opacity" Value="0.35" />
+        </Style>
+        <!-- "Normale" lit up like a selected segment while the size is the default one. -->
+        <Style Selector="Button.normal-on Border.segment, Button.normal-on:pointerover Border.segment">
+            <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
+        </Style>
+        <Style Selector="Button.normal-on TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource AccentInkBrush}" />
+        </Style>
+
         <!-- The check box at the end of an on/off row. -->
         <Style Selector="Border.check">
             <Setter Property="Width" Value="18" />
@@ -426,29 +453,47 @@
                         </Border>
                     </StackPanel>
 
-                    <!-- Each label is drawn at the size it stands for. -->
+                    <!-- − 15,5 + in half-point steps between the bounds set in
+                         AppSettings, then "Normale": tinted while the size is
+                         the default one, a way back to it otherwise. No
+                         preview line: the conversation behind the window
+                         already shows the change as it happens. -->
                     <StackPanel Spacing="8">
-                        <TextBlock Classes="setting-label" Text="{Binding T.SettingsMessageFontSize, Source={x:Static loc:Loc.Instance}}" />
-                        <Border Classes="segmented">
-                            <ItemsControl ItemsSource="{Binding FontSizeOptions}">
-                                <ItemsControl.ItemsPanel>
-                                    <ItemsPanelTemplate>
-                                        <StackPanel Orientation="Horizontal" Spacing="2" />
-                                    </ItemsPanelTemplate>
-                                </ItemsControl.ItemsPanel>
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate DataType="models:FontSizeOption">
-                                        <Button Classes="row-button"
-                                                Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).SetFontSizeCommand}"
-                                                CommandParameter="{Binding Size}">
-                                            <Border Classes="segment" Background="{Binding RowBackground}">
-                                                <TextBlock Text="{Binding Label}" Foreground="{Binding TextBrush}" FontSize="{Binding Size}" VerticalAlignment="Center" />
-                                            </Border>
-                                        </Button>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </Border>
+                        <StackPanel Spacing="2">
+                            <TextBlock Classes="setting-label" Text="{Binding T.SettingsMessageFontSize, Source={x:Static loc:Loc.Instance}}" />
+                            <TextBlock Classes="setting-hint" Text="{Binding MessageFontSizeHint}" />
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Border Classes="segmented">
+                                <StackPanel Orientation="Horizontal" Spacing="2">
+                                    <Button Classes="row-button stepper" Command="{Binding DecreaseFontSizeCommand}"
+                                            IsEnabled="{Binding CanDecreaseMessageFontSize}"
+                                            ToolTip.Tip="{Binding T.FontSizeDecrease, Source={x:Static loc:Loc.Instance}}">
+                                        <Border Classes="segment">
+                                            <Path Data="M3 8h10" />
+                                        </Border>
+                                    </Button>
+                                    <TextBlock Text="{Binding MessageFontSizeLabel}" MinWidth="44" TextAlignment="Center"
+                                               FontSize="13.5" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                    <Button Classes="row-button stepper" Command="{Binding IncreaseFontSizeCommand}"
+                                            IsEnabled="{Binding CanIncreaseMessageFontSize}"
+                                            ToolTip.Tip="{Binding T.FontSizeIncrease, Source={x:Static loc:Loc.Instance}}">
+                                        <Border Classes="segment">
+                                            <Path Data="M3 8h10M8 3v10" />
+                                        </Border>
+                                    </Button>
+                                </StackPanel>
+                            </Border>
+                            <Border Classes="segmented">
+                                <Button Classes="row-button stepper" Command="{Binding ResetFontSizeCommand}"
+                                        Classes.normal-on="{Binding IsMessageFontSizeNormal}">
+                                    <Border Classes="segment">
+                                        <TextBlock Text="{Binding T.FontSizeNormal, Source={x:Static loc:Loc.Instance}}"
+                                                   FontSize="13" VerticalAlignment="Center" />
+                                    </Border>
+                                </Button>
+                            </Border>
+                        </StackPanel>
                     </StackPanel>
 
                     <Border Classes="separator" />

@@ -771,12 +771,19 @@ public partial class MainViewModel : ViewModelBase
         new() { Style = AppEmojiStyle.Twemoji },
     ];
 
-    public ObservableCollection<FontSizeOption> FontSizeOptions { get; } =
-    [
-        new() { Wording = s => s.FontSizeSmall, Size = 14 },
-        new() { Wording = s => s.FontSizeNormal, Size = 15.5 },
-        new() { Wording = s => s.FontSizeLarge, Size = 17.5 },
-    ];
+    /// <summary>The message text size as a number, "15,5" or "15.5" depending on the language.</summary>
+    public string MessageFontSizeLabel => FormatFontSize(Settings.MessageFontSize);
+
+    public string MessageFontSizeHint => Loc.S.FontSizeRangeHint(
+        FormatFontSize(AppSettings.MinMessageFontSize),
+        FormatFontSize(AppSettings.DefaultMessageFontSize),
+        FormatFontSize(AppSettings.MaxMessageFontSize));
+
+    public bool IsMessageFontSizeNormal => Settings.MessageFontSize == AppSettings.DefaultMessageFontSize;
+    public bool CanDecreaseMessageFontSize => Settings.MessageFontSize > AppSettings.MinMessageFontSize;
+    public bool CanIncreaseMessageFontSize => Settings.MessageFontSize < AppSettings.MaxMessageFontSize;
+
+    private static string FormatFontSize(double size) => size.ToString("0.#", Loc.Culture);
 
     public ObservableCollection<LanguageOption> LanguageOptions { get; } =
     [
@@ -3204,7 +3211,15 @@ public partial class MainViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void SetFontSize(double size) => Settings.MessageFontSize = size;
+    private void DecreaseFontSize() =>
+        Settings.MessageFontSize = AppSettings.ClampMessageFontSize(Settings.MessageFontSize - AppSettings.MessageFontSizeStep);
+
+    [RelayCommand]
+    private void IncreaseFontSize() =>
+        Settings.MessageFontSize = AppSettings.ClampMessageFontSize(Settings.MessageFontSize + AppSettings.MessageFontSizeStep);
+
+    [RelayCommand]
+    private void ResetFontSize() => Settings.MessageFontSize = AppSettings.DefaultMessageFontSize;
 
     [RelayCommand]
     private void ToggleFormattingToolbar() => Settings.ShowFormattingToolbar = !Settings.ShowFormattingToolbar;
@@ -4836,10 +4851,9 @@ public partial class MainViewModel : ViewModelBase
         {
             option.RefreshLanguage();
         }
-        foreach (var option in FontSizeOptions)
-        {
-            option.RefreshLanguage();
-        }
+        // The decimal separator changes with the language: 15,5 / 15.5.
+        OnPropertyChanged(nameof(MessageFontSizeLabel));
+        OnPropertyChanged(nameof(MessageFontSizeHint));
         foreach (var option in SkinToneOptions)
         {
             option.RefreshLanguage();
@@ -4979,10 +4993,6 @@ public partial class MainViewModel : ViewModelBase
         {
             RefreshMessageColors(ThreadRootMessage);
         }
-        foreach (var fontOption in FontSizeOptions)
-        {
-            fontOption.RefreshColors();
-        }
         foreach (var fontChoice in FontChoiceOptions)
         {
             fontChoice.RefreshColors();
@@ -5007,10 +5017,10 @@ public partial class MainViewModel : ViewModelBase
 
     private void RefreshFontSizeSelection()
     {
-        foreach (var option in FontSizeOptions)
-        {
-            option.IsSelected = option.Size == Settings.MessageFontSize;
-        }
+        OnPropertyChanged(nameof(MessageFontSizeLabel));
+        OnPropertyChanged(nameof(IsMessageFontSizeNormal));
+        OnPropertyChanged(nameof(CanDecreaseMessageFontSize));
+        OnPropertyChanged(nameof(CanIncreaseMessageFontSize));
     }
 
     private void RefreshFontChoiceSelection()
