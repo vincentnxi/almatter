@@ -41,10 +41,23 @@ const USER_AGENT: &str = concat!(
     " (+https://github.com/vincentnxi/almatter)"
 );
 
+/// What both shared clients start from. Under test it keeps no idle
+/// connection: every test runs its own mock server, a server gone at the end
+/// of one test leaves its connection in the pool, and when a later test's
+/// server is handed the same port the pool handed that dead connection back.
+/// The request failed, and with it a test that had nothing wrong — now and
+/// then, depending on which ports came round again.
+fn base_builder() -> reqwest::ClientBuilder {
+    let builder = reqwest::Client::builder();
+    #[cfg(test)]
+    let builder = builder.pool_max_idle_per_host(0);
+    builder
+}
+
 fn shared_http_client() -> reqwest::Client {
     HTTP_CLIENT
         .get_or_init(|| {
-            reqwest::Client::builder()
+            base_builder()
                 .user_agent(USER_AGENT)
                 .connect_timeout(CONNECT_TIMEOUT)
                 .read_timeout(READ_TIMEOUT)
@@ -61,7 +74,7 @@ fn shared_http_client() -> reqwest::Client {
 fn upload_http_client() -> reqwest::Client {
     UPLOAD_HTTP_CLIENT
         .get_or_init(|| {
-            reqwest::Client::builder()
+            base_builder()
                 .user_agent(USER_AGENT)
                 .connect_timeout(CONNECT_TIMEOUT)
                 .build()
