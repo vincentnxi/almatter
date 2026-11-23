@@ -55,6 +55,14 @@ public static class ColorTokens
     public static IBrush ReadRowInk { get; private set; } = Solid(ThemeDefinition.Light.TextSecondary);
 
     /// <summary>
+    /// A sidebar row with something waiting: the main text colour, except on
+    /// dark Salon, where it is pure white whatever the contrast setting. The
+    /// reduced contrast pulls the main text 17 % toward the background, which
+    /// left an unread name too close to the grey of the read ones there.
+    /// </summary>
+    public static IBrush UnreadRowInk { get; private set; } = Solid(ThemeDefinition.Light.TextPrimary);
+
+    /// <summary>
     /// Full palette swap. AccentSoft/AccentInk are lerped toward the
     /// palette's OWN panel/text colors rather than universal white/black:
     /// on the light palette that lands almost exactly where a white/black
@@ -116,6 +124,7 @@ public static class ColorTokens
         CardBg = Solid(theme.CardBg);
         Divider = Solid(theme.Divider);
         ReadRowInk = theme.SalonStyle ? TextTertiary : TextSecondary;
+        UnreadRowInk = theme.SalonStyle && theme.IsDark ? Brushes.White : TextPrimary;
 
         // Over a gradient, a solid selection or divider would be right at one
         // height of the window and a visible patch at another. See-through

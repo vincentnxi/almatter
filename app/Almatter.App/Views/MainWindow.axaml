@@ -36,6 +36,7 @@
         <SolidColorBrush x:Key="DividerBrush" Color="#E6E8EC" />
         <SolidColorBrush x:Key="DividerStrongBrush" Color="#D3D7DE" />
         <SolidColorBrush x:Key="TextPrimaryBrush" Color="#14161A" />
+        <SolidColorBrush x:Key="UnreadRowInkBrush" Color="#14161A" />
         <SolidColorBrush x:Key="TextSecondaryBrush" Color="#5B626D" />
         <SolidColorBrush x:Key="TextTertiaryBrush" Color="#8A929E" />
         <SolidColorBrush x:Key="AccentBrush" Color="#005FB8" />
@@ -238,7 +239,7 @@
                             <!-- Salon: a small bar on the sidebar's left edge instead, out
                                  past the row's padding (8), the list's step (12) and the
                                  sidebar's margin (8). Drawn outside the row: no width taken. -->
-                            <Border Grid.Column="0" Grid.ColumnSpan="4" IsVisible="{Binding HasUnread}" Background="{DynamicResource TextPrimaryBrush}"
+                            <Border Grid.Column="0" Grid.ColumnSpan="4" IsVisible="{Binding HasUnread}" Background="{DynamicResource UnreadRowInkBrush}"
                                     Width="{DynamicResource UnreadBarWidth}" Height="8" CornerRadius="0,4,4,0" Margin="-28,0,0,0"
                                     HorizontalAlignment="Left" VerticalAlignment="Center" IsHitTestVisible="False" />
                         </Grid>
@@ -305,7 +306,7 @@
                             <!-- Salon: a small bar on the sidebar's left edge instead, out
                                  past the row's padding (8), the list's step (12) and the
                                  sidebar's margin (8). Drawn outside the row: no width taken. -->
-                            <Border Grid.Column="0" Grid.ColumnSpan="4" IsVisible="{Binding HasUnread}" Background="{DynamicResource TextPrimaryBrush}"
+                            <Border Grid.Column="0" Grid.ColumnSpan="4" IsVisible="{Binding HasUnread}" Background="{DynamicResource UnreadRowInkBrush}"
                                     Width="{DynamicResource UnreadBarWidth}" Height="8" CornerRadius="0,4,4,0" Margin="-28,0,0,0"
                                     HorizontalAlignment="Left" VerticalAlignment="Center" IsHitTestVisible="False" />
                         </Grid>

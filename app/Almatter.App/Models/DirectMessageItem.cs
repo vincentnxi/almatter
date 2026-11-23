@@ -74,7 +74,7 @@ public sealed partial class DirectMessageItem : ObservableObject, IChannelListIt
     /// <summary>Same three levels as a channel row — see ChannelItem.NameBrush for why read rows step back rather than unread ones shouting louder.</summary>
     public IBrush NameBrush => IsSelected
         ? ColorTokens.SelectedRowInk
-        : HasUnread ? ColorTokens.TextPrimary : ColorTokens.ReadRowInk;
+        : HasUnread ? ColorTokens.UnreadRowInk : ColorTokens.ReadRowInk;
 
     public FontWeight NameWeight => IsSelected || HasUnread
         ? (ColorTokens.Theme.ArkStyle || ColorTokens.Theme.SalonStyle ? FontWeight.SemiBold : FontWeight.Bold)

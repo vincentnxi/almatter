@@ -80,6 +80,7 @@ internal static class ThemeResources
         resources["ThreadGroundBrush"] = gradient ? Brushes.Transparent : ColorTokens.Solid(theme.BgApp);
         resources["DividerStrongBrush"] = ColorTokens.Solid(theme.DividerStrong);
         resources["TextPrimaryBrush"] = ColorTokens.TextPrimary;
+        resources["UnreadRowInkBrush"] = ColorTokens.UnreadRowInk;
         resources["TextSecondaryBrush"] = ColorTokens.TextSecondary;
         resources["TextTertiaryBrush"] = ColorTokens.Solid(theme.TextTertiary);
         resources["CardBgBrush"] = ColorTokens.CardBg;
