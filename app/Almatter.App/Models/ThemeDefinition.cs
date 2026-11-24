@@ -127,9 +127,6 @@ public sealed record ThemeDefinition
     /// <summary>The sidebar's foot (you, your status, the settings). Null: no fill of its own, as usual.</summary>
     public string? FooterHex { get; init; }
 
-    /// <summary>The text, buttons and tools of the composer sit on one line (Ark, Salon), not the text above a row of buttons.</summary>
-    public bool OneLineComposer => ArkStyle || SalonStyle;
-
     /// <summary>The sidebar's section headings are set in capitals (Ark, Salon).</summary>
     public bool CapitalHeadings => ArkStyle || SalonStyle;
 
