@@ -201,6 +201,18 @@ public sealed partial class Strings
         LinkPreviewsHint = "Shows the page's title and picture under messages that contain a link.",
         SettingsAccount = "Account",
         LogOut = "Sign out",
+        CheckForUpdates = "Check for new versions",
+        CheckForUpdatesHint = "Almatter reads the list of versions on GitHub shortly after it starts, then once a day. Nothing about you is sent; GitHub only sees your IP address.",
+        InstalledVersion = version => $"Installed version: {version}",
+        CheckForUpdatesNow = "Check now",
+        UpdateChecking = "Checking…",
+        UpdateUpToDate = "You have the latest version.",
+        UpdateCheckFailed = "Couldn't check. Check the Internet connection and try again.",
+        UpdateAvailable = version => $"Almatter {version} is available.",
+        UpdateYouHave = version => $"You have {version}.",
+        UpdateOpenPage = "View on GitHub",
+        UpdateSkip = "Skip this version",
+        UpdateLater = "Later",
 
         // ── Notifications and taskbar ────────────────────────────────
         Someone = "Someone",

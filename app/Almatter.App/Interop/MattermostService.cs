@@ -347,6 +347,14 @@ public sealed class MattermostService
         return data.Path;
     }
 
+    /// <summary>The newest release published on GitHub if it is newer than <paramref name="currentVersion"/>, else null. Asks GitHub, not the Mattermost server, with no token.</summary>
+    public async Task<NewerReleaseDto?> CheckForUpdateAsync(string currentVersion)
+    {
+        var request = new JsonObject { ["command"] = "check_for_update", ["current_version"] = currentVersion };
+        var data = await CallAsync<UpdateCheckData>(request);
+        return data.Newer;
+    }
+
     /// <summary>Downloads (once — cached to disk after that) one message attachment and returns its local file path.</summary>
     public async Task<string> GetFilePathAsync(string baseUrl, string token, string fileId, string fileName)
     {

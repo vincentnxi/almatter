@@ -267,6 +267,18 @@ internal sealed class LinkPreviewImageData
     [JsonPropertyName("path")] public string Path { get; set; } = "";
 }
 
+internal sealed class UpdateCheckData
+{
+    [JsonPropertyName("newer")] public NewerReleaseDto? Newer { get; set; }
+}
+
+/// <summary>A release on GitHub newer than the running app. The address is built by the core from a checked tag, always a page of the Almatter repository.</summary>
+public sealed class NewerReleaseDto
+{
+    [JsonPropertyName("version")] public string Version { get; set; } = "";
+    [JsonPropertyName("url")] public string Url { get; set; } = "";
+}
+
 internal sealed class ChannelData
 {
     [JsonPropertyName("channel")] public ChannelDto Channel { get; set; } = new();

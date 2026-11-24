@@ -166,6 +166,12 @@ enum Request {
     GetLinkPreviewImage {
         url: String,
     },
+    /// Whether a newer Almatter has been published on GitHub — see
+    /// `crate::updates`. Answers `{"newer": null}` or
+    /// `{"newer": {"version": "0.15.0", "url": "https://github.com/…"}}`.
+    CheckForUpdate {
+        current_version: String,
+    },
     /// Downloads (once — cached to disk after that) one message attachment
     /// and returns the local file path, so the UI can open it with the OS's
     /// own default handler for that file type.
@@ -886,6 +892,9 @@ async fn handle(request_json: &str, db: &'static Mutex<Database>) -> Value {
         Request::GetLinkPreviewImage { url } => ensure_link_preview_image_cached(&url)
             .await
             .map(|path| json!({ "path": path })),
+        Request::CheckForUpdate { current_version } => crate::updates::check_for_update(&current_version)
+            .await
+            .map(|newer| json!({ "newer": newer })),
         Request::GetFile { base_url, token, file_id, file_name } => {
             let client = MattermostClient::new(base_url).with_token(token);
             ensure_file_cached(&client, &file_id, &file_name)

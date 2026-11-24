@@ -931,9 +931,41 @@
         <Border Grid.Column="1" Background="{DynamicResource ConversationGroundBrush}" BorderBrush="{DynamicResource DividerBrush}"
                 BorderThickness="{DynamicResource ConversationBorderThickness}" Margin="{DynamicResource ConversationMargin}"
                 CornerRadius="{DynamicResource PanelRadius}" ClipToBounds="True">
-        <Grid RowDefinitions="52,*,Auto">
+        <Grid RowDefinitions="Auto,52,*,Auto">
 
-            <Border Grid.Row="0" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1" Padding="16,0">
+            <!-- A newer version on GitHub (MainViewModel.Updates.cs). In the
+                 accent's soft tint and deep ink, like the selected channel, so
+                 it follows the chosen accent and theme. -->
+            <Border Grid.Row="0" IsVisible="{Binding ShowUpdateBanner}"
+                    Background="{DynamicResource AccentSoftBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1" Padding="16,8,10,8">
+                <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto">
+                    <Path Grid.Column="0" Data="M12 2.5a9.5 9.5 0 1 0 0 19 9.5 9.5 0 0 0 0-19z M12 7v8.5 M8.5 12l3.5 3.5 3.5-3.5"
+                          Stroke="{DynamicResource AccentInkBrush}" StrokeThickness="1.7" StrokeLineCap="Round" StrokeJoin="Round"
+                          Width="16" Height="16" Stretch="Uniform" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="1" Margin="10,0" VerticalAlignment="Center" TextWrapping="Wrap" Foreground="{DynamicResource AccentInkBrush}">
+                        <Run Text="{Binding UpdateBannerTitle}" FontWeight="SemiBold" /><Run Text=" " /><Run Text="{Binding UpdateBannerDetail}" />
+                    </TextBlock>
+                    <Button Grid.Column="2" Classes="row-button" VerticalAlignment="Center" Command="{Binding OpenUpdatePageCommand}">
+                        <Border Background="{DynamicResource PrimaryButtonBrush}" CornerRadius="{DynamicResource RowRadiusValue}" Padding="12,5">
+                            <TextBlock Text="{Binding T.UpdateOpenPage, Source={x:Static loc:Loc.Instance}}" Foreground="{DynamicResource OnPrimaryButtonBrush}" FontSize="12.5" />
+                        </Border>
+                    </Button>
+                    <Button Grid.Column="3" Classes="row-button" VerticalAlignment="Center" Margin="4,0,0,0" Command="{Binding SkipUpdateCommand}">
+                        <Border Background="Transparent" CornerRadius="{DynamicResource RowRadiusValue}" Padding="10,5">
+                            <TextBlock Text="{Binding T.UpdateSkip, Source={x:Static loc:Loc.Instance}}" Foreground="{DynamicResource AccentInkBrush}" FontSize="12.5" />
+                        </Border>
+                    </Button>
+                    <Button Grid.Column="4" Classes="row-button" Width="24" Height="24" VerticalAlignment="Center" Margin="4,0,0,0"
+                            ToolTip.Tip="{Binding T.UpdateLater, Source={x:Static loc:Loc.Instance}}" Command="{Binding DismissUpdateCommand}">
+                        <Canvas Width="12" Height="12" HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <Line StartPoint="1,1" EndPoint="11,11" Stroke="{DynamicResource AccentInkBrush}" StrokeThickness="1.6" StrokeLineCap="Round" />
+                            <Line StartPoint="11,1" EndPoint="1,11" Stroke="{DynamicResource AccentInkBrush}" StrokeThickness="1.6" StrokeLineCap="Round" />
+                        </Canvas>
+                    </Button>
+                </Grid>
+            </Border>
+
+            <Border Grid.Row="1" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1" Padding="16,0">
                 <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto,Auto,Auto">
                     <Path Grid.Column="0" Data="M9 4l-1 16M16 4l-1 16M4 9h16M3 15h16" Stroke="{DynamicResource TextPrimaryBrush}" StrokeThickness="1.8"
                           Width="16" Height="16" Stretch="Uniform" VerticalAlignment="Center" />
@@ -984,7 +1016,7 @@
                 </Grid>
             </Border>
 
-            <ScrollViewer Grid.Row="1" x:Name="MessagesScroller">
+            <ScrollViewer Grid.Row="2" x:Name="MessagesScroller">
                 <ItemsControl x:Name="MessagesItemsControl" ItemsSource="{Binding Messages}" Margin="20,14,20,26">
                     <!-- Virtualized: without this, every message in the channel's whole
                          history is fully realized/measured/laid out on every repaint —
@@ -1448,7 +1480,7 @@
                  away from it. Clicking it returns to the newest message AND
                  resumes live updates, which is the one gesture that reliably
                  leaves the "looking at an older message" state. -->
-            <Button Grid.Row="1" Classes="row-button" IsVisible="{Binding ShowReturnToLiveButton}"
+            <Button Grid.Row="2" Classes="row-button" IsVisible="{Binding ShowReturnToLiveButton}"
                     HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,28,14"
                     Width="34" Height="34" ToolTip.Tip="{Binding T.JumpToLatest, Source={x:Static loc:Loc.Instance}}"
                     Command="{Binding ReturnToLiveTailCommand}">
@@ -1469,7 +1501,7 @@
                  The negative bottom margin tucks it into the gap above the
                  composer; the message list's larger bottom margin keeps the
                  last line of text clear of it. -->
-            <Border Grid.Row="1" IsVisible="{Binding TypingIndicatorText, Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}"
+            <Border Grid.Row="2" IsVisible="{Binding TypingIndicatorText, Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}"
                     IsHitTestVisible="False"
                     HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="28,0,80,-8"
                     Padding="10,4" CornerRadius="12"
@@ -1487,7 +1519,7 @@
             </Border>
 
             <!-- The well around the composer: nothing at all except on Ark, where it is a sunken tray. -->
-            <Border Grid.Row="2" Margin="20,10,20,16" Background="{DynamicResource ComposerWellBrush}" BorderBrush="{DynamicResource ComposerWellBorderBrush}"
+            <Border Grid.Row="3" Margin="20,10,20,16" Background="{DynamicResource ComposerWellBrush}" BorderBrush="{DynamicResource ComposerWellBorderBrush}"
                     BorderThickness="{DynamicResource ComposerWellBorderThickness}" Padding="{DynamicResource ComposerWellPadding}" CornerRadius="{DynamicResource ComposerWellRadius}">
             <Border x:Name="ComposerFrame" Classes="composer-frame" CornerRadius="{DynamicResource SurfaceRadiusValue}" Background="{DynamicResource ComposerBrush}" BoxShadow="{DynamicResource SmallCardShadow}">
                 <StackPanel>

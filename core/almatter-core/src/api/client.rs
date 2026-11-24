@@ -1079,16 +1079,35 @@ pub async fn fetch_external_bytes(url: &str) -> Result<Vec<u8>, ApiError> {
     fetch_external(&external_http_client()?, is_public_address, url).await
 }
 
+/// A small document from another website — so far, the list of Almatter's
+/// releases on GitHub. Same client and same guards as `fetch_external_bytes`
+/// (public addresses only, never the session token, a time limit), but asking
+/// for `accept` and holding no more than `max_bytes`: a JSON answer has no
+/// business coming anywhere near a picture's size.
+pub async fn fetch_external_document(url: &str, accept: &str, max_bytes: usize) -> Result<Vec<u8>, ApiError> {
+    fetch_external_limited(&external_http_client()?, is_public_address, url, accept, max_bytes).await
+}
+
 /// `fetch_external_bytes` with the client and the address rule given — the
 /// tests' local mock server is, after all, on this computer.
 async fn fetch_external(client: &reqwest::Client, allowed: fn(IpAddr) -> bool, url: &str) -> Result<Vec<u8>, ApiError> {
+    fetch_external_limited(client, allowed, url, "image/*,*/*;q=0.8", MAX_EXTERNAL_BYTES).await
+}
+
+async fn fetch_external_limited(
+    client: &reqwest::Client,
+    allowed: fn(IpAddr) -> bool,
+    url: &str,
+    accept: &str,
+    max_bytes: usize,
+) -> Result<Vec<u8>, ApiError> {
     // A URL that doesn't parse is left to reqwest, which reports it as before.
     if reqwest::Url::parse(url).is_ok_and(|parsed| !url_address_allowed(&parsed, allowed)) {
         return Err(ApiError::PrivateAddress);
     }
     let mut resp = client
         .get(url)
-        .header(reqwest::header::ACCEPT, "image/*,*/*;q=0.8")
+        .header(reqwest::header::ACCEPT, accept)
         .timeout(EXTERNAL_FETCH_TIMEOUT)
         .send()
         .await
@@ -1099,15 +1118,15 @@ async fn fetch_external(client: &reqwest::Client, allowed: fn(IpAddr) -> bool, u
         return Err(ApiError::from_response(resp.status().as_u16(), String::new()));
     }
 
-    let limit_mb = MAX_EXTERNAL_BYTES / (1024 * 1024);
-    if resp.content_length().is_some_and(|len| len > MAX_EXTERNAL_BYTES as u64) {
+    let limit_mb = (max_bytes / (1024 * 1024)).max(1);
+    if resp.content_length().is_some_and(|len| len > max_bytes as u64) {
         return Err(ApiError::TooLarge { limit_mb });
     }
     // Piece by piece rather than `bytes()`: the declared length can be absent
     // or wrong, so the count has to be kept as the body actually arrives.
     let mut bytes = Vec::new();
     while let Some(chunk) = resp.chunk().await.map_err(ApiError::Interrupted)? {
-        if bytes.len() + chunk.len() > MAX_EXTERNAL_BYTES {
+        if bytes.len() + chunk.len() > max_bytes {
             return Err(ApiError::TooLarge { limit_mb });
         }
         bytes.extend_from_slice(&chunk);

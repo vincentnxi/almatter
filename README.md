@@ -87,11 +87,13 @@ delete your data (saved sign-in, settings, cached messages). That data lives in
 ## Privacy and security
 
 - There is **no telemetry, analytics or third-party service**. Almatter talks to the
-  Mattermost server you sign in to, with one exception: the image of a link preview, and a
+  Mattermost server you sign in to, with two exceptions. The image of a link preview, and a
   picture whose address is written in a message, are downloaded from the website that
   hosts them, like a browser would — never from an address
   on your own computer or local network, whatever the page asks for. Turning link previews
-  off in the settings stops that.
+  off in the settings stops that. And once a day Almatter reads the list of its own
+  versions on GitHub, to tell you when a new one is out; nothing about you is sent, and
+  the check can be turned off in the settings (General).
 - Your password is never stored. The session token is saved encrypted with Windows' data
   protection API (DPAPI), readable only by your Windows account.
 - Messages are cached on your disk so they open instantly and remain readable offline.
@@ -298,12 +300,14 @@ données se trouvent dans `%LOCALAPPDATA%\Almatter`.
 ## Confidentialité et sécurité
 
 - **Aucune télémétrie, aucune mesure d'audience, aucun service tiers.** Almatter
-  communique avec le serveur Mattermost auquel vous vous connectez, à une exception
-  près : l'image d'un aperçu de lien, et une image dont l'adresse est écrite dans un
+  communique avec le serveur Mattermost auquel vous vous connectez, à deux exceptions
+  près. L'image d'un aperçu de lien, et une image dont l'adresse est écrite dans un
   message, sont téléchargées depuis le site qui les héberge,
   comme le ferait un navigateur — jamais depuis une adresse de votre ordinateur ou de
   votre réseau local, quoi que la page demande. Désactiver les aperçus de liens dans les
-  réglages supprime ces téléchargements.
+  réglages supprime ces téléchargements. Et une fois par jour, Almatter consulte la liste
+  de ses propres versions sur GitHub pour vous prévenir quand une nouvelle sort ; rien
+  sur vous n'est envoyé, et la vérification se désactive dans les réglages (Général).
 - Votre mot de passe n'est jamais enregistré. Le jeton de session est chiffré avec la
   protection de données de Windows (DPAPI) et lisible uniquement par votre compte
   Windows.

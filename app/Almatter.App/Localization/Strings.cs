@@ -238,6 +238,22 @@ public sealed partial class Strings
     public required string SettingsAccount { get; init; }
     public required string LogOut { get; init; }
 
+    // ── Updates ──────────────────────────────────────────────────────
+    /// <summary>The settings switch, and the explanation under it — which says what is sent where.</summary>
+    public required string CheckForUpdates { get; init; }
+    public required string CheckForUpdatesHint { get; init; }
+    public required Func<string, string> InstalledVersion { get; init; }
+    public required string CheckForUpdatesNow { get; init; }
+    public required string UpdateChecking { get; init; }
+    public required string UpdateUpToDate { get; init; }
+    public required string UpdateCheckFailed { get; init; }
+    /// <summary>The banner: "Almatter 0.15.0 est disponible." then "Vous avez la 0.14.0."</summary>
+    public required Func<string, string> UpdateAvailable { get; init; }
+    public required Func<string, string> UpdateYouHave { get; init; }
+    public required string UpdateOpenPage { get; init; }
+    public required string UpdateSkip { get; init; }
+    public required string UpdateLater { get; init; }
+
     // ── Notifications and taskbar ────────────────────────────────────
     public required string Someone { get; init; }
     public required Func<string, string> ReactedToYourMessage { get; init; }

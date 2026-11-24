@@ -589,6 +589,34 @@
 
                     <Border Classes="separator" />
 
+                    <!-- New versions: the switch, then the installed version and a
+                         check on demand, which works whether the switch is on or not. -->
+                    <StackPanel Spacing="10">
+                        <Button Classes="row-button" Command="{Binding ToggleCheckForUpdatesCommand}">
+                            <Grid ColumnDefinitions="*,Auto" Background="Transparent">
+                                <StackPanel Grid.Column="0" Spacing="2">
+                                    <TextBlock Classes="setting-label" Text="{Binding T.CheckForUpdates, Source={x:Static loc:Loc.Instance}}" />
+                                    <TextBlock Classes="setting-hint" Text="{Binding T.CheckForUpdatesHint, Source={x:Static loc:Loc.Instance}}" />
+                                </StackPanel>
+                                <Border Grid.Column="1" Classes="check" Background="{Binding Settings.CheckForUpdatesCheckBrush}">
+                                    <Path IsVisible="{Binding Settings.CheckForUpdates}" Data="M4 9l3 3 6-7" />
+                                </Border>
+                            </Grid>
+                        </Button>
+                        <StackPanel Orientation="Horizontal" Spacing="12">
+                            <TextBlock Classes="setting-hint" Text="{Binding InstalledVersionText}" VerticalAlignment="Center" />
+                            <Button Classes="row-button" Command="{Binding CheckForUpdatesNowCommand}">
+                                <Border BorderBrush="{DynamicResource DividerStrongBrush}" BorderThickness="1" Background="{DynamicResource BgPanelBrush}"
+                                        CornerRadius="{DynamicResource SurfaceRadiusValue}" Padding="12,5">
+                                    <TextBlock Text="{Binding T.CheckForUpdatesNow, Source={x:Static loc:Loc.Instance}}" FontSize="12.5" VerticalAlignment="Center" />
+                                </Border>
+                            </Button>
+                        </StackPanel>
+                        <TextBlock Classes="setting-hint" Text="{Binding UpdateCheckStatusText}" IsVisible="{Binding HasUpdateCheckStatus}" />
+                    </StackPanel>
+
+                    <Border Classes="separator" />
+
                     <StackPanel Spacing="8">
                         <StackPanel Spacing="2">
                             <TextBlock Classes="setting-label" Text="{Binding T.SettingsAccount, Source={x:Static loc:Loc.Instance}}" />

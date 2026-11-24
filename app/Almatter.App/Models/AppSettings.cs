@@ -139,6 +139,7 @@ public sealed partial class AppSettings : ObservableObject
         OnPropertyChanged(nameof(ArkShadowsCheckBrush));
         OnPropertyChanged(nameof(LinkPreviewsCheckBrush));
         OnPropertyChanged(nameof(SoundForAllMessagesCheckBrush));
+        OnPropertyChanged(nameof(CheckForUpdatesCheckBrush));
     }
 
     // The three "…CheckBrush" properties are drawing state for the settings
@@ -193,6 +194,24 @@ public sealed partial class AppSettings : ObservableObject
     public IBrush SoundForAllMessagesCheckBrush => SoundForAllMessages ? ColorTokens.Accent : Brushes.Transparent;
 
     partial void OnSoundForAllMessagesChanged(bool value) => OnPropertyChanged(nameof(SoundForAllMessagesCheckBrush));
+
+    /// <summary>
+    /// Ask GitHub, shortly after startup and then once a day, whether a newer
+    /// Almatter has been published, and say so in a banner. On by default:
+    /// the installer is not updated any other way. The request carries
+    /// nothing about the user; GitHub sees the address it comes from.
+    /// </summary>
+    [ObservableProperty]
+    public partial bool CheckForUpdates { get; set; } = true;
+
+    [JsonIgnore]
+    public IBrush CheckForUpdatesCheckBrush => CheckForUpdates ? ColorTokens.Accent : Brushes.Transparent;
+
+    partial void OnCheckForUpdatesChanged(bool value) => OnPropertyChanged(nameof(CheckForUpdatesCheckBrush));
+
+    /// <summary>The version the banner's "Ignorer cette version" was clicked for: no banner for it again, only for a later one.</summary>
+    [ObservableProperty]
+    public partial string SkippedUpdateVersion { get; set; } = "";
 
     /// <summary>Sidebar width in px, set by dragging its right edge. Clamped on load to the bounds the grid declares.</summary>
     [ObservableProperty]

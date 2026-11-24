@@ -8,4 +8,5 @@ pub mod db;
 pub mod dispatch;
 pub mod models;
 pub mod sync;
+pub mod updates;
 pub mod ws;

@@ -1059,6 +1059,10 @@ public partial class MainViewModel : ViewModelBase
                 }
                 ApplyLinkedPicturesSetting();
             }
+            else if (e.PropertyName == nameof(AppSettings.CheckForUpdates))
+            {
+                OnCheckForUpdatesSettingChanged();
+            }
             SettingsStore.Save(Settings);
         };
     }
@@ -1164,6 +1168,7 @@ public partial class MainViewModel : ViewModelBase
         _pollingStarted = true;
         _pollingCts = new CancellationTokenSource();
         var cancellationToken = _pollingCts.Token;
+        StartUpdateCheckLoop(cancellationToken);
 
         _ = Task.Run(async () =>
         {
@@ -4883,6 +4888,7 @@ public partial class MainViewModel : ViewModelBase
         {
             channel.RefreshLanguage();
         }
+        RefreshUpdateTexts();
 
         // Result rows carry their dates already worded; searching again is
         // the simplest way to reword them, and starts from the cache.
