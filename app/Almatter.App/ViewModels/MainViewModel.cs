@@ -869,13 +869,12 @@ public partial class MainViewModel : ViewModelBase
     public bool ShowAccentOptions => !IsNamedThemeActive && !IsArkThemeActive && !IsSalonThemeActive;
 
     /// <summary>
-    /// The composers' rows of files waiting to be sent. Under Ark the row
-    /// is dropped while empty: its spacing would otherwise push the text
-    /// off the middle of the one-line composer. Every other theme keeps it,
-    /// so their composers stay exactly as tall as before.
+    /// The composers' rows of files waiting to be sent, dropped while empty:
+    /// its spacing would otherwise push the text off the middle of the
+    /// one-line composer.
     /// </summary>
-    public bool ShowPendingAttachments => PendingAttachments.Count > 0 || !ColorTokens.Theme.OneLineComposer;
-    public bool ShowThreadPendingAttachments => ThreadPendingAttachments.Count > 0 || !ColorTokens.Theme.OneLineComposer;
+    public bool ShowPendingAttachments => PendingAttachments.Count > 0;
+    public bool ShowThreadPendingAttachments => ThreadPendingAttachments.Count > 0;
 
     // The sidebar's section headings. Ark sets them as small capitals in a
     // monospaced face, Salon as capitals in the app's font; TextBlock has
@@ -4964,8 +4963,6 @@ public partial class MainViewModel : ViewModelBase
         OnPropertyChanged(nameof(IsSalonThemeActive));
         OnPropertyChanged(nameof(ShowModeAndContrast));
         OnPropertyChanged(nameof(ShowAccentOptions));
-        OnPropertyChanged(nameof(ShowPendingAttachments));
-        OnPropertyChanged(nameof(ShowThreadPendingAttachments));
         RefreshSectionHeadings();
         OnPropertyChanged(nameof(ThreadReplyCountLabel));
         RefreshDateSeparatorLabels();

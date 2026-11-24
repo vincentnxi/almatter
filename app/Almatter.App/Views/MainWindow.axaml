@@ -97,14 +97,6 @@
         <Thickness x:Key="ComposerWellBorderThickness">0</Thickness>
         <Thickness x:Key="ComposerWellPadding">0</Thickness>
         <CornerRadius x:Key="ComposerWellRadius">0</CornerRadius>
-        <x:Int32 x:Key="ComposerToolsRow">1</x:Int32>
-        <x:Int32 x:Key="ComposerToolsColumn">0</x:Int32>
-        <x:Int32 x:Key="ComposerTextSpan">2</x:Int32>
-        <VerticalAlignment x:Key="ComposerToolsAlignment">Stretch</VerticalAlignment>
-        <Thickness x:Key="ComposerTextPadding">12,10,12,4</Thickness>
-        <Thickness x:Key="ComposerToolsMargin">10,4,10,10</Thickness>
-        <Thickness x:Key="ThreadComposerToolsMargin">0</Thickness>
-        <VerticalAlignment x:Key="ComposerTextAlignment">Stretch</VerticalAlignment>
         <SolidColorBrush x:Key="TypingPillBrush" Color="#FFFFFF" />
         <SolidColorBrush x:Key="TypingPillBorderBrush" Color="#D3D7DE" />
         <BoxShadows x:Key="TypingPillShadow">0 6 20 0 #33000000</BoxShadows>
@@ -1583,17 +1575,17 @@
                             BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1">
                         <views:FormattingToolbar x:Name="ComposerFormattingToolbar" />
                     </Border>
-                    <!-- The text above its buttons, or (Ark) the text and its buttons on one line,
-                         as in the mockup: the grid slots below come from ThemeResources. -->
-                    <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto">
+                    <!-- The text and its buttons on one line, under every theme: the
+                         tools and the send button right of the text, kept at the
+                         bottom as the text grows. -->
+                    <Grid ColumnDefinitions="*,Auto">
                     <TextBox x:Name="ComposerBox" Classes="composer" Text="{Binding ComposeText}"
                              PlaceholderText="{Binding ComposerPlaceholder}"
                              FontSize="{Binding Settings.MessageFontSize}"
                              TextWrapping="Wrap"
-                             Grid.ColumnSpan="{DynamicResource ComposerTextSpan}" Padding="{DynamicResource ComposerTextPadding}" AcceptsReturn="True" MinHeight="20"
-                             VerticalAlignment="{DynamicResource ComposerTextAlignment}" VerticalContentAlignment="Center" />
-                    <Grid ColumnDefinitions="Auto,*,Auto" Margin="{DynamicResource ComposerToolsMargin}" VerticalAlignment="{DynamicResource ComposerToolsAlignment}"
-                          Grid.Row="{DynamicResource ComposerToolsRow}" Grid.Column="{DynamicResource ComposerToolsColumn}" Grid.ColumnSpan="{DynamicResource ComposerTextSpan}">
+                             Padding="14,10,6,10" AcceptsReturn="True" MinHeight="20"
+                             VerticalAlignment="Center" VerticalContentAlignment="Center" />
+                    <Grid Grid.Column="1" ColumnDefinitions="Auto,*,Auto" Margin="0,5,6,5" VerticalAlignment="Bottom">
                         <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="2">
                             <Button Classes="row-button" Width="28" Height="28" ToolTip.Tip="{Binding T.AttachFile, Source={x:Static loc:Loc.Instance}}"
                                     Command="{Binding AttachFileCommand}">
@@ -1967,15 +1959,14 @@
                             <views:FormattingToolbar x:Name="ThreadFormattingToolbar" />
                         </Border>
                         <!-- Same arrangement as the channel composer's (see there). -->
-                        <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto">
+                        <Grid ColumnDefinitions="*,Auto">
                         <TextBox x:Name="ThreadComposerBox" Classes="composer" Text="{Binding ThreadComposeText}"
-                                 PlaceholderText="{Binding T.ReplyToThreadPlaceholder, Source={x:Static loc:Loc.Instance}}" Padding="0" Grid.ColumnSpan="{DynamicResource ComposerTextSpan}" VerticalAlignment="{DynamicResource ComposerTextAlignment}"
+                                 PlaceholderText="{Binding T.ReplyToThreadPlaceholder, Source={x:Static loc:Loc.Instance}}" Padding="0" VerticalAlignment="Center"
                                  FontSize="{Binding Settings.MessageFontSize}"
                                  TextWrapping="Wrap"
                                  AcceptsReturn="True" />
-                        <StackPanel Orientation="Horizontal" Spacing="2" HorizontalAlignment="Left" Margin="{DynamicResource ThreadComposerToolsMargin}"
-                                    VerticalAlignment="{DynamicResource ComposerToolsAlignment}"
-                                    Grid.Row="{DynamicResource ComposerToolsRow}" Grid.Column="{DynamicResource ComposerToolsColumn}" Grid.ColumnSpan="{DynamicResource ComposerTextSpan}">
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2" HorizontalAlignment="Left" Margin="6,0,0,0"
+                                    VerticalAlignment="Bottom">
                             <Button Classes="row-button" Width="24" Height="24" ToolTip.Tip="{Binding T.AttachFile, Source={x:Static loc:Loc.Instance}}"
                                     Command="{Binding AttachThreadFileCommand}">
                                 <Path Data="M21.4 11.1 L12.2 20.3 A5 5 0 0 1 5.1 13.2 L14.1 4.2 A3.5 3.5 0 0 1 19.1 9.2 L10.1 18.2 A2 2 0 0 1 7.3 15.4 L15.4 7.3"

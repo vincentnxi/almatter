@@ -278,19 +278,6 @@ internal static class ThemeResources
         resources["SectionButtonSize"] = ark ? 26.0 : 20.0;
         resources["SectionButtonRadius"] = new CornerRadius(ark ? 13 : 0);
 
-        // The composer's layout: its buttons on a row under the text, or (Ark,
-        // Salon) on the same line, right of the text and before the send
-        // button, which makes the box one line shorter.
-        var oneLine = theme.OneLineComposer;
-        resources["ComposerToolsRow"] = oneLine ? 0 : 1;
-        resources["ComposerToolsColumn"] = oneLine ? 1 : 0;
-        resources["ComposerTextSpan"] = oneLine ? 1 : 2;
-        resources["ComposerToolsAlignment"] = oneLine ? Avalonia.Layout.VerticalAlignment.Bottom : Avalonia.Layout.VerticalAlignment.Stretch;
-        resources["ComposerTextPadding"] = oneLine ? new Thickness(14, 10, 6, 10) : new Thickness(12, 10, 12, 4);
-        resources["ComposerToolsMargin"] = oneLine ? new Thickness(0, 5, 6, 5) : new Thickness(10, 4, 10, 10);
-        resources["ThreadComposerToolsMargin"] = oneLine ? new Thickness(6, 0, 0, 0) : new Thickness(0);
-        resources["ComposerTextAlignment"] = oneLine ? Avalonia.Layout.VerticalAlignment.Center : Avalonia.Layout.VerticalAlignment.Stretch;
-
         // The composer's box: a card with an outline, or (Salon) a filled
         // box with none.
         resources["ComposerBrush"] = theme.ComposerHex is { } composer ? ColorTokens.Solid(composer) : ColorTokens.CardBg;
