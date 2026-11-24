@@ -497,6 +497,10 @@ public sealed record ThemeDefinition
     /// The accent is untouched: it has to stay recognisable as the accent.
     /// AccentSoft and AccentInk follow automatically, since ColorTokens
     /// derives them from whatever panel and text colors it is handed.
+    ///
+    /// The red is muted, though (see <see cref="Muted"/>). Left at full
+    /// strength it was the one loud thing in a softened window: the
+    /// "Nouveau" rule and "Se déconnecter" stood out more than before.
     /// </summary>
     public ThemeDefinition Softened() => new()
     {
@@ -514,9 +518,9 @@ public sealed record ThemeDefinition
         CardBg = TowardMidGrey(CardBg),
         AccentHex = AccentHex,
         OnAccentHex = OnAccentHex,
-        DangerHex = DangerHex,
-        DangerSoftHex = DangerSoftHex,
-        DangerBorderHex = DangerBorderHex,
+        DangerHex = Muted(DangerHex),
+        DangerSoftHex = Muted(DangerSoftHex),
+        DangerBorderHex = Muted(DangerBorderHex),
         ScrimHex = ScrimHex,
         PopoverShadow = PopoverShadow,
         CardShadow = CardShadow,
@@ -541,6 +545,38 @@ public sealed record ThemeDefinition
     };
 
     private static string TowardMidGrey(string hex) => Mix(hex, "#808080", SurfaceSoftening);
+
+    /// <summary>How much of its colour the red gives up under reduced contrast.</summary>
+    private const double DangerMuting = 0.4;
+
+    /// <summary>
+    /// Takes some of the colour out of "#RRGGBB" without changing how light it
+    /// is: blended, in linear light, toward the grey of the same luminance. The
+    /// contrast against any background is therefore exactly what it was —
+    /// "Se déconnecter" stays as readable, and the "Nouveau" label keeps its
+    /// white or dark text — only less saturated: #C42B1C becomes about
+    /// #A74A46, #F0574A about #CF706A.
+    /// </summary>
+    internal static string Muted(string hex)
+    {
+        static double ToLinear(int channel)
+        {
+            var c = channel / 255.0;
+            return c <= 0.04045 ? c / 12.92 : Math.Pow((c + 0.055) / 1.055, 2.4);
+        }
+
+        static int ToSrgb(double linear)
+        {
+            var c = linear <= 0.0031308 ? linear * 12.92 : 1.055 * Math.Pow(linear, 1 / 2.4) - 0.055;
+            return (int)Math.Round(Math.Clamp(c, 0, 1) * 255);
+        }
+
+        var r = ToLinear(Convert.ToInt32(hex.Substring(1, 2), 16));
+        var g = ToLinear(Convert.ToInt32(hex.Substring(3, 2), 16));
+        var b = ToLinear(Convert.ToInt32(hex.Substring(5, 2), 16));
+        var luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+        return $"#{ToSrgb(r + (luminance - r) * DangerMuting):X2}{ToSrgb(g + (luminance - g) * DangerMuting):X2}{ToSrgb(b + (luminance - b) * DangerMuting):X2}";
+    }
 
     /// <summary>Blends two "#RRGGBB" strings. Alpha-prefixed values (the scrim) are never passed through here.</summary>
     internal static string Mix(string from, string to, double amount)
