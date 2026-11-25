@@ -1384,13 +1384,38 @@ fn app_data_dir() -> PathBuf {
 /// here because `log` itself needs this folder.
 fn data_dir() -> &'static (PathBuf, Option<std::io::Error>) {
     static DIR: OnceLock<(PathBuf, Option<std::io::Error>)> = OnceLock::new();
-    DIR.get_or_init(|| match directories::ProjectDirs::from("com", "Almatter", "Almatter") {
-        // Unit tests share the real app's paths (see `log`); they must not
-        // carry its data off.
-        Some(dirs) if cfg!(test) => (dirs.data_local_dir().to_path_buf(), None),
-        Some(dirs) => settle_data_dir(dirs.data_dir(), dirs.data_local_dir()),
-        None => (PathBuf::from("."), None),
+    DIR.get_or_init(|| {
+        let settled = match directories::ProjectDirs::from("com", "Almatter", "Almatter") {
+            // Unit tests share the real app's paths (see `log`); they must not
+            // carry its data off.
+            Some(dirs) if cfg!(test) => (dirs.data_local_dir().to_path_buf(), None),
+            Some(dirs) => settle_data_dir(dirs.data_dir(), dirs.data_local_dir()),
+            None => (PathBuf::from("."), None),
+        };
+        make_private(&settled.0);
+        settled
     })
+}
+
+/// Creates the folder if needed and, on Linux and macOS, makes it reachable
+/// by its owner only (rwx------). Everything Almatter keeps sits under it:
+/// the messages in the cache database, attachments, avatars, core.log. Left
+/// to the defaults, the folder is readable by every account on the machine
+/// whenever the home folder is too — the rule on Debian, and on Ubuntu
+/// before 21.04. One closed folder is enough: what is inside cannot be
+/// reached through it, whatever its own permissions. Windows needs nothing
+/// here: a folder under the user's AppData already admits only that user,
+/// SYSTEM and the administrators. Best effort, like `log`.
+fn make_private(dir: &Path) {
+    if dir == Path::new(".") {
+        return;
+    }
+    let _ = std::fs::create_dir_all(dir);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700));
+    }
 }
 
 /// Everything here used to live in `old`, Windows' roaming profile: on a
@@ -1626,6 +1651,21 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         dir
+    }
+
+    /// Another account on the machine must not be able to open the folder
+    /// holding the cached messages, whatever the umask made it.
+    #[cfg(unix)]
+    #[test]
+    fn make_private_closes_the_folder_to_other_accounts() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = empty_test_dir("private").join("data");
+        make_private(&dir);
+        assert_eq!(std::fs::metadata(&dir).unwrap().permissions().mode() & 0o777, 0o700);
+        // An existing folder left wide open by an earlier version is closed too.
+        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o755)).unwrap();
+        make_private(&dir);
+        assert_eq!(std::fs::metadata(&dir).unwrap().permissions().mode() & 0o777, 0o700);
     }
 
     /// Guards the old location above all: if a library update ever moved it,

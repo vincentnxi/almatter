@@ -13,6 +13,8 @@ sealed class Program
     [STAThread]
     public static void Main(string[] args)
     {
+        // Before anything (the crash log included) writes into the folder.
+        PrivateFolder.Secure();
         CrashLogger.Install();
 
         // Before Avalonia and before anything opens the cache or settings: a
