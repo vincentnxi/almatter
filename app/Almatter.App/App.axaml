@@ -47,6 +47,16 @@
     <Application.Styles>
         <FluentTheme />
 
+        <!-- Performance mode keeps scroll bars at full size instead of thin
+             and growing under the pointer (see ThemeResources). The style is
+             always here and only its resource changes: adding or removing a
+             style at runtime restyled every control, and left the window's
+             own buttons shifted left over the header until a restart. Held
+             at application level so menus and flyouts follow too. -->
+        <Style Selector=":is(ScrollViewer)">
+            <Setter Property="AllowAutoHide" Value="{DynamicResource ScrollBarAutoHide}" />
+        </Style>
+
         <!-- The system's own menu typeface instead of the one chosen for
              messages. Anywhere but Windows, the platform default. -->
         <Style Selector="MenuFlyoutPresenter">

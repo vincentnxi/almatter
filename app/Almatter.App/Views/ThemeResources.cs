@@ -23,31 +23,19 @@ internal static class ThemeResources
     /// <summary>
     /// Fluent's scroll bars sit thin and grow, animated, under the pointer.
     /// In performance mode they stay at full size instead, so nothing moves.
-    /// Is&lt;ScrollViewer&gt; also reaches the classes derived from it (the
-    /// message tables). Held at application level, so menus and flyouts,
-    /// which live outside the windows' trees, follow too; adding or removing
-    /// it restyles what is already on screen.
+    /// The ":is(ScrollViewer)" style in App.axaml reads this resource:
+    /// false pins the bars; UnsetValue makes the style set nothing, leaving
+    /// Fluent's own behaviour exactly as if the style were absent. Changing
+    /// a resource updates the bound value only; adding or removing a style
+    /// restyled every control and shifted the window's buttons.
     /// </summary>
-    private static readonly Style NoScrollBarMotion = new(x => x.Is<ScrollViewer>())
-    {
-        Setters = { new Setter(ScrollViewer.AllowAutoHideProperty, false) },
-    };
-
     private static void ApplyScrollBarMotion(bool performanceMode)
     {
-        if (Application.Current?.Styles is not { } styles)
+        if (Application.Current?.Resources is not { } resources)
         {
             return;
         }
-        var present = styles.Contains(NoScrollBarMotion);
-        if (performanceMode && !present)
-        {
-            styles.Add(NoScrollBarMotion);
-        }
-        else if (!performanceMode && present)
-        {
-            styles.Remove(NoScrollBarMotion);
-        }
+        resources["ScrollBarAutoHide"] = performanceMode ? false : AvaloniaProperty.UnsetValue;
     }
 
     /// <summary>
