@@ -6,40 +6,30 @@ namespace Almatter.App.Models;
 ///
 /// The numbers are what settings.json stores, so they are permanent: never
 /// renumber one, and never reuse the number of a theme that was removed. A
-/// number the app no longer knows (a settings file from a newer version, or
-/// one edited by hand) simply finds no palette, and the app falls back to
-/// its own.
+/// number the app no longer knows (a removed theme, a settings file from a
+/// newer version, or one edited by hand) simply finds no palette, and the
+/// app falls back to its own.
+///
+/// Every theme only changes colours: the layout, shapes, fonts and
+/// behaviour are Almatter's own under all of them.
 /// </summary>
 public enum AppNamedTheme
 {
     None = 0,
-    Catppuccin = 1,
-    CatppuccinLatte = 2,
+
+    // Removed 2026-11-25, numbers never to be reused: Catppuccin = 1, CatppuccinLatte = 2,
+    // RosePine = 4, RosePineMoon = 5, RosePineDawn = 6, TokyoNight = 7,
+    // Expresso = 8, Ark = 13.
     Nord = 3,
-    RosePine = 4,
-    RosePineMoon = 5,
-    RosePineDawn = 6,
-    TokyoNight = 7,
-    Expresso = 8,
     Cardamome = 9,
     Creme = 10,
     Crepuscule = 11,
     Aube = 12,
 
     /// <summary>
-    /// Almatter's second look of its own: neutral greys, panels that float
-    /// as rounded cards, pastel accents. Unlike the palettes above it is not
-    /// one fixed palette: it follows the light/dark mode and has its own
-    /// accent choice (see <see cref="AppArkAccent"/>), so it is not in
-    /// <see cref="NamedThemes.All"/>.
-    /// </summary>
-    Ark = 13,
-
-    /// <summary>
-    /// Slate greys and a blue-violet accent, after the look of the big chat
-    /// apps. Like Ark it follows the light/dark mode and the contrast
-    /// setting, so it is not in <see cref="NamedThemes.All"/>; its accent is
-    /// its own and not a choice.
+    /// Slate greys and a blue-violet accent. Unlike the palettes above it
+    /// follows the light/dark mode and the contrast setting, so it is not in
+    /// <see cref="NamedThemes.All"/>; its accent is its own and not a choice.
     /// </summary>
     Salon = 14,
 }

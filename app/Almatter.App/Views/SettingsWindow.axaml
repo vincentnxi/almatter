@@ -307,8 +307,8 @@
                     </StackPanel>
 
                     <!-- Only the settings the chosen theme actually uses are
-                         shown: all of them for Almatter's own palette, mode,
-                         pastel accents and contrast for Ark, none for a
+                         shown: all of them for Almatter's own palette, mode
+                         and contrast for Salon, none for a
                          fixed-palette theme, which decides them itself. The
                          hidden ones keep their saved values. -->
                     <Border Classes="separator" IsVisible="{Binding ShowModeAndContrast}" />
@@ -349,29 +349,6 @@
                         <!-- Each swatch is the color itself, in the shade the
                              current palette gives it; the one in use wears a
                              ring of its own color. -->
-                        <StackPanel Spacing="8" IsVisible="{Binding IsArkThemeActive}">
-                            <TextBlock Classes="setting-label" Text="{Binding T.AccentLabel, Source={x:Static loc:Loc.Instance}}" />
-                            <ItemsControl ItemsSource="{Binding ArkAccentOptions}" Margin="-1,0,0,0">
-                                <ItemsControl.ItemsPanel>
-                                    <ItemsPanelTemplate>
-                                        <StackPanel Orientation="Horizontal" Spacing="4" />
-                                    </ItemsPanelTemplate>
-                                </ItemsControl.ItemsPanel>
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate DataType="models:ArkAccentOption">
-                                        <Button Classes="swatch-button" Width="30" Height="30" ToolTip.Tip="{Binding Name}"
-                                                Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).SetArkAccentCommand}"
-                                                CommandParameter="{Binding Accent}">
-                                            <Panel>
-                                                <Ellipse Width="28" Height="28" Stroke="{Binding RingBrush}" StrokeThickness="2" />
-                                                <Ellipse Width="18" Height="18" Fill="{Binding SwatchBrush}" />
-                                            </Panel>
-                                        </Button>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </StackPanel>
-
                         <StackPanel Spacing="8" IsVisible="{Binding ShowAccentOptions}">
                             <TextBlock Classes="setting-label" Text="{Binding T.AccentLabel, Source={x:Static loc:Loc.Instance}}" />
                             <ItemsControl ItemsSource="{Binding AccentOptions}" Margin="-1,0,0,0">
@@ -394,18 +371,6 @@
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
                         </StackPanel>
-
-                        <Button Classes="row-button" Command="{Binding ToggleArkShadowsCommand}" IsVisible="{Binding IsArkThemeActive}">
-                            <Grid ColumnDefinitions="*,Auto" Background="Transparent">
-                                <StackPanel Grid.Column="0" Spacing="2">
-                                    <TextBlock Classes="setting-label" Text="{Binding T.ArkShadows, Source={x:Static loc:Loc.Instance}}" />
-                                    <TextBlock Classes="setting-hint" Text="{Binding T.ArkShadowsHint, Source={x:Static loc:Loc.Instance}}" />
-                                </StackPanel>
-                                <Border Grid.Column="1" Classes="check" Background="{Binding Settings.ArkShadowsCheckBrush}">
-                                    <Path IsVisible="{Binding Settings.ArkShadows}" Data="M4 9l3 3 6-7" />
-                                </Border>
-                            </Grid>
-                        </Button>
 
                         <Button Classes="row-button" Command="{Binding ToggleReducedContrastCommand}">
                             <Grid ColumnDefinitions="*,Auto" Background="Transparent">

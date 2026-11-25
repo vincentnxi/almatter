@@ -49,9 +49,8 @@ fraction of that, and to stay usable on older machines.
   only ones that make a sound, unless you ask for a sound on every message — an unread badge on the taskbar icon, a title bar that
   follows the theme.
 - **Appearance** — light and dark themes (or follow Windows), six accent colours, a
-  reduced-contrast mode, the Ark theme (floating panels, pastel accents, Geist Mono labels),
-  the Salon theme (slate greys, light or dark), twelve named colour themes (Catppuccin, Nord,
-  Rosé Pine, Tokyo Night and others), message text size set to the half point, a choice
+  reduced-contrast mode, six named colour themes (Aube and Crépuscule on a gradient, Salon in
+  slate greys, light or dark, Nord, Cardamome, Crème), message text size set to the half point, a choice
   between the official client's Open Sans, Lato and the system UI font, and between the
   system's emoji and Twemoji. A "new" line marks where the unread messages start, and
   messages that mention you stand out. The settings open in a window of their own.
@@ -201,7 +200,7 @@ suggested approach for each OS.
 
 Almatter is released under the [MIT License](LICENSE).
 
-It bundles the Open Sans, Lato and Geist Mono fonts under the SIL Open Font License 1.1, and
+It bundles the Open Sans and Lato fonts under the SIL Open Font License 1.1, and
 the Twemoji graphics (Copyright Twitter, Inc and other contributors) under CC-BY 4.0, turned
 into a colour font. Its emoji shortcode table is generated from emoji-data (MIT) — see
 [licenses/](licenses/).
@@ -258,9 +257,8 @@ rester utilisable sur des machines anciennes.
   réactions) marquées 🔔 et seules à faire du bruit, sauf si vous demandez un son pour tous les messages —, pastille de non-lus sur l'icône de
   la barre des tâches, barre de titre assortie au thème.
 - **Apparence** — thèmes clair et sombre (ou celui de Windows), six couleurs
-  d'accentuation, mode contraste réduit, le thème Ark (panneaux flottants, accents pastel,
-  étiquettes en Geist Mono), le thème Salon (gris ardoise, clair ou sombre), douze thèmes
-  de couleurs (Catppuccin, Nord, Rosé Pine, Tokyo Night et d'autres), taille du texte des
+  d'accentuation, mode contraste réduit, six thèmes de couleurs (Aube et Crépuscule en
+  dégradé, Salon en gris ardoise, clair ou sombre, Nord, Cardamome, Crème), taille du texte des
   messages réglable au demi-point, choix entre Open Sans (la police du client officiel),
   Lato et la police système, et entre les émojis du système et Twemoji. Une ligne
   « nouveau » marque le début des messages non lus, et les messages qui vous mentionnent
@@ -423,7 +421,7 @@ système.
 
 Almatter est distribué sous [licence MIT](LICENSE).
 
-Il embarque les polices Open Sans, Lato et Geist Mono, sous SIL Open Font License 1.1, et
+Il embarque les polices Open Sans et Lato, sous SIL Open Font License 1.1, et
 les images Twemoji (Copyright Twitter, Inc et autres contributeurs), sous CC-BY 4.0,
 converties en police couleur. Sa table de raccourcis emoji est générée à partir
 d'emoji-data (MIT) — voir [licenses/](licenses/).

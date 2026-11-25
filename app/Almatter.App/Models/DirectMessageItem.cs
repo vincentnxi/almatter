@@ -65,20 +65,14 @@ public sealed partial class DirectMessageItem : ObservableObject, IChannelListIt
 
     public IBrush AvatarBrush => ColorTokens.Solid(AvatarHex);
     public IBrush PresenceBrush => ColorTokens.Presence(Presence);
-    public IBrush RowBackground => IsSelected ? ColorTokens.SelectedRow : Brushes.Transparent;
-
-    /// <summary>The selected row's outline and shadow: only under a theme that draws it as a card (Ark).</summary>
-    public IBrush RowBorderBrush => IsSelected ? ColorTokens.SelectedRowBorder : Brushes.Transparent;
-    public BoxShadows RowShadow => IsSelected ? ColorTokens.SelectedRowShadow : default;
+    public IBrush RowBackground => IsSelected ? ColorTokens.AccentSoft : Brushes.Transparent;
 
     /// <summary>Same three levels as a channel row — see ChannelItem.NameBrush for why read rows step back rather than unread ones shouting louder.</summary>
     public IBrush NameBrush => IsSelected
-        ? ColorTokens.SelectedRowInk
-        : HasUnread ? ColorTokens.UnreadRowInk : ColorTokens.ReadRowInk;
+        ? ColorTokens.AccentInk
+        : HasUnread ? ColorTokens.TextPrimary : ColorTokens.TextSecondary;
 
-    public FontWeight NameWeight => IsSelected || HasUnread
-        ? (ColorTokens.Theme.ArkStyle || ColorTokens.Theme.SalonStyle ? FontWeight.SemiBold : FontWeight.Bold)
-        : FontWeight.Normal;
+    public FontWeight NameWeight => IsSelected || HasUnread ? FontWeight.Bold : FontWeight.Normal;
 
     /// <summary>Rarely seen on a 1:1, where the server counts every message as a mention — it's the group conversations this catches.</summary>
     public bool ShowUnreadDot => HasUnread && !HasMentions;
@@ -87,9 +81,6 @@ public sealed partial class DirectMessageItem : ObservableObject, IChannelListIt
     public void RefreshColors()
     {
         OnPropertyChanged(nameof(RowBackground));
-        OnPropertyChanged(nameof(RowBorderBrush));
-        OnPropertyChanged(nameof(RowShadow));
-        OnPropertyChanged(nameof(NameWeight));
         OnPropertyChanged(nameof(NameBrush));
         // The presence palette is per-theme too, and this brush is a real
         // brush rather than a DynamicResource — without this, a row's dot
@@ -102,9 +93,6 @@ public sealed partial class DirectMessageItem : ObservableObject, IChannelListIt
     partial void OnIsSelectedChanged(bool value)
     {
         OnPropertyChanged(nameof(RowBackground));
-        OnPropertyChanged(nameof(RowBorderBrush));
-        OnPropertyChanged(nameof(RowShadow));
-        OnPropertyChanged(nameof(NameWeight));
         OnPropertyChanged(nameof(NameBrush));
         OnPropertyChanged(nameof(NameWeight));
     }

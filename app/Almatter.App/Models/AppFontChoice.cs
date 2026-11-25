@@ -45,16 +45,6 @@ public static class AppFonts
     public const string LatoStack = "avares://Almatter/Assets/Fonts#Lato,Segoe UI Variable Text,Segoe UI,Inter";
 
     /// <summary>
-    /// Ark's small labels: section headings, times, dates. Bundled under the
-    /// SIL OFL 1.1 (see licenses/Geist-OFL.txt), in a folder of its own,
-    /// outside Assets/Fonts, for the reason given on TwemojiFamily: asking
-    /// for a family of a folder loads the whole folder, so next to Open Sans
-    /// it would sit in memory for every theme. Ark's body text follows the
-    /// font choice like every other theme.
-    /// </summary>
-    public const string ArkMonoStack = "avares://Almatter/Assets/GeistMonoFont#Geist Mono,Cascadia Mono,Consolas";
-
-    /// <summary>
     /// Twemoji's artwork (CC-BY 4.0, see licenses/Twemoji-CC-BY-4.0.txt),
     /// turned into a font by .github/workflows/build-twemoji-font.yml.
     ///

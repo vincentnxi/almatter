@@ -1637,5 +1637,5 @@ public partial class MainWindow : Window
     }
 
     /// <summary>Window.Resources entries bound via DynamicResource pick up the new palette live — see ThemeResources.</summary>
-    private void ApplyThemeResources(MainViewModel vm) => ThemeResources.Apply(this, vm.Settings, hasPanels: true);
+    private void ApplyThemeResources(MainViewModel vm) => ThemeResources.Apply(this, vm.Settings, isMainWindow: true);
 }

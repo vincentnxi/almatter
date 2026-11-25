@@ -14,20 +14,15 @@ public sealed partial class NamedThemeOption : ObservableObject
 {
     public required AppNamedTheme Theme { get; init; }
 
-    /// <summary>Null for the "Almatter", "Ark" and "Salon" rows, which follow the mode rather than being one fixed palette.</summary>
+    /// <summary>Null for the "Almatter" and "Salon" rows, which follow the mode rather than being one fixed palette.</summary>
     public NamedPalette? Palette { get; init; }
 
-    public string Name => Palette?.Name ?? Theme switch
-    {
-        AppNamedTheme.Ark => "Ark",
-        AppNamedTheme.Salon => "Salon",
-        _ => "Almatter",
-    };
+    public string Name => Palette?.Name ?? (Theme == AppNamedTheme.Salon ? "Salon" : "Almatter");
 
-    // "Light or dark": Ark's tag, and Salon's as well.
+    // "Light or dark": Salon follows the mode.
     public string Tag => Palette is not null
         ? Palette.IsDark ? Loc.S.ThemeDark : Loc.S.ThemeLight
-        : Theme is AppNamedTheme.Ark or AppNamedTheme.Salon ? Loc.S.ThemeArkTag : Loc.S.ThemeAlmatterTag;
+        : Theme == AppNamedTheme.Salon ? Loc.S.ThemeFollowsModeTag : Loc.S.ThemeAlmatterTag;
 
     [ObservableProperty]
     public partial bool IsSelected { get; set; }
@@ -48,7 +43,7 @@ public sealed partial class NamedThemeOption : ObservableObject
     /// <summary>
     /// Called after the palette changes. <paramref name="almatterPalette"/> is
     /// what the row's palette looks like with the user's mode, accent and
-    /// contrast settings, for the "Almatter" and "Ark" rows' dots; the other
+    /// contrast settings, for the "Almatter" and "Salon" rows. dots; the other
     /// rows ignore it.
     /// </summary>
     public void RefreshColors(ThemeDefinition almatterPalette)
@@ -62,7 +57,7 @@ public sealed partial class NamedThemeOption : ObservableObject
         }
         else
         {
-            GroundDot = ColorTokens.Solid(almatterPalette.WindowGroundHex ?? almatterPalette.BgApp);
+            GroundDot = ColorTokens.Solid(almatterPalette.BgApp);
             TextDot = ColorTokens.Solid(almatterPalette.TextPrimary);
             AccentDot = ColorTokens.Solid(almatterPalette.AccentHex);
         }

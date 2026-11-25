@@ -79,56 +79,10 @@ public sealed record ThemeDefinition
     /// <summary>
     /// The accent as text and icons on the ground (links, mentions, "3
     /// replies", the pin label), and as the selected row's text. Null for
-    /// the usual case where the accent itself reads as text; set when the
-    /// accent is a pastel on a light palette, which it doesn't.
+    /// the usual case where the accent itself reads as text; set when it
+    /// doesn't (Salon's blue-violet is 2,8:1 on its dark conversation).
     /// </summary>
     public string? AccentDeepHex { get; init; }
-
-    /// <summary>The selected row's tint, when the usual one (the accent nearly faded into the panel) would vanish. Null for the usual one.</summary>
-    public string? AccentSoftHex { get; init; }
-
-    /// <summary>
-    /// Panels drawn as rounded cards with a gap around them, over a ground
-    /// of their own (WindowGroundHex), rather than edge to edge with a line
-    /// between them. Only Ark has them.
-    /// </summary>
-    public bool FloatingPanels { get; init; }
-
-    /// <summary>What shows in the gaps between floating panels. Null: the window is BgApp, as usual.</summary>
-    public string? WindowGroundHex { get; init; }
-
-    /// <summary>
-    /// Ark's own styling beyond colours and panels: small monospaced labels
-    /// (Geist Mono), a light channel title, ink-coloured primary
-    /// buttons, the selected row as a raised card, the composer in a well,
-    /// and the title bar drawn into the window (on Windows).
-    /// </summary>
-    public bool ArkStyle { get; init; }
-
-    /// <summary>The selected sidebar row's card. Null: the usual accent tint.</summary>
-    public string? SelectedRowHex { get; init; }
-
-    /// <summary>Ark's soft shadows are on (the user's "Shadows" setting): panels, composer, header buttons and the selected row.</summary>
-    public bool CastsShadows { get; init; }
-
-    /// <summary>
-    /// Salon's styling beyond colours: slate greys with no line between the
-    /// sidebar and the conversation, capitalised section headings, red
-    /// mention badges, a small bar left of an unread channel, tinted
-    /// mentions in messages, the composer on one line in a filled box, and
-    /// a thin title bar drawn into the window (on Windows) in the sidebar's
-    /// colour.
-    /// </summary>
-    public bool SalonStyle { get; init; }
-
-    /// <summary>The composer's fill. Null: the card colour, as usual.</summary>
-    public string? ComposerHex { get; init; }
-
-    /// <summary>The sidebar's foot (you, your status, the settings). Null: no fill of its own, as usual.</summary>
-    public string? FooterHex { get; init; }
-
-    /// <summary>The sidebar's section headings are set in capitals (Ark, Salon).</summary>
-    public bool CapitalHeadings => ArkStyle || SalonStyle;
 
     public static readonly ThemeDefinition Light = new()
     {
@@ -191,80 +145,6 @@ public sealed record ThemeDefinition
     };
 
     /// <summary>
-    /// Ark, light: neutral greys, the panels as near-white cards floating
-    /// on a darker grey ground. The accent fields are placeholders: Resolve
-    /// lays the chosen pastel over them.
-    /// </summary>
-    public static readonly ThemeDefinition ArkLight = new()
-    {
-        Name = "Ark",
-        IsDark = false,
-        WindowGroundHex = "#E3E4E7",
-        FloatingPanels = true,
-        ArkStyle = true,
-        SelectedRowHex = "#FFFFFF",
-        BgApp = "#FCFCFD",
-        BgPanel = "#F4F5F6",
-        BgRail = "#ECEDEF",
-        BgHover = "#EEEFF1",
-        Divider = "#E0E1E5",
-        DividerStrong = "#C9CBD0",
-        TextPrimary = "#16171A",
-        TextSecondary = "#5C5F65",
-        TextTertiary = "#73767C",
-        CardBg = "#FFFFFF",
-        AccentHex = ArkAccentPalette.PastelHex(AppArkAccent.Citron),
-        OnAccentHex = ArkAccentPalette.OnPastelHex,
-        DangerHex = "#C42B1C",
-        DangerSoftHex = "#FBEAE8",
-        DangerBorderHex = "#F0C4BE",
-        ScrimHex = "#B3FCFCFD",
-        PopoverShadow = "0 8 24 0 #2E101114",
-        CardShadow = "0 2 6 0 #14101114",
-        PresenceOnlineHex = "#1F9E4A",
-        PresenceAwayHex = "#D9A521",
-        PresenceDndHex = "#C42B1C",
-        PresenceOfflineHex = "#8E9197",
-        RowRadius = 7,
-        SurfaceRadius = 10,
-    };
-
-    /// <summary>Ark, dark: anthracite cards on a near-black ground. The pastels read as text here as they are.</summary>
-    public static readonly ThemeDefinition ArkDark = new()
-    {
-        Name = "Ark",
-        IsDark = true,
-        WindowGroundHex = "#08090A",
-        FloatingPanels = true,
-        ArkStyle = true,
-        SelectedRowHex = "#2A2B30",
-        BgApp = "#1A1B1F",
-        BgPanel = "#151619",
-        BgRail = "#212226",
-        BgHover = "#1E1F23",
-        Divider = "#2A2C31",
-        DividerStrong = "#3A3D43",
-        TextPrimary = "#EDEEF0",
-        TextSecondary = "#A2A5AC",
-        TextTertiary = "#80848C",
-        CardBg = "#222328",
-        AccentHex = ArkAccentPalette.PastelHex(AppArkAccent.Citron),
-        OnAccentHex = ArkAccentPalette.OnPastelHex,
-        DangerHex = "#F06A6E",
-        DangerSoftHex = "#2E1B1C",
-        DangerBorderHex = "#5A2B2D",
-        ScrimHex = "#B31A1B1F",
-        PopoverShadow = "0 10 28 0 #B3000000",
-        CardShadow = "0 2 8 0 #80000000",
-        PresenceOnlineHex = "#5FC77A",
-        PresenceAwayHex = "#E0B04A",
-        PresenceDndHex = "#F06A6E",
-        PresenceOfflineHex = "#80848C",
-        RowRadius = 7,
-        SurfaceRadius = 10,
-    };
-
-    /// <summary>
     /// Salon, dark: slate greys, the sidebar a step darker than the
     /// conversation and the inset fields darker still, with a blue-violet
     /// accent. That accent is only 2,8:1 as text on the conversation, so
@@ -277,13 +157,6 @@ public sealed record ThemeDefinition
     {
         Name = "Salon",
         IsDark = true,
-        SalonStyle = true,
-        // The window's own ground shows only in the title bar drawn into it,
-        // which takes the sidebar's colour.
-        WindowGroundHex = "#2B2D31",
-        SelectedRowHex = "#404249",
-        ComposerHex = "#383A40",
-        FooterHex = "#232428",
         BgApp = "#313338",
         BgPanel = "#2B2D31",
         BgRail = "#1E1F22",
@@ -307,8 +180,8 @@ public sealed record ThemeDefinition
         PresenceAwayHex = "#F0B232",
         PresenceDndHex = "#F23F43",
         PresenceOfflineHex = "#80848E",
-        RowRadius = 4,
-        SurfaceRadius = 8,
+        RowRadius = 6,
+        SurfaceRadius = 10,
     };
 
     /// <summary>
@@ -321,11 +194,6 @@ public sealed record ThemeDefinition
     {
         Name = "Salon",
         IsDark = false,
-        SalonStyle = true,
-        WindowGroundHex = "#F2F3F5",
-        SelectedRowHex = "#D7D9DD",
-        ComposerHex = "#EBEDEF",
-        FooterHex = "#EBEDEF",
         BgApp = "#FFFFFF",
         BgPanel = "#F2F3F5",
         BgRail = "#E3E5E8",
@@ -349,8 +217,8 @@ public sealed record ThemeDefinition
         PresenceAwayHex = "#F0B232",
         PresenceDndHex = "#DA373C",
         PresenceOfflineHex = "#80848E",
-        RowRadius = 4,
-        SurfaceRadius = 8,
+        RowRadius = 6,
+        SurfaceRadius = 10,
     };
 
     /// <summary>
@@ -364,9 +232,7 @@ public sealed record ThemeDefinition
         bool systemPrefersDark,
         bool reducedContrast = false,
         AppAccent accent = AppAccent.Blue,
-        AppNamedTheme named = AppNamedTheme.None,
-        AppArkAccent arkAccent = AppArkAccent.Citron,
-        bool arkShadows = true)
+        AppNamedTheme named = AppNamedTheme.None)
     {
         // A named theme decides everything on its own: the mode, the accent
         // and the softening are left out, not lost — they are still saved,
@@ -383,29 +249,8 @@ public sealed record ThemeDefinition
             _ => systemPrefersDark,
         };
 
-        // Ark follows the mode and the softening like Almatter's own
-        // palette, with its own pastel accent instead of the usual one.
-        if (named == AppNamedTheme.Ark)
-        {
-            var ark = dark ? ArkDark : ArkLight;
-            if (reducedContrast)
-            {
-                ark = ark.Softened();
-            }
-            var pastel = ArkAccentPalette.PastelHex(arkAccent);
-            return ark with
-            {
-                AccentHex = pastel,
-                OnAccentHex = ArkAccentPalette.OnPastelHex,
-                AccentDeepHex = dark ? null : ArkAccentPalette.DeepHex(arkAccent),
-                // Halfway to white: the usual 88 % fade would leave a pastel
-                // all but invisible on the light sidebar.
-                AccentSoftHex = dark ? null : Mix(pastel, "#FFFFFF", 0.45),
-                CastsShadows = arkShadows,
-            };
-        }
-
-        // Salon follows the mode and the softening too, with its one accent.
+        // Salon follows the mode and the softening like Almatter's own
+        // palette, with its one accent instead of the user's choice.
         if (named == AppNamedTheme.Salon)
         {
             var salon = dark ? SalonDark : SalonLight;
@@ -530,15 +375,6 @@ public sealed record ThemeDefinition
         GroundTopHex = GroundTopHex is null ? null : TowardMidGrey(GroundTopHex),
         GroundBottomHex = GroundBottomHex is null ? null : TowardMidGrey(GroundBottomHex),
         AccentDeepHex = AccentDeepHex,
-        AccentSoftHex = AccentSoftHex,
-        FloatingPanels = FloatingPanels,
-        WindowGroundHex = WindowGroundHex is null ? null : TowardMidGrey(WindowGroundHex),
-        ArkStyle = ArkStyle,
-        SelectedRowHex = SelectedRowHex is null ? null : TowardMidGrey(SelectedRowHex),
-        CastsShadows = CastsShadows,
-        SalonStyle = SalonStyle,
-        ComposerHex = ComposerHex is null ? null : TowardMidGrey(ComposerHex),
-        FooterHex = FooterHex is null ? null : TowardMidGrey(FooterHex),
     };
 
     private static string TowardMidGrey(string hex) => Mix(hex, "#808080", SurfaceSoftening);

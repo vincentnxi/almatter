@@ -27,17 +27,6 @@ public static class ColorTokens
     /// </summary>
     public static IBrush AccentText { get; private set; } = Solid(ThemeDefinition.Light.AccentHex);
 
-    /// <summary>The selected sidebar row: fill, text, outline and shadow. See ThemeDefinition.SelectedRowHex.</summary>
-    public static IBrush SelectedRow { get; private set; } = Solid("#D7E3F0");
-    public static IBrush SelectedRowInk { get; private set; } = Solid("#074581");
-    public static IBrush SelectedRowBorder { get; private set; } = Brushes.Transparent;
-    public static BoxShadows SelectedRowShadow { get; private set; }
-
-    /// <summary>Reaction pills: outlined only on most themes, tinted on Ark. See ReactionItem.</summary>
-    public static IBrush ReactionMineBorder { get; private set; } = Solid(ThemeDefinition.Light.AccentHex);
-    public static IBrush ReactionMineBackground { get; private set; } = Brushes.Transparent;
-    public static IBrush ReactionBackground { get; private set; } = Brushes.Transparent;
-
     /// <summary>Behind selected text. AccentSoft itself on a light palette; a brighter blue on a dark one.</summary>
     public static IBrush TextSelection { get; private set; } = Solid("#D7E3F0");
 
@@ -46,21 +35,6 @@ public static class ColorTokens
     public static IBrush TextTertiary { get; private set; } = Solid(ThemeDefinition.Light.TextTertiary);
     public static IBrush CardBg { get; private set; } = Solid(ThemeDefinition.Light.CardBg);
     public static IBrush Divider { get; private set; } = Solid(ThemeDefinition.Light.Divider);
-
-    /// <summary>
-    /// A sidebar row with nothing waiting: secondary text, or (Salon) the
-    /// quieter tertiary, so an unread row in the main text colour stands
-    /// out clearly from it.
-    /// </summary>
-    public static IBrush ReadRowInk { get; private set; } = Solid(ThemeDefinition.Light.TextSecondary);
-
-    /// <summary>
-    /// A sidebar row with something waiting: the main text colour, except on
-    /// dark Salon, where it is pure white whatever the contrast setting. The
-    /// reduced contrast pulls the main text 17 % toward the background, which
-    /// left an unread name too close to the grey of the read ones there.
-    /// </summary>
-    public static IBrush UnreadRowInk { get; private set; } = Solid(ThemeDefinition.Light.TextPrimary);
 
     /// <summary>
     /// Full palette swap. AccentSoft/AccentInk are lerped toward the
@@ -77,39 +51,15 @@ public static class ColorTokens
 
         var accentColor = Color.Parse(theme.AccentHex);
         Accent = new SolidColorBrush(accentColor);
-        AccentSoft = theme.AccentSoftHex is { } soft
-            ? Solid(soft)
-            : new SolidColorBrush(Lerp(accentColor, Color.Parse(theme.BgPanel), 0.88));
+        AccentSoft = new SolidColorBrush(Lerp(accentColor, Color.Parse(theme.BgPanel), 0.88));
 
-        // A pastel accent on a light palette can't be read as text, so the
-        // palette hands over a deep shade of it for that (Ark); every other
+        // An accent too faint to read as text on its own ground comes with
+        // a deeper shade for that (Salon); every other
         // palette's accent reads as text as it is.
         AccentInk = theme.AccentDeepHex is { } deep
             ? Solid(deep)
             : new SolidColorBrush(Lerp(accentColor, Color.Parse(theme.TextPrimary), 0.35));
         AccentText = theme.AccentDeepHex is { } deepText ? Solid(deepText) : Accent;
-
-        // The selected sidebar row: the accent tint with accent-coloured
-        // text, or (Ark) a raised card in the panel's own ink.
-        SelectedRow = theme.SelectedRowHex is { } card ? Solid(card) : AccentSoft;
-        SelectedRowInk = theme.SelectedRowHex is null ? AccentInk : Solid(theme.TextPrimary);
-        SelectedRowBorder = theme.SelectedRowHex is null ? Brushes.Transparent : Solid(theme.Divider);
-        // Reactions. On a light Ark palette the pastel itself is too faint
-        // for an outline, so yours is ringed in its deep shade, at 45 %.
-        // Salon also has a deep shade, but only for text: its accent is
-        // strong enough to outline a pill as it is.
-        ReactionMineBorder = theme.ArkStyle && theme.AccentDeepHex is { } ring ? Solid("#73" + ring[1..]) : Accent;
-        var filledReactions = theme.ArkStyle || theme.SalonStyle;
-        ReactionMineBackground = filledReactions ? AccentSoft : Brushes.Transparent;
-        ReactionBackground = filledReactions ? Solid(theme.BgPanel) : Brushes.Transparent;
-
-        // Strong enough to lift the card off the sidebar, as in the mockup:
-        // a fine edge plus a soft fall below. Off with the "Shadows" setting.
-        SelectedRowShadow = theme.SelectedRowHex is null || !theme.CastsShadows
-            ? default
-            : BoxShadows.Parse(theme.IsDark
-                ? "0 1 2 0 #59000000, 0 6 14 -4 #8C000000"
-                : "0 1 2 0 #14101114, 0 6 14 -4 #33101114");
 
         // AccentSoft is nearly the dark background itself, fine for a whole
         // row but too faint to show which words are selected. Stopping the
@@ -123,8 +73,6 @@ public static class ColorTokens
         TextTertiary = Solid(theme.TextTertiary);
         CardBg = Solid(theme.CardBg);
         Divider = Solid(theme.Divider);
-        ReadRowInk = theme.SalonStyle ? TextTertiary : TextSecondary;
-        UnreadRowInk = theme.SalonStyle && theme.IsDark ? Brushes.White : TextPrimary;
 
         // Over a gradient, a solid selection or divider would be right at one
         // height of the window and a visible patch at another. See-through

@@ -8,22 +8,17 @@ namespace Almatter.App.Views;
 
 /// <summary>
 /// Pushes the active palette into a window's resource dictionary, where
-/// DynamicResource references pick it up live. Shared by both windows so
-/// the login screen and the main window can never drift apart.
+/// DynamicResource references pick it up live. Shared by every window so
+/// the login screen, the settings and the main window can never drift apart.
+///
+/// Only colours vary from one theme to the next: every theme keeps
+/// Almatter's own layout, shapes and fonts, which are written into the
+/// windows' XAML.
 /// </summary>
 internal static class ThemeResources
 {
-    /// <summary>The strip at the top of the main window when Ark draws the title bar into it: the height of the system's caption buttons.</summary>
-    public const double IntegratedTitleBarHeight = 32;
-
-    /// <summary>Salon's thinner strip, as in its mockup.</summary>
-    public const double SalonTitleBarHeight = 28;
-
     /// <summary>The channel header's height: the drag band, with the window's buttons centred on it, when there is no title bar.</summary>
     public const double HeaderTitleBarHeight = 52;
-
-    /// <summary>Salon's mention badge: a red that white text reads on at 4,6:1, on both palettes.</summary>
-    public const string SalonBadgeHex = "#DA373C";
 
     /// <summary>
     /// Also sets Application.RequestedThemeVariant, which is what makes
@@ -34,20 +29,8 @@ internal static class ThemeResources
     /// wants; ColorTokens has already resolved the same thing for our own
     /// palette, so the two stay in step.
     /// </summary>
-    /// <param name="hasPanels">True for the main window, the one whose columns become floating cards under a theme that has them.</param>
-    /// <summary>WCAG contrast of white text on a "#RRGGBB" colour.</summary>
-    private static double ContrastWithWhite(string hex)
-    {
-        static double Channel(string h, int i)
-        {
-            var v = System.Convert.ToInt32(h.Substring(1 + i * 2, 2), 16) / 255.0;
-            return v <= 0.03928 ? v / 12.92 : System.Math.Pow((v + 0.055) / 1.055, 2.4);
-        }
-        var luminance = 0.2126 * Channel(hex, 0) + 0.7152 * Channel(hex, 1) + 0.0722 * Channel(hex, 2);
-        return 1.05 / (luminance + 0.05);
-    }
-
-    public static void Apply(Window window, AppSettings settings, bool hasPanels = false)
+    /// <param name="isMainWindow">True for the main window, the only one drawn without a title bar (on Windows).</param>
+    public static void Apply(Window window, AppSettings settings, bool isMainWindow = false)
     {
         if (Application.Current is { } app)
         {
@@ -83,7 +66,6 @@ internal static class ThemeResources
         resources["ThreadGroundBrush"] = gradient ? Brushes.Transparent : ColorTokens.Solid(theme.BgApp);
         resources["DividerStrongBrush"] = ColorTokens.Solid(theme.DividerStrong);
         resources["TextPrimaryBrush"] = ColorTokens.TextPrimary;
-        resources["UnreadRowInkBrush"] = ColorTokens.UnreadRowInk;
         resources["TextSecondaryBrush"] = ColorTokens.TextSecondary;
         resources["TextTertiaryBrush"] = ColorTokens.Solid(theme.TextTertiary);
         resources["CardBgBrush"] = ColorTokens.CardBg;
@@ -91,13 +73,6 @@ internal static class ThemeResources
         resources["AccentSoftBrush"] = ColorTokens.AccentSoft;
         resources["AccentInkBrush"] = ColorTokens.AccentInk;
         resources["AccentTextBrush"] = ColorTokens.AccentText;
-
-        // A pastel badge or unread dot on a light sidebar is 1,1 to 1,5:1
-        // against it: a ring of the accent's deep shade, at 45 %, outlines it.
-        // Salon's deep shade is for text only: its accent needs no ring.
-        var pastelRing = theme.ArkStyle && theme.AccentDeepHex is not null;
-        resources["AccentEdgeBrush"] = pastelRing ? ColorTokens.Solid("#73" + theme.AccentDeepHex![1..]) : Brushes.Transparent;
-        resources["AccentEdgeThickness"] = new Thickness(pastelRing ? 1 : 0);
         resources["TextSelectionBrush"] = ColorTokens.TextSelection;
         resources["OnAccentBrush"] = ColorTokens.Solid(theme.OnAccentHex);
         resources["DangerBrush"] = ColorTokens.Solid(theme.DangerHex);
@@ -112,223 +87,41 @@ internal static class ThemeResources
         resources["RowRadiusValue"] = new CornerRadius(theme.RowRadius);
         resources["SurfaceRadiusValue"] = new CornerRadius(theme.SurfaceRadius);
 
-        // The three columns: edge to edge with a line between them, or (Ark)
-        // rounded cards with a gap all round over the window's own ground.
-        // No shadow under the cards on purpose: the app renders on the CPU,
-        // and a blurred shadow the size of a panel is redrawn on every scroll.
-        var floating = theme.FloatingPanels;
-        const double gap = 10;
-        var salon = theme.SalonStyle;
-
-        // Ark and Salon on Windows draw the title bar into the window: the
-        // panels start below a strip of the window's ground that drags the
-        // window, with the system's own buttons at its right. Salon's strip
-        // is thinner, in the sidebar's colour, with smaller buttons.
-        var integratedTitle = hasPanels && (theme.ArkStyle || salon) && System.OperatingSystem.IsWindows();
-        var stripHeight = !integratedTitle ? 0.0 : salon ? SalonTitleBarHeight : IntegratedTitleBarHeight;
-        var top = integratedTitle ? stripHeight : gap;
-
-        // Every other theme on Windows has no title bar at all: the sidebar
+        // On Windows the main window has no title bar at all: the sidebar
         // runs up to the top edge and the system's three buttons sit at the
         // right of the channel header, centred on it. The header (and the
         // sidebar's team name) drag the window; its own buttons are marked
-        // as ordinary input in MainWindow.axaml. No strip of its own, so
-        // the columns keep starting at the very top.
-        var headerTitle = hasPanels && !integratedTitle && !floating && System.OperatingSystem.IsWindows();
-        if (hasPanels)
+        // as ordinary input in MainWindow.axaml. Elsewhere the system's own
+        // title bar stays (see docs/PLATFORM_PORTABILITY.md).
+        var headerTitle = isMainWindow && System.OperatingSystem.IsWindows();
+        if (isMainWindow)
         {
-            window.ExtendClientAreaTitleBarHeightHint = integratedTitle ? stripHeight : headerTitle ? HeaderTitleBarHeight : -1;
-            window.ExtendClientAreaToDecorationsHint = integratedTitle || headerTitle;
+            window.ExtendClientAreaTitleBarHeightHint = headerTitle ? HeaderTitleBarHeight : -1;
+            window.ExtendClientAreaToDecorationsHint = headerTitle;
         }
-        resources["TitleStripVisible"] = integratedTitle;
-        resources["TitleStripHeight"] = stripHeight;
-        resources["SplitterMargin"] = new Thickness(-3, stripHeight, 0, 0);
-        resources["CaptionButtonWidth"] = salon ? 34.0 : headerTitle ? 46.0 : 36.0;
-        resources["CaptionButtonHeight"] = salon ? SalonTitleBarHeight : IntegratedTitleBarHeight;
-        resources["WindowTitleOpacity"] = salon || headerTitle ? 0.0 : 1.0;
         // Room kept free at the right of whichever header sits under the
-        // three buttons: the channel's, or the thread's while one is open.
+        // three buttons (46 px each, MainWindow.axaml): the channel's, or the
+        // thread's while one is open.
         resources["CaptionReserveWidth"] = headerTitle ? 3 * 46.0 + 8 : 0.0;
         resources["HeaderTitleOn"] = headerTitle;
-        resources["CaptionGlyphTransform"] = Avalonia.Media.Transformation.TransformOperations.Parse(headerTitle ? "none" : "scale(0.8)");
 
         // The header's shadow over the messages, in place of its bottom line.
-        // A thin strip, so cheap to redraw as the messages scroll under it
-        // (unlike a shadow the size of a whole panel, see below).
+        // A thin strip, so cheap to redraw as the messages scroll under it.
         resources["HeaderShadow"] = !headerTitle ? default
             : BoxShadows.Parse(theme.IsDark ? "0 10 18 -8 #BF000000, 0 2 4 -1 #59000000" : "0 8 16 -8 #47101114, 0 1 3 0 #14101114");
         resources["HeaderBorderThickness"] = new Thickness(0, 0, 0, headerTitle ? 0 : 1);
 
-        // Salon's columns sit flush, without a line between sidebar and
-        // conversation (their colours part them), below the title strip.
-        // The conversation paints its own ground, since the window's is the
-        // sidebar's colour for the strip.
-        var flushTop = new Thickness(0, stripHeight, 0, 0);
-        resources["PanelRadius"] = new CornerRadius(floating ? 12 : 0);
-        resources["SidebarMargin"] = floating ? new Thickness(gap, top, 0, gap) : flushTop;
-        resources["SidebarBorderThickness"] = floating ? new Thickness(1) : salon ? new Thickness(0) : new Thickness(0, 0, 1, 0);
-        resources["ConversationMargin"] = floating ? new Thickness(gap, top, gap, gap) : flushTop;
-        resources["ConversationBorderThickness"] = new Thickness(floating ? 1 : 0);
-        resources["ConversationGroundBrush"] = floating || salon ? ColorTokens.Solid(theme.BgApp) : Brushes.Transparent;
-        resources["ThreadMargin"] = floating ? new Thickness(0, top, gap, gap) : flushTop;
-        resources["ThreadBorderThickness"] = floating ? new Thickness(1) : new Thickness(1, 0, 0, 0);
-
-        // Ark's other touches. Every value in the "else" half is what the
-        // window had before these resources existed, so no other theme moves.
-        var ark = theme.ArkStyle;
-
-        // Soft shadows under Ark's cards, when the user keeps them on: a
-        // tight one for the edge and a wide, pulled-in one for the lift, as
-        // in the mockup. A panel's shadow is drawn by a plate behind it (see
-        // MainWindow.axaml): the panel clips its content to its rounded
-        // corners, which would cut its own shadow off. Cost measured in
-        // AppSettings.ArkShadows.
-        var shadows = ark && theme.CastsShadows;
-        resources["PanelShadow"] = !shadows ? default
-            : BoxShadows.Parse(theme.IsDark ? "0 12 28 -12 #B3000000" : "0 1 2 0 #0D101114, 0 10 28 -12 #33101114");
-        // The plates are filled (so the shadow has a shape to fall from) only
-        // when they cast one; otherwise they would darken a gradient theme's
-        // see-through sidebar a second time.
-        resources["ShadowPlateBrush"] = shadows ? ColorTokens.Solid(theme.BgPanel) : Brushes.Transparent;
-        resources["SmallCardShadow"] = !shadows ? default
-            : BoxShadows.Parse(theme.IsDark ? "0 2 6 0 #66000000" : "0 1 2 0 #0D101114, 0 6 16 -8 #26101114");
-        resources["SelectedRowBorderThickness"] = new Thickness(ark ? 1 : 0);
-
-        // Section headings and the channel title.
-        resources["SectionHeaderFontSize"] = ark ? 10.5 : salon ? 12.0 : 12.5;
-        resources["SectionHeaderFontWeight"] = ark ? FontWeight.Medium : FontWeight.Bold;
-        resources["SectionHeaderLetterSpacing"] = ark ? 1.2 : salon ? 0.3 : 0.0;
-        resources["ChannelTitleFontSize"] = ark ? 22.0 : salon ? 16.0 : 15.0;
-        resources["ChannelTitleFontWeight"] = ark ? FontWeight.Light : FontWeight.Bold;
-
-        // Primary buttons (send, join, save): the accent, or ink on Ark —
-        // black on the light palette, near-white on the dark one.
-        resources["PrimaryButtonBrush"] = ark ? ColorTokens.TextPrimary : ColorTokens.Accent;
-        resources["OnPrimaryButtonBrush"] = ColorTokens.Solid(ark ? theme.BgApp : theme.OnAccentHex);
-        resources["PrimaryButtonRadius"] = new CornerRadius(ark ? 15 : 7);
-
-        // The channel header's round, outlined icon buttons.
-        resources["HeaderButtonBrush"] = ark ? ColorTokens.CardBg : Brushes.Transparent;
-        resources["HeaderButtonBorderBrush"] = ark ? ColorTokens.Divider : Brushes.Transparent;
-        resources["HeaderButtonBorderThickness"] = new Thickness(ark ? 1 : 0);
-        resources["HeaderButtonRadius"] = new CornerRadius(ark ? 16 : theme.RowRadius);
-        resources["HeaderButtonSize"] = ark ? 32.0 : 28.0;
-
-        // Switches for the few elements that exist in only one of the two
-        // looks (the dotted date rules, the "Ctrl K" chip, the reply icon).
-        resources["ArkOn"] = ark;
-        resources["ArkOff"] = !ark;
-        resources["SalonOn"] = salon;
-        resources["SalonOff"] = !salon;
-        resources["UnreadBarWidth"] = salon ? 4.0 : 0.0;
-
-        // Every theme: the red "Nouveau" rule (its label white, or near
-        // black on a red too light for white text), and a message naming
-        // the reader tinted with the palette's warm "away" colour.
-        var markerHex = salon ? SalonBadgeHex : theme.DangerHex;
-        resources["NewMarkerBrush"] = ColorTokens.Solid(markerHex);
-        resources["OnNewMarkerBrush"] = ColorTokens.Solid(ContrastWithWhite(markerHex) >= 4.5 ? "#FFFFFF" : "#14161A");
+        // The red "Nouveau" rule (its label white, or near black on a red too
+        // light for white text), and a message naming the reader tinted with
+        // the palette's warm "away" colour.
+        resources["NewMarkerBrush"] = ColorTokens.Solid(theme.DangerHex);
+        resources["OnNewMarkerBrush"] = ColorTokens.Solid(ContrastWithWhite(theme.DangerHex) >= 4.5 ? "#FFFFFF" : "#14161A");
         resources["MentionRowBrush"] = ColorTokens.Solid((theme.IsDark ? "#1A" : "#24") + theme.PresenceAwayHex[1..]);
         resources["MentionBarBrush"] = ColorTokens.Solid(theme.PresenceAwayHex);
 
-        // Salon: mention badges in red, a small bar in the text colour left
-        // of an unread channel instead of an accent dot, the sidebar's
-        // search field sunk in the darkest grey, and mentions in messages on
-        // a tint of the accent. White on the badge red is 4,6:1.
-        resources["BadgeBrush"] = salon ? ColorTokens.Solid(SalonBadgeHex) : ColorTokens.Accent;
-        resources["OnBadgeBrush"] = salon ? Brushes.White : ColorTokens.Solid(theme.OnAccentHex);
-        resources["FilterBrush"] = salon ? ColorTokens.Solid(theme.BgRail) : ColorTokens.CardBg;
-        resources["FilterBorderThickness"] = new Thickness(salon ? 0 : 1);
-        resources["MentionBrush"] = salon ? ColorTokens.Solid(theme.IsDark ? "#C9CDFB" : theme.AccentDeepHex ?? theme.AccentHex) : ColorTokens.AccentText;
-        resources["MentionBackgroundBrush"] = salon ? ColorTokens.Solid(theme.IsDark ? "#4D5865F2" : "#265865F2") : Brushes.Transparent;
-
-        // Text: sidebar rows a touch smaller, names semi-bold rather than bold.
-        resources["SidebarRowFontSize"] = ark ? 14.0 : 14.5;
-        resources["AuthorFontWeight"] = ark || salon ? FontWeight.SemiBold : FontWeight.Bold;
-        resources["PanelTitleFontWeight"] = ark ? FontWeight.Medium : FontWeight.Bold;
-
-        // The date between two days: a pill on a rule, or (Ark) a small
-        // capitalised label between dotted rules.
-        // Salon: a bare label on a solid rule.
-        var bareDate = ark || salon;
-        resources["DateLabelPillBrush"] = bareDate ? Brushes.Transparent : ColorTokens.CardBg;
-        resources["DateLabelPillBorderBrush"] = bareDate ? Brushes.Transparent : ColorTokens.Solid(theme.DividerStrong);
-        resources["DateLabelPillPadding"] = bareDate ? new Thickness(4, 0) : new Thickness(12, 4);
-        resources["DateLabelFontSize"] = ark ? 10.5 : salon ? 12.0 : 11.5;
-        resources["DateLabelFontWeight"] = ark ? FontWeight.Medium : FontWeight.SemiBold;
-        resources["DateLabelLetterSpacing"] = ark ? 1.2 : 0.0;
-
-        // Reactions: outlined pills, or (Ark) tinted ones with a mono count.
-        resources["ReactionCountFontWeight"] = ark ? FontWeight.Medium : FontWeight.Bold;
-
-        // "3 replies": accent text, or (Ark) an outlined pill in ink.
-        resources["ThreadPillBrush"] = ark ? ColorTokens.CardBg : Brushes.Transparent;
-        resources["ThreadPillBorderBrush"] = ark ? ColorTokens.Divider : Brushes.Transparent;
-        resources["ThreadPillBorderThickness"] = new Thickness(ark ? 1 : 0);
-        resources["ThreadPillPadding"] = ark ? new Thickness(10, 5, 12, 5) : new Thickness(0);
-        resources["ThreadPillRadius"] = new CornerRadius(ark ? 14 : 0);
-        resources["ThreadReplyTextBrush"] = ark ? ColorTokens.TextPrimary : ColorTokens.AccentText;
-        resources["ThreadReplyFontWeight"] = ark ? FontWeight.Medium : FontWeight.SemiBold;
-
-        // Attachments and code blocks.
-        resources["AttachmentBrush"] = ark ? ColorTokens.Solid(theme.BgPanel) : ColorTokens.CardBg;
-        resources["AttachmentRadius"] = new CornerRadius(ark ? 10 : 8);
-        resources["CodeBlockBrush"] = ColorTokens.Solid(ark ? theme.BgRail : theme.BgPanel);
-        resources["CodeBlockRadius"] = new CornerRadius(ark ? 8 : 6);
-        resources["CodeFontFamily"] = ark ? FontFamily.Parse(AppFonts.ArkMonoStack) : MessageInlineText.MonospaceFont;
-
-        // The thread panel's opening message, set in a card on Ark.
-        resources["ThreadRootBrush"] = ark ? ColorTokens.Solid(theme.BgPanel) : Brushes.Transparent;
-        resources["ThreadRootBorderBrush"] = ark ? ColorTokens.Divider : Brushes.Transparent;
-        resources["ThreadRootBorderThickness"] = new Thickness(ark ? 1 : 0);
-        resources["ThreadRootPadding"] = new Thickness(ark ? 12 : 0);
-        resources["ThreadRootRadius"] = new CornerRadius(ark ? 10 : 0);
-
-        // The sidebar's foot (you, your status, the settings): a strip under
-        // a line, or (Ark) a card with a round ink settings button.
-        // Salon: a band of its own, a step darker than the sidebar, no line.
-        resources["FooterBrush"] = ark ? ColorTokens.CardBg : theme.FooterHex is { } foot ? ColorTokens.Solid(foot) : Brushes.Transparent;
-        resources["FooterBorderThickness"] = ark ? new Thickness(1) : salon ? new Thickness(0) : new Thickness(0, 1, 0, 0);
-        resources["FooterMargin"] = ark ? new Thickness(10, 0, 10, 10) : new Thickness(0);
-        resources["FooterPadding"] = ark ? new Thickness(10, 8) : salon ? new Thickness(10, 9) : new Thickness(12, 10);
-        resources["FooterRadius"] = new CornerRadius(ark ? 12 : 0);
-        resources["SettingsButtonBrush"] = ark ? ColorTokens.TextPrimary : Brushes.Transparent;
-        resources["SettingsIconBrush"] = ark ? ColorTokens.Solid(theme.BgApp) : ColorTokens.TextSecondary;
-        resources["SettingsButtonSize"] = ark ? 34.0 : 28.0;
-        resources["SettingsButtonRadius"] = new CornerRadius(ark ? 17 : 0);
-
-        // The sidebar's "+" buttons: bare, or (Ark) small outlined circles.
-        resources["SectionButtonSize"] = ark ? 26.0 : 20.0;
-        resources["SectionButtonRadius"] = new CornerRadius(ark ? 13 : 0);
-
-        // The composer's box: a card with an outline, or (Salon) a filled
-        // box with none.
-        resources["ComposerBrush"] = theme.ComposerHex is { } composer ? ColorTokens.Solid(composer) : ColorTokens.CardBg;
-        resources["ComposerFrameBorderThickness"] = new Thickness(salon ? 0 : 1);
-
-        // "… is typing": a floating pill, or (Ark, Salon) bare text on the
-        // conversation's ground. The ground-coloured fill stays so that,
-        // scrolled up, messages don't run under the words.
-        var bareTyping = ark || salon;
-        resources["TypingPillBrush"] = bareTyping ? ColorTokens.Solid(theme.BgApp) : ColorTokens.CardBg;
-        resources["TypingPillBorderBrush"] = bareTyping ? Brushes.Transparent : ColorTokens.Solid(theme.DividerStrong);
-        resources["TypingPillShadow"] = bareTyping ? default : BoxShadows.Parse(theme.PopoverShadow);
-
-        // The composer sits in a sunken well on Ark.
-        resources["ComposerWellBrush"] = ark ? ColorTokens.Solid(theme.BgRail) : Brushes.Transparent;
-        resources["ComposerWellBorderBrush"] = ark ? ColorTokens.Divider : Brushes.Transparent;
-        resources["ComposerWellBorderThickness"] = new Thickness(ark ? 1 : 0);
-        resources["ComposerWellPadding"] = new Thickness(ark ? 5 : 0);
-        resources["ComposerWellRadius"] = new CornerRadius(ark ? theme.SurfaceRadius + 4 : 0);
-
         // Not a palette token, but it travels the same path: one resource
         // the whole window inherits from, swapped live when the choice changes.
-        var appFont = AppFonts.Resolve(settings.FontChoice, settings.EmojiStyle);
-        resources["AppFontFamily"] = appFont;
-
-        // Small labels (headings, times, dates): monospaced on Ark, the
-        // app's own font everywhere else.
-        resources["LabelFontFamily"] = theme.ArkStyle ? FontFamily.Parse(AppFonts.ArkMonoStack) : appFont;
+        resources["AppFontFamily"] = AppFonts.Resolve(settings.FontChoice, settings.EmojiStyle);
 
         // The window's own chrome-level colors aren't reachable through
         // DynamicResource on the Window element itself in XAML (they'd be
@@ -336,9 +129,19 @@ internal static class ThemeResources
         // A gradient theme's gradient is drawn on top of this by the window's
         // GroundBackdrop (much cheaper than a gradient brush on the CPU);
         // the solid colour is what shows for every other theme.
-        // Only the main window has panels to float: the settings and login
-        // windows keep the plain ground under a floating-panel theme.
-        window.Background = ColorTokens.Solid(hasPanels && theme.WindowGroundHex is { } ground ? ground : theme.BgApp);
+        window.Background = ColorTokens.Solid(theme.BgApp);
         window.Foreground = ColorTokens.TextPrimary;
+    }
+
+    /// <summary>WCAG contrast of white text on a "#RRGGBB" colour.</summary>
+    private static double ContrastWithWhite(string hex)
+    {
+        static double Channel(string h, int i)
+        {
+            var v = System.Convert.ToInt32(h.Substring(1 + i * 2, 2), 16) / 255.0;
+            return v <= 0.03928 ? v / 12.92 : System.Math.Pow((v + 0.055) / 1.055, 2.4);
+        }
+        var luminance = 0.2126 * Channel(hex, 0) + 0.7152 * Channel(hex, 1) + 0.0722 * Channel(hex, 2);
+        return 1.05 / (luminance + 0.05);
     }
 }

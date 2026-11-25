@@ -36,7 +36,6 @@
         <SolidColorBrush x:Key="DividerBrush" Color="#E6E8EC" />
         <SolidColorBrush x:Key="DividerStrongBrush" Color="#D3D7DE" />
         <SolidColorBrush x:Key="TextPrimaryBrush" Color="#14161A" />
-        <SolidColorBrush x:Key="UnreadRowInkBrush" Color="#14161A" />
         <SolidColorBrush x:Key="TextSecondaryBrush" Color="#5B626D" />
         <SolidColorBrush x:Key="TextTertiaryBrush" Color="#8A929E" />
         <SolidColorBrush x:Key="AccentBrush" Color="#005FB8" />
@@ -45,10 +44,6 @@
         <SolidColorBrush x:Key="AccentInkBrush" Color="#074581" />
         <SolidColorBrush x:Key="AccentTextBrush" Color="#005FB8" />
         <SolidColorBrush x:Key="OnAccentBrush" Color="#FFFFFF" />
-        <SolidColorBrush x:Key="ConversationGroundBrush" Color="Transparent" />
-        <!-- A thin darker ring around badges and unread dots, for a pastel accent that would vanish on a light sidebar (Ark). None otherwise. -->
-        <SolidColorBrush x:Key="AccentEdgeBrush" Color="Transparent" />
-        <Thickness x:Key="AccentEdgeThickness">0</Thickness>
         <SolidColorBrush x:Key="DangerBrush" Color="#C42B1C" />
         <SolidColorBrush x:Key="DangerSoftBrush" Color="#FBEAE8" />
         <SolidColorBrush x:Key="DangerBorderBrush" Color="#F0C4BE" />
@@ -61,106 +56,17 @@
         <!-- Theme shape/elevation tokens — swapped alongside the palette. -->
         <CornerRadius x:Key="RowRadiusValue">6</CornerRadius>
         <CornerRadius x:Key="SurfaceRadiusValue">10</CornerRadius>
-        <!-- The three columns, edge to edge here; rounded cards with gaps under Ark (ThemeResources). -->
-        <CornerRadius x:Key="PanelRadius">0</CornerRadius>
-        <Thickness x:Key="SidebarMargin">0</Thickness>
-        <Thickness x:Key="SidebarBorderThickness">0,0,1,0</Thickness>
-        <Thickness x:Key="ConversationMargin">0</Thickness>
-        <Thickness x:Key="ConversationBorderThickness">0</Thickness>
-        <Thickness x:Key="ThreadMargin">0</Thickness>
-        <Thickness x:Key="ThreadBorderThickness">1,0,0,0</Thickness>
 
-        <!-- Ark's other touches (ThemeResources). These are the plain look's values. -->
-        <BoxShadows x:Key="PanelShadow">0 0 0 0 #00000000</BoxShadows>
-        <BoxShadows x:Key="SmallCardShadow">0 0 0 0 #00000000</BoxShadows>
-        <SolidColorBrush x:Key="ShadowPlateBrush" Color="Transparent" />
-        <x:Boolean x:Key="TitleStripVisible">False</x:Boolean>
-        <x:Double x:Key="TitleStripHeight">0</x:Double>
+        <!-- The window's own buttons, the header that stands in for the title bar,
+             the "Nouveau" rule and mention tint (ThemeResources). -->
         <x:Boolean x:Key="HeaderTitleOn">False</x:Boolean>
         <x:Double x:Key="CaptionReserveWidth">0</x:Double>
-        <TransformOperations x:Key="CaptionGlyphTransform">scale(0.8)</TransformOperations>
         <BoxShadows x:Key="HeaderShadow">0 0 0 0 #00000000</BoxShadows>
         <Thickness x:Key="HeaderBorderThickness">0,0,0,1</Thickness>
-        <Thickness x:Key="SplitterMargin">-3,0,0,0</Thickness>
-        <Thickness x:Key="SelectedRowBorderThickness">0</Thickness>
-        <FontFamily x:Key="LabelFontFamily">Segoe UI</FontFamily>
-        <x:Double x:Key="SectionHeaderFontSize">12.5</x:Double>
-        <FontWeight x:Key="SectionHeaderFontWeight">Bold</FontWeight>
-        <x:Double x:Key="SectionHeaderLetterSpacing">0</x:Double>
-        <x:Double x:Key="ChannelTitleFontSize">15</x:Double>
-        <FontWeight x:Key="ChannelTitleFontWeight">Bold</FontWeight>
-        <SolidColorBrush x:Key="PrimaryButtonBrush" Color="#005FB8" />
-        <SolidColorBrush x:Key="OnPrimaryButtonBrush" Color="#FFFFFF" />
-        <CornerRadius x:Key="PrimaryButtonRadius">7</CornerRadius>
-        <SolidColorBrush x:Key="HeaderButtonBrush" Color="Transparent" />
-        <SolidColorBrush x:Key="HeaderButtonBorderBrush" Color="Transparent" />
-        <Thickness x:Key="HeaderButtonBorderThickness">0</Thickness>
-        <CornerRadius x:Key="HeaderButtonRadius">6</CornerRadius>
-        <x:Double x:Key="HeaderButtonSize">28</x:Double>
-        <SolidColorBrush x:Key="ComposerWellBrush" Color="Transparent" />
-        <SolidColorBrush x:Key="ComposerWellBorderBrush" Color="Transparent" />
-        <Thickness x:Key="ComposerWellBorderThickness">0</Thickness>
-        <Thickness x:Key="ComposerWellPadding">0</Thickness>
-        <CornerRadius x:Key="ComposerWellRadius">0</CornerRadius>
-        <SolidColorBrush x:Key="TypingPillBrush" Color="#FFFFFF" />
-        <SolidColorBrush x:Key="TypingPillBorderBrush" Color="#D3D7DE" />
-        <BoxShadows x:Key="TypingPillShadow">0 6 20 0 #33000000</BoxShadows>
-        <x:Boolean x:Key="ArkOn">False</x:Boolean>
-        <x:Boolean x:Key="ArkOff">True</x:Boolean>
-        <x:Boolean x:Key="SalonOn">False</x:Boolean>
-        <x:Boolean x:Key="SalonOff">True</x:Boolean>
-        <SolidColorBrush x:Key="BadgeBrush" Color="#005FB8" />
-        <SolidColorBrush x:Key="OnBadgeBrush" Color="#FFFFFF" />
-        <SolidColorBrush x:Key="FilterBrush" Color="#FFFFFF" />
-        <Thickness x:Key="FilterBorderThickness">1</Thickness>
-        <SolidColorBrush x:Key="ComposerBrush" Color="#FFFFFF" />
-        <Thickness x:Key="ComposerFrameBorderThickness">1</Thickness>
-        <x:Double x:Key="UnreadBarWidth">0</x:Double>
         <SolidColorBrush x:Key="NewMarkerBrush" Color="#C42B1C" />
         <SolidColorBrush x:Key="OnNewMarkerBrush" Color="#FFFFFF" />
         <SolidColorBrush x:Key="MentionRowBrush" Color="#24D9A521" />
         <SolidColorBrush x:Key="MentionBarBrush" Color="#D9A521" />
-        <x:Double x:Key="WindowTitleOpacity">1</x:Double>
-        <x:Double x:Key="CaptionButtonWidth">36</x:Double>
-        <x:Double x:Key="CaptionButtonHeight">32</x:Double>
-        <x:Double x:Key="SidebarRowFontSize">14.5</x:Double>
-        <FontWeight x:Key="AuthorFontWeight">Bold</FontWeight>
-        <FontWeight x:Key="PanelTitleFontWeight">Bold</FontWeight>
-        <SolidColorBrush x:Key="DateLabelPillBrush" Color="#FFFFFF" />
-        <SolidColorBrush x:Key="DateLabelPillBorderBrush" Color="#D3D7DE" />
-        <Thickness x:Key="DateLabelPillPadding">12,4</Thickness>
-        <x:Double x:Key="DateLabelFontSize">11.5</x:Double>
-        <FontWeight x:Key="DateLabelFontWeight">SemiBold</FontWeight>
-        <x:Double x:Key="DateLabelLetterSpacing">0</x:Double>
-        <FontWeight x:Key="ReactionCountFontWeight">Bold</FontWeight>
-        <SolidColorBrush x:Key="ThreadPillBrush" Color="Transparent" />
-        <SolidColorBrush x:Key="ThreadPillBorderBrush" Color="Transparent" />
-        <Thickness x:Key="ThreadPillBorderThickness">0</Thickness>
-        <Thickness x:Key="ThreadPillPadding">0</Thickness>
-        <CornerRadius x:Key="ThreadPillRadius">0</CornerRadius>
-        <SolidColorBrush x:Key="ThreadReplyTextBrush" Color="#005FB8" />
-        <FontWeight x:Key="ThreadReplyFontWeight">SemiBold</FontWeight>
-        <SolidColorBrush x:Key="AttachmentBrush" Color="#FFFFFF" />
-        <CornerRadius x:Key="AttachmentRadius">8</CornerRadius>
-        <SolidColorBrush x:Key="CodeBlockBrush" Color="#F5F6F8" />
-        <CornerRadius x:Key="CodeBlockRadius">6</CornerRadius>
-        <FontFamily x:Key="CodeFontFamily">Cascadia Mono, Consolas, Menlo, DejaVu Sans Mono, Liberation Mono, Courier New</FontFamily>
-        <SolidColorBrush x:Key="ThreadRootBrush" Color="Transparent" />
-        <SolidColorBrush x:Key="ThreadRootBorderBrush" Color="Transparent" />
-        <Thickness x:Key="ThreadRootBorderThickness">0</Thickness>
-        <Thickness x:Key="ThreadRootPadding">0</Thickness>
-        <CornerRadius x:Key="ThreadRootRadius">0</CornerRadius>
-        <SolidColorBrush x:Key="FooterBrush" Color="Transparent" />
-        <Thickness x:Key="FooterBorderThickness">0,1,0,0</Thickness>
-        <Thickness x:Key="FooterMargin">0</Thickness>
-        <Thickness x:Key="FooterPadding">12,10</Thickness>
-        <CornerRadius x:Key="FooterRadius">0</CornerRadius>
-        <SolidColorBrush x:Key="SettingsButtonBrush" Color="Transparent" />
-        <SolidColorBrush x:Key="SettingsIconBrush" Color="#5B626D" />
-        <x:Double x:Key="SettingsButtonSize">28</x:Double>
-        <CornerRadius x:Key="SettingsButtonRadius">0</CornerRadius>
-        <x:Double x:Key="SectionButtonSize">20</x:Double>
-        <CornerRadius x:Key="SectionButtonRadius">0</CornerRadius>
         <BoxShadows x:Key="PopoverShadow">0 6 20 0 #33000000</BoxShadows>
         <BoxShadows x:Key="CardShadow">0 2 6 0 #1A000000</BoxShadows>
 
@@ -209,7 +115,7 @@
                 </Button.ContextFlyout>
                 <StackPanel ToolTip.Tip="{Binding OriginalNameTip}">
                     <Border Height="2" Margin="8,0" CornerRadius="1" Background="{DynamicResource AccentBrush}" IsVisible="{Binding ShowDropIndicatorAbove}" />
-                    <Border Background="{Binding RowBackground}" BorderBrush="{Binding RowBorderBrush}" BorderThickness="{DynamicResource SelectedRowBorderThickness}" BoxShadow="{Binding RowShadow}"
+                    <Border Background="{Binding RowBackground}"
                             CornerRadius="{DynamicResource RowRadiusValue}" Padding="8,7">
                         <Grid ColumnDefinitions="Auto,*,Auto,Auto">
                             <Path Grid.Column="0" IsVisible="{Binding !IsPrivate}" Data="M9 4l-1 16M16 4l-1 16M4 9h16M3 15h16"
@@ -219,26 +125,18 @@
                                 <Path Data="M4.5 5 L4.5 3.2 A2.5 2.5 0 0 1 9.5 3.2 L9.5 5" Stroke="{Binding IconBrush}" StrokeThickness="1.4" />
                             </Canvas>
                             <TextBlock Grid.Column="1" Text="{Binding Name}" FontWeight="{Binding NameWeight}" Foreground="{Binding NameBrush}"
-                                       FontSize="{DynamicResource SidebarRowFontSize}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                       FontSize="14.5" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
                             <Path Grid.Column="2" IsVisible="{Binding IsMuted}" ToolTip.Tip="{Binding T.ChannelMutedTip, Source={x:Static loc:Loc.Instance}}"
                                   Data="M11 5 6 9H2v6h4l5 4V5z M23 9l-6 6 M17 9l6 6" Stroke="{DynamicResource TextTertiaryBrush}" StrokeThickness="1.6"
                                   StrokeLineCap="Round" StrokeJoin="Round" Width="13" Height="13" Stretch="Uniform" VerticalAlignment="Center" Margin="6,0,0,0" />
-                            <Border Grid.Column="3" IsVisible="{Binding HasMentions}" Background="{DynamicResource BadgeBrush}" BorderBrush="{DynamicResource AccentEdgeBrush}" BorderThickness="{DynamicResource AccentEdgeThickness}"
+                            <Border Grid.Column="3" IsVisible="{Binding HasMentions}" Background="{DynamicResource AccentBrush}"
                                     CornerRadius="9" MinWidth="18" Height="18" Padding="5,0" Margin="8,0,0,0">
-                                <TextBlock Text="{Binding MentionCount}" Foreground="{DynamicResource OnBadgeBrush}" FontWeight="Bold" FontSize="10.5" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                <TextBlock Text="{Binding MentionCount}" Foreground="{DynamicResource OnAccentBrush}" FontWeight="Bold" FontSize="10.5" HorizontalAlignment="Center" VerticalAlignment="Center" />
                             </Border>
                             <!-- Something unread, but nobody called your name. Same cell as the
                                  badge above: only one of the two is ever visible. -->
-                            <Panel Grid.Column="3" IsVisible="{DynamicResource SalonOff}">
-                                <Border IsVisible="{Binding ShowUnreadDot}" Background="{DynamicResource AccentBrush}" BorderBrush="{DynamicResource AccentEdgeBrush}" BorderThickness="{DynamicResource AccentEdgeThickness}"
-                                        Width="8" Height="8" CornerRadius="4" Margin="8,0,5,0" VerticalAlignment="Center" />
-                            </Panel>
-                            <!-- Salon: a small bar on the sidebar's left edge instead, out
-                                 past the row's padding (8), the list's step (12) and the
-                                 sidebar's margin (8). Drawn outside the row: no width taken. -->
-                            <Border Grid.Column="0" Grid.ColumnSpan="4" IsVisible="{Binding HasUnread}" Background="{DynamicResource UnreadRowInkBrush}"
-                                    Width="{DynamicResource UnreadBarWidth}" Height="8" CornerRadius="0,4,4,0" Margin="-28,0,0,0"
-                                    HorizontalAlignment="Left" VerticalAlignment="Center" IsHitTestVisible="False" />
+                            <Border Grid.Column="3" IsVisible="{Binding ShowUnreadDot}" Background="{DynamicResource AccentBrush}"
+                                    Width="8" Height="8" CornerRadius="4" Margin="8,0,5,0" VerticalAlignment="Center" />
                         </Grid>
                     </Border>
                     <Border Height="2" Margin="8,0" CornerRadius="1" Background="{DynamicResource AccentBrush}" IsVisible="{Binding ShowDropIndicatorBelow}" />
@@ -268,7 +166,7 @@
                 </Button.ContextFlyout>
                 <StackPanel ToolTip.Tip="{Binding OriginalNameTip}">
                     <Border Height="2" Margin="8,0" CornerRadius="1" Background="{DynamicResource AccentBrush}" IsVisible="{Binding ShowDropIndicatorAbove}" />
-                    <Border Background="{Binding RowBackground}" BorderBrush="{Binding RowBorderBrush}" BorderThickness="{DynamicResource SelectedRowBorderThickness}" BoxShadow="{Binding RowShadow}"
+                    <Border Background="{Binding RowBackground}"
                             CornerRadius="{DynamicResource RowRadiusValue}" Padding="8,6">
                         <Grid ColumnDefinitions="Auto,*,Auto,Auto">
                             <Grid Grid.Column="0" Width="22" Height="22" Margin="0,0,8,0">
@@ -286,26 +184,18 @@
                                          HorizontalAlignment="Right" VerticalAlignment="Bottom" />
                             </Grid>
                             <TextBlock Grid.Column="1" Text="{Binding DisplayName}" FontWeight="{Binding NameWeight}" Foreground="{Binding NameBrush}"
-                                       FontSize="{DynamicResource SidebarRowFontSize}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                       FontSize="14.5" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
                             <Path Grid.Column="2" IsVisible="{Binding IsMuted}" ToolTip.Tip="{Binding T.ChannelMutedTip, Source={x:Static loc:Loc.Instance}}"
                                   Data="M11 5 6 9H2v6h4l5 4V5z M23 9l-6 6 M17 9l6 6" Stroke="{DynamicResource TextTertiaryBrush}" StrokeThickness="1.6"
                                   StrokeLineCap="Round" StrokeJoin="Round" Width="13" Height="13" Stretch="Uniform" VerticalAlignment="Center" Margin="6,0,0,0" />
-                            <Border Grid.Column="3" IsVisible="{Binding HasMentions}" Background="{DynamicResource BadgeBrush}" BorderBrush="{DynamicResource AccentEdgeBrush}" BorderThickness="{DynamicResource AccentEdgeThickness}"
+                            <Border Grid.Column="3" IsVisible="{Binding HasMentions}" Background="{DynamicResource AccentBrush}"
                                     CornerRadius="9" MinWidth="18" Height="18" Padding="5,0" Margin="8,0,0,0">
-                                <TextBlock Text="{Binding MentionCount}" Foreground="{DynamicResource OnBadgeBrush}" FontWeight="Bold" FontSize="10.5" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                <TextBlock Text="{Binding MentionCount}" Foreground="{DynamicResource OnAccentBrush}" FontWeight="Bold" FontSize="10.5" HorizontalAlignment="Center" VerticalAlignment="Center" />
                             </Border>
                             <!-- Something unread, but nobody called your name. Same cell as the
                                  badge above: only one of the two is ever visible. -->
-                            <Panel Grid.Column="3" IsVisible="{DynamicResource SalonOff}">
-                                <Border IsVisible="{Binding ShowUnreadDot}" Background="{DynamicResource AccentBrush}" BorderBrush="{DynamicResource AccentEdgeBrush}" BorderThickness="{DynamicResource AccentEdgeThickness}"
-                                        Width="8" Height="8" CornerRadius="4" Margin="8,0,5,0" VerticalAlignment="Center" />
-                            </Panel>
-                            <!-- Salon: a small bar on the sidebar's left edge instead, out
-                                 past the row's padding (8), the list's step (12) and the
-                                 sidebar's margin (8). Drawn outside the row: no width taken. -->
-                            <Border Grid.Column="0" Grid.ColumnSpan="4" IsVisible="{Binding HasUnread}" Background="{DynamicResource UnreadRowInkBrush}"
-                                    Width="{DynamicResource UnreadBarWidth}" Height="8" CornerRadius="0,4,4,0" Margin="-28,0,0,0"
-                                    HorizontalAlignment="Left" VerticalAlignment="Center" IsHitTestVisible="False" />
+                            <Border Grid.Column="3" IsVisible="{Binding ShowUnreadDot}" Background="{DynamicResource AccentBrush}"
+                                    Width="8" Height="8" CornerRadius="4" Margin="8,0,5,0" VerticalAlignment="Center" />
                         </Grid>
                     </Border>
                     <Border Height="2" Margin="8,0" CornerRadius="1" Background="{DynamicResource AccentBrush}" IsVisible="{Binding ShowDropIndicatorBelow}" />
@@ -320,28 +210,16 @@
              MessageItem itself, and only ever shown when that message starts a
              new day (see MessageItem.DateSeparatorLabel). -->
         <DataTemplate x:Key="DateSeparatorTemplate" DataType="models:MessageItem">
-            <!-- A solid rule each side of a pill, or (Ark) dotted rules each
-                 side of a bare capitalised label. A dotted rule is a long
-                 dashed line cut to its column, since a Border can't dash. -->
+            <!-- A solid rule each side of a pill. -->
             <Grid ColumnDefinitions="*,Auto,*" Margin="0,10,0,14">
-                <Border Grid.Column="0" Height="1" VerticalAlignment="Center" Background="{DynamicResource DividerStrongBrush}" IsVisible="{DynamicResource ArkOff}" />
-                <Panel Grid.Column="0" Height="2" VerticalAlignment="Center" ClipToBounds="True" IsVisible="{DynamicResource ArkOn}">
-                    <Line StartPoint="0,1" EndPoint="4000,1" HorizontalAlignment="Right" Stroke="{DynamicResource DividerStrongBrush}"
-                          StrokeThickness="1.5" StrokeDashArray="0.1,3" StrokeLineCap="Round" />
-                </Panel>
-                <Border Grid.Column="1" Margin="10,0" Padding="{DynamicResource DateLabelPillPadding}" CornerRadius="12"
-                        Background="{DynamicResource DateLabelPillBrush}"
-                        BorderBrush="{DynamicResource DateLabelPillBorderBrush}" BorderThickness="1">
-                    <TextBlock Text="{Binding DateSeparatorLabel}" FontFamily="{DynamicResource LabelFontFamily}"
-                               FontSize="{DynamicResource DateLabelFontSize}" FontWeight="{DynamicResource DateLabelFontWeight}"
-                               LetterSpacing="{DynamicResource DateLabelLetterSpacing}"
+                <Border Grid.Column="0" Height="1" VerticalAlignment="Center" Background="{DynamicResource DividerStrongBrush}" />
+                <Border Grid.Column="1" Margin="10,0" Padding="12,4" CornerRadius="12"
+                        Background="{DynamicResource CardBgBrush}"
+                        BorderBrush="{DynamicResource DividerStrongBrush}" BorderThickness="1">
+                    <TextBlock Text="{Binding DateSeparatorLabel}" FontSize="11.5" FontWeight="SemiBold"
                                Foreground="{DynamicResource TextSecondaryBrush}" />
                 </Border>
-                <Border Grid.Column="2" Height="1" VerticalAlignment="Center" Background="{DynamicResource DividerStrongBrush}" IsVisible="{DynamicResource ArkOff}" />
-                <Panel Grid.Column="2" Height="2" VerticalAlignment="Center" ClipToBounds="True" IsVisible="{DynamicResource ArkOn}">
-                    <Line StartPoint="0,1" EndPoint="4000,1" HorizontalAlignment="Left" Stroke="{DynamicResource DividerStrongBrush}"
-                          StrokeThickness="1.5" StrokeDashArray="0.1,3" StrokeLineCap="Round" />
-                </Panel>
+                <Border Grid.Column="2" Height="1" VerticalAlignment="Center" Background="{DynamicResource DividerStrongBrush}" />
             </Grid>
         </DataTemplate>
 
@@ -426,9 +304,9 @@
              every code block would be one more thing between the mouse wheel
              and the conversation. -->
         <DataTemplate DataType="models:CodeBlock">
-            <Border Background="{DynamicResource CodeBlockBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1"
-                    CornerRadius="{DynamicResource CodeBlockRadius}" Padding="10,7" Margin="0,4">
-                <SelectableTextBlock Text="{Binding Code}" TextWrapping="Wrap" FontFamily="{DynamicResource CodeFontFamily}"
+            <Border Background="{DynamicResource BgPanelBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1"
+                    CornerRadius="6" Padding="10,7" Margin="0,4">
+                <SelectableTextBlock Text="{Binding Code}" TextWrapping="Wrap" FontFamily="{x:Static views:MessageInlineText.MonospaceFont}"
                                      FontSize="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.MessageFontSize}" />
             </Border>
         </DataTemplate>
@@ -445,46 +323,32 @@
     </Window.DataTemplates>
 
     <Window.Styles>
-        <!-- The title bar Avalonia draws when Ark brings it into the window
-             carries a full-screen button next to the usual three. Windows
-             apps don't have one, and Almatter has no use for full screen. -->
+        <!-- With no title bar (Windows, see ThemeResources), Avalonia draws
+             the window's buttons itself, over the channel header. It adds a
+             full-screen button next to the usual three: Windows apps don't
+             have one, and Almatter has no use for full screen. -->
         <Style Selector=":is(Button)[(WindowDecorationProperties.ElementRole)=FullScreenButton]">
             <Setter Property="IsVisible" Value="False" />
         </Style>
 
-        <!-- Its three buttons, smaller than Fluent's, as in the Ark and Salon
-             mockups. Set here because Fluent's own size resources
-             (CaptionButtonWidth and …Height) live inside its control theme
-             and can't be overridden from outside. The sizes come from
-             ThemeResources, the height matching the title strip's. -->
+        <!-- The three buttons at Windows' own width, centred on the header.
+             Set here because Fluent's own size resources (CaptionButtonWidth
+             and …Height) live inside its control theme and can't be
+             overridden from outside. -->
         <Style Selector=":is(Button)[(WindowDecorationProperties.ElementRole)=MinimizeButton],
                         :is(Button)[(WindowDecorationProperties.ElementRole)=MaximizeButton],
                         :is(Button)[(WindowDecorationProperties.ElementRole)=CloseButton]">
-            <Setter Property="Width" Value="{DynamicResource CaptionButtonWidth}" />
-            <Setter Property="Height" Value="{DynamicResource CaptionButtonHeight}" />
-            <!-- Centred on the band: the channel header when there is no
-                 title bar, a no-op on Ark's and Salon's strip, which is
-                 the buttons' own height. -->
+            <Setter Property="Width" Value="46" />
+            <Setter Property="Height" Value="32" />
             <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
-        <!-- The window's name, drawn by Avalonia at the strip's left. Salon
-             shows the team's name in the middle instead (the title strip
-             below); the window keeps its name for the taskbar. The panel's
-             name comes from Fluent's WindowDrawnDecorations template. -->
-        <!-- Opacity, not IsVisible: the template binds IsVisible itself, and
-             a template binding outranks a style. -->
+        <!-- The window's name, which Avalonia would draw at the header's
+             left; the window keeps its name for the taskbar. The panel's
+             name comes from Fluent's WindowDrawnDecorations template.
+             Opacity, not IsVisible: the template binds IsVisible itself,
+             and a template binding outranks a style. -->
         <Style Selector="Panel#PART_TitleTextPanel">
-            <Setter Property="Opacity" Value="{DynamicResource WindowTitleOpacity}" />
-        </Style>
-
-        <Style Selector=":is(Button)[(WindowDecorationProperties.ElementRole)=MinimizeButton] /template/ ContentPresenter,
-                        :is(Button)[(WindowDecorationProperties.ElementRole)=MaximizeButton] /template/ ContentPresenter,
-                        :is(Button)[(WindowDecorationProperties.ElementRole)=CloseButton] /template/ ContentPresenter">
-            <!-- Smaller glyphs for Ark's and Salon's smaller buttons; full
-                 size (none) with no title bar, where the buttons have
-                 Windows' own size and a scaled glyph lands between pixels,
-                 blurring one edge of the maximize square. -->
-            <Setter Property="RenderTransform" Value="{DynamicResource CaptionGlyphTransform}" />
+            <Setter Property="Opacity" Value="0" />
         </Style>
 
         <Style Selector="Button.row-button">
@@ -509,14 +373,6 @@
              buttons that close popovers, none of which should tint.
              The row's own selected background (bound on the Border inside)
              paints on top, so a selected row keeps its accent tint. -->
-        <!-- A sidebar row's card may cast a shadow (Ark): the button around
-             it must not cut it off at the row's edges. -->
-        <Style Selector="Button.sidebar-row">
-            <Setter Property="ClipToBounds" Value="False" />
-        </Style>
-        <Style Selector="Button.sidebar-row /template/ ContentPresenter">
-            <Setter Property="ClipToBounds" Value="False" />
-        </Style>
         <Style Selector="Button.sidebar-row:pointerover">
             <Setter Property="Background" Value="{DynamicResource BgHoverBrush}" />
         </Style>
@@ -556,11 +412,8 @@
              header reads as a heading and the rows as its content. The
              same step is taken off the right, so a selected row's tint
              keeps equal gaps to both edges of the sidebar. -->
-        <!-- Not clipped (an ItemsControl is by default): Salon's unread bar
-             sits out past the list's left edge, against the sidebar's. -->
         <Style Selector="ItemsControl.section-list">
             <Setter Property="Margin" Value="12,0,12,0" />
-            <Setter Property="ClipToBounds" Value="False" />
         </Style>
 
         <!-- Invisible until pointed at, then a soft accent line — the same
@@ -650,7 +503,7 @@
         <!-- The frame around each composer, outlined in the accent colour while files are dragged over the window (class set from code-behind). -->
         <Style Selector="Border.composer-frame">
             <Setter Property="BorderBrush" Value="{DynamicResource DividerStrongBrush}" />
-            <Setter Property="BorderThickness" Value="{DynamicResource ComposerFrameBorderThickness}" />
+            <Setter Property="BorderThickness" Value="1" />
         </Style>
         <Style Selector="Border.composer-frame.drop-target">
             <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
@@ -722,39 +575,10 @@
              nothing for the other themes. -->
         <views:GroundBackdrop Grid.Column="0" Grid.ColumnSpan="3" Palette="{DynamicResource GroundTheme}" />
 
-        <!-- The title bar drawn into the window (Ark, on Windows): a strip of
-             ground above the panels that drags the window like the system's
-             own title bar. Avalonia draws the window's name and its buttons
-             over it. -->
-        <Border Grid.Column="0" Grid.ColumnSpan="3" VerticalAlignment="Top" Height="{DynamicResource TitleStripHeight}"
-                IsVisible="{DynamicResource TitleStripVisible}" Background="Transparent"
-                WindowDecorationProperties.ElementRole="TitleBar">
-            <!-- Salon: the team's name in the middle, in place of Avalonia's
-                 own title at the left (hidden by a style below). -->
-            <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Center" VerticalAlignment="Center"
-                        IsVisible="{DynamicResource SalonOn}" IsHitTestVisible="False">
-                <Image Source="/Assets/almatter-logo.png" Width="14" Height="14" VerticalAlignment="Center" />
-                <TextBlock Text="{Binding TeamName}" FontSize="12.5" FontWeight="SemiBold"
-                           Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
-            </StackPanel>
-        </Border>
-
-        <!-- Shadow plates: one under each floating panel, same place and
-             shape, casting the panel's shadow (Ark, when shadows are on).
-             The panels can't cast it themselves: they clip to their rounded
-             corners, which would cut the shadow off. Empty and shadowless
-             for every other theme. -->
-        <Border Grid.Column="0" Margin="{DynamicResource SidebarMargin}" CornerRadius="{DynamicResource PanelRadius}"
-                Background="{DynamicResource ShadowPlateBrush}" BoxShadow="{DynamicResource PanelShadow}" IsHitTestVisible="False" />
-        <Border Grid.Column="1" Margin="{DynamicResource ConversationMargin}" CornerRadius="{DynamicResource PanelRadius}"
-                Background="{DynamicResource ShadowPlateBrush}" BoxShadow="{DynamicResource PanelShadow}" IsHitTestVisible="False" />
-        <Border Grid.Column="2" Width="320" IsVisible="{Binding IsThreadOpen}" Margin="{DynamicResource ThreadMargin}" CornerRadius="{DynamicResource PanelRadius}"
-                Background="{DynamicResource ShadowPlateBrush}" BoxShadow="{DynamicResource PanelShadow}" IsHitTestVisible="False" />
-
         <!-- SIDEBAR -->
         <Border Grid.Column="0" Background="{DynamicResource SidebarGroundBrush}" BorderBrush="{DynamicResource DividerBrush}"
-                BorderThickness="{DynamicResource SidebarBorderThickness}" Margin="{DynamicResource SidebarMargin}"
-                CornerRadius="{DynamicResource PanelRadius}" ClipToBounds="True">
+                BorderThickness="0,0,1,0" Margin="0"
+                CornerRadius="0" ClipToBounds="True">
             <Grid RowDefinitions="Auto,Auto,*,Auto">
 
                 <!-- With no title bar, the team's name is the top of the
@@ -771,7 +595,7 @@
                 <!-- Filters the favorites, channels and DMs below by name as
                      you type (Ctrl+K to jump here). Searching message text
                      is the header's magnifier / Ctrl+F. -->
-                <Border Grid.Row="1" Margin="12,0,12,12" Padding="10,0,4,0" CornerRadius="{DynamicResource RowRadiusValue}" Background="{DynamicResource FilterBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="{DynamicResource FilterBorderThickness}" BoxShadow="{DynamicResource SmallCardShadow}">
+                <Border Grid.Row="1" Margin="12,0,12,12" Padding="10,0,4,0" CornerRadius="{DynamicResource RowRadiusValue}" Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1">
                     <Grid ColumnDefinitions="Auto,*,Auto">
                         <Canvas Grid.Column="0" Width="15" Height="15" VerticalAlignment="Center">
                             <Ellipse Width="10" Height="10" Stroke="{DynamicResource TextTertiaryBrush}" StrokeThickness="1.6" />
@@ -800,7 +624,7 @@
                                     <Path IsVisible="{Binding !ShowFavoritesList}" Data="M9 6l6 6-6 6"
                                           Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="2.4" StrokeLineCap="Round" StrokeJoin="Round"
                                           Width="10" Height="10" Stretch="Uniform" VerticalAlignment="Center" />
-                                    <TextBlock Text="{Binding FavoritesHeaderLabel}" FontFamily="{DynamicResource LabelFontFamily}" FontSize="{DynamicResource SectionHeaderFontSize}" FontWeight="{DynamicResource SectionHeaderFontWeight}" LetterSpacing="{DynamicResource SectionHeaderLetterSpacing}" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
+                                    <TextBlock Text="{Binding T.FavoritesHeader, Source={x:Static loc:Loc.Instance}}" FontSize="12.5" FontWeight="Bold" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
                                 </StackPanel>
                             </Button>
 
@@ -836,14 +660,14 @@
                                         <Path IsVisible="{Binding !ShowChannelsList}" Data="M9 6l6 6-6 6"
                                               Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="2.4" StrokeLineCap="Round" StrokeJoin="Round"
                                               Width="10" Height="10" Stretch="Uniform" VerticalAlignment="Center" />
-                                        <TextBlock Text="{Binding ChannelsHeaderLabel}" FontFamily="{DynamicResource LabelFontFamily}" FontSize="{DynamicResource SectionHeaderFontSize}" FontWeight="{DynamicResource SectionHeaderFontWeight}" LetterSpacing="{DynamicResource SectionHeaderLetterSpacing}" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
+                                        <TextBlock Text="{Binding T.ChannelsHeader, Source={x:Static loc:Loc.Instance}}" FontSize="12.5" FontWeight="Bold" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
                                     </StackPanel>
                                 </Button>
                                 <Button Grid.Column="1" Classes="row-button" Margin="0,0,8,0"
                                         HorizontalAlignment="Right" ToolTip.Tip="{Binding T.BrowseChannels, Source={x:Static loc:Loc.Instance}}"
                                         Command="{Binding OpenBrowseChannelsCommand}">
-                                    <Border Width="{DynamicResource SectionButtonSize}" Height="{DynamicResource SectionButtonSize}" CornerRadius="{DynamicResource SectionButtonRadius}"
-                                            Background="{DynamicResource HeaderButtonBrush}" BorderBrush="{DynamicResource HeaderButtonBorderBrush}" BorderThickness="{DynamicResource HeaderButtonBorderThickness}">
+                                    <Border Width="20" Height="20" CornerRadius="0"
+                                            Background="Transparent">
                                         <Path Data="M12 5v14M5 12h14" Stroke="{DynamicResource TextTertiaryBrush}" StrokeThickness="2"
                                               StrokeLineCap="Round" Width="12" Height="12" Stretch="Uniform"
                                               HorizontalAlignment="Center" VerticalAlignment="Center" />
@@ -868,14 +692,14 @@
                                         <Path IsVisible="{Binding !ShowDirectMessagesList}" Data="M9 6l6 6-6 6"
                                               Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="2.4" StrokeLineCap="Round" StrokeJoin="Round"
                                               Width="10" Height="10" Stretch="Uniform" VerticalAlignment="Center" />
-                                        <TextBlock Text="{Binding DirectMessagesHeaderLabel}" FontFamily="{DynamicResource LabelFontFamily}" FontSize="{DynamicResource SectionHeaderFontSize}" FontWeight="{DynamicResource SectionHeaderFontWeight}" LetterSpacing="{DynamicResource SectionHeaderLetterSpacing}" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
+                                        <TextBlock Text="{Binding T.DirectMessagesHeader, Source={x:Static loc:Loc.Instance}}" FontSize="12.5" FontWeight="Bold" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
                                     </StackPanel>
                                 </Button>
                                 <Button Grid.Column="1" Classes="row-button" Margin="0,0,8,0"
                                         HorizontalAlignment="Right" ToolTip.Tip="{Binding T.NewConversation, Source={x:Static loc:Loc.Instance}}"
                                         Command="{Binding OpenNewConversationCommand}">
-                                    <Border Width="{DynamicResource SectionButtonSize}" Height="{DynamicResource SectionButtonSize}" CornerRadius="{DynamicResource SectionButtonRadius}"
-                                            Background="{DynamicResource HeaderButtonBrush}" BorderBrush="{DynamicResource HeaderButtonBorderBrush}" BorderThickness="{DynamicResource HeaderButtonBorderThickness}">
+                                    <Border Width="20" Height="20" CornerRadius="0"
+                                            Background="Transparent">
                                         <Path Data="M12 5v14M5 12h14" Stroke="{DynamicResource TextTertiaryBrush}" StrokeThickness="2"
                                               StrokeLineCap="Round" Width="12" Height="12" Stretch="Uniform"
                                               HorizontalAlignment="Center" VerticalAlignment="Center" />
@@ -895,10 +719,10 @@
                     </StackPanel>
                 </ScrollViewer>
 
-                <!-- A strip under a line, or (Ark) a card. -->
-                <Border Grid.Row="3" x:Name="SettingsAnchor" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="{DynamicResource FooterBorderThickness}"
-                        Padding="{DynamicResource FooterPadding}" Margin="{DynamicResource FooterMargin}" CornerRadius="{DynamicResource FooterRadius}"
-                        Background="{DynamicResource FooterBrush}" BoxShadow="{DynamicResource SmallCardShadow}">
+                <!-- You, your status and the settings, in a strip under a line. -->
+                <Border Grid.Row="3" x:Name="SettingsAnchor" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,1,0,0"
+                        Padding="12,10" Margin="0" CornerRadius="0"
+                        Background="Transparent">
                     <Grid ColumnDefinitions="*,Auto">
                         <Button Grid.Column="0" Classes="row-button" ToolTip.Tip="{Binding T.ChangeStatus, Source={x:Static loc:Loc.Instance}}"
                                 Command="{Binding ToggleStatusPickerCommand}">
@@ -921,10 +745,10 @@
                         </Button>
                         <Button Grid.Column="1" Classes="row-button" ToolTip.Tip="{Binding T.SettingsTitle, Source={x:Static loc:Loc.Instance}}"
                                 Command="{Binding OpenSettingsCommand}">
-                            <!-- A bare gear, or (Ark) a round ink button. -->
-                            <Border Width="{DynamicResource SettingsButtonSize}" Height="{DynamicResource SettingsButtonSize}" CornerRadius="{DynamicResource SettingsButtonRadius}" Background="{DynamicResource SettingsButtonBrush}">
+                            <!-- A bare gear. -->
+                            <Border Width="28" Height="28" CornerRadius="0" Background="Transparent">
                             <Path Data="M12 15a3 3 0 100-6 3 3 0 000 6z M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z"
-                                  Stroke="{DynamicResource SettingsIconBrush}" StrokeThickness="1.6" Width="16" Height="16" Stretch="Uniform"
+                                  Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.6" Width="16" Height="16" Stretch="Uniform"
                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
                             </Border>
                         </Button>
@@ -941,14 +765,11 @@
              — which is why it lives here rather than in a column of its own. -->
         <GridSplitter Grid.Column="1" Classes="sidebar-resize"
                       HorizontalAlignment="Left" VerticalAlignment="Stretch"
-                      Width="6" Margin="{DynamicResource SplitterMargin}" Background="Transparent"
+                      Width="6" Margin="-3,0,0,0" Background="Transparent"
                       Cursor="SizeWestEast" ZIndex="1" />
 
-        <!-- MAIN CONVERSATION — a frame that only shows under a floating-panel
-             theme (Ark): transparent, flat and flush otherwise. -->
-        <Border Grid.Column="1" Background="{DynamicResource ConversationGroundBrush}" BorderBrush="{DynamicResource DividerBrush}"
-                BorderThickness="{DynamicResource ConversationBorderThickness}" Margin="{DynamicResource ConversationMargin}"
-                CornerRadius="{DynamicResource PanelRadius}" ClipToBounds="True">
+        <!-- MAIN CONVERSATION -->
+        <Border Grid.Column="1" Background="Transparent" ClipToBounds="True">
         <Grid RowDefinitions="Auto,52,*,Auto">
 
             <!-- A newer version on GitHub (MainViewModel.Updates.cs). In the
@@ -964,8 +785,8 @@
                         <Run Text="{Binding UpdateBannerTitle}" FontWeight="SemiBold" /><Run Text=" " /><Run Text="{Binding UpdateBannerDetail}" />
                     </TextBlock>
                     <Button Grid.Column="2" Classes="row-button" VerticalAlignment="Center" Command="{Binding OpenUpdatePageCommand}">
-                        <Border Background="{DynamicResource PrimaryButtonBrush}" CornerRadius="{DynamicResource RowRadiusValue}" Padding="12,5">
-                            <TextBlock Text="{Binding T.UpdateOpenPage, Source={x:Static loc:Loc.Instance}}" Foreground="{DynamicResource OnPrimaryButtonBrush}" FontSize="12.5" />
+                        <Border Background="{DynamicResource AccentBrush}" CornerRadius="{DynamicResource RowRadiusValue}" Padding="12,5">
+                            <TextBlock Text="{Binding T.UpdateOpenPage, Source={x:Static loc:Loc.Instance}}" Foreground="{DynamicResource OnAccentBrush}" FontSize="12.5" />
                         </Border>
                     </Button>
                     <Button Grid.Column="3" Classes="row-button" VerticalAlignment="Center" Margin="4,0,0,0" Command="{Binding SkipUpdateCommand}">
@@ -994,7 +815,7 @@
                     <Path Grid.Column="0" Data="M9 4l-1 16M16 4l-1 16M4 9h16M3 15h16" Stroke="{DynamicResource TextPrimaryBrush}" StrokeThickness="1.8"
                           Width="16" Height="16" Stretch="Uniform" VerticalAlignment="Center" />
                     <StackPanel Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center">
-                        <TextBlock Text="{Binding ActiveChannelName}" FontWeight="{DynamicResource ChannelTitleFontWeight}" FontSize="{DynamicResource ChannelTitleFontSize}" />
+                        <TextBlock Text="{Binding ActiveChannelName}" FontWeight="Bold" FontSize="15" />
                         <!-- Only for a channel renamed "pour moi": its real name, the one colleagues will use. -->
                         <TextBlock Text="{Binding ActiveChannelOriginalName}" IsVisible="{Binding HasActiveChannelOriginalName}"
                                    FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}" />
@@ -1003,12 +824,12 @@
                     <TextBlock Grid.Column="3" Text="{Binding ActiveChannelTopic}" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
                                HorizontalAlignment="Left" Margin="0,0,96,0" />
                     <!-- The 96 above: however long the topic, a stretch of bare header is left to drag the window by. -->
-                    <!-- The header's icon buttons: bare icons, or (Ark) round outlined chips.
+                    <!-- The header's icon buttons, bare icons.
                          "User": clicks reach them instead of dragging the window. -->
                     <Button Grid.Column="4" Classes="row-button" ToolTip.Tip="{Binding T.ChannelMembers, Source={x:Static loc:Loc.Instance}}" Margin="4,0" WindowDecorationProperties.ElementRole="User"
                             Command="{Binding OpenMembersPanelCommand}">
-                        <Border Width="{DynamicResource HeaderButtonSize}" Height="{DynamicResource HeaderButtonSize}" CornerRadius="{DynamicResource HeaderButtonRadius}"
-                                Background="{DynamicResource HeaderButtonBrush}" BorderBrush="{DynamicResource HeaderButtonBorderBrush}" BorderThickness="{DynamicResource HeaderButtonBorderThickness}" BoxShadow="{DynamicResource SmallCardShadow}">
+                        <Border Width="28" Height="28" CornerRadius="{DynamicResource RowRadiusValue}"
+                                Background="Transparent">
                             <Path Data="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2 M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z M22 21v-2a4 4 0 0 0-3-3.87 M16 3.13a4 4 0 0 1 0 7.75"
                                   Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.6" StrokeLineCap="Round" StrokeJoin="Round"
                                   Width="16" Height="16" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center" />
@@ -1016,8 +837,8 @@
                     </Button>
                     <Button Grid.Column="5" Classes="row-button" ToolTip.Tip="{Binding T.PinnedMessages, Source={x:Static loc:Loc.Instance}}" Margin="4,0" WindowDecorationProperties.ElementRole="User"
                             Command="{Binding OpenPinnedPanelCommand}">
-                        <Border MinWidth="{DynamicResource HeaderButtonSize}" Height="{DynamicResource HeaderButtonSize}" CornerRadius="{DynamicResource HeaderButtonRadius}" Padding="6,0"
-                                Background="{DynamicResource HeaderButtonBrush}" BorderBrush="{DynamicResource HeaderButtonBorderBrush}" BorderThickness="{DynamicResource HeaderButtonBorderThickness}" BoxShadow="{DynamicResource SmallCardShadow}">
+                        <Border MinWidth="28" Height="28" CornerRadius="{DynamicResource RowRadiusValue}" Padding="6,0"
+                                Background="Transparent">
                         <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center" HorizontalAlignment="Center">
                             <Path Data="M12 17v5 M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"
                                   Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.6" StrokeLineCap="Round" StrokeJoin="Round"
@@ -1029,15 +850,15 @@
                     </Button>
                     <Button Grid.Column="6" Classes="row-button" ToolTip.Tip="{Binding T.Search, Source={x:Static loc:Loc.Instance}}" Margin="4,0" WindowDecorationProperties.ElementRole="User"
                             Command="{Binding OpenSearchCommand}">
-                        <Border Width="{DynamicResource HeaderButtonSize}" Height="{DynamicResource HeaderButtonSize}" CornerRadius="{DynamicResource HeaderButtonRadius}"
-                                Background="{DynamicResource HeaderButtonBrush}" BorderBrush="{DynamicResource HeaderButtonBorderBrush}" BorderThickness="{DynamicResource HeaderButtonBorderThickness}" BoxShadow="{DynamicResource SmallCardShadow}">
+                        <Border Width="28" Height="28" CornerRadius="{DynamicResource RowRadiusValue}"
+                                Background="Transparent">
                             <Canvas Width="16" Height="16" HorizontalAlignment="Center" VerticalAlignment="Center">
                                 <Ellipse Canvas.Left="1" Canvas.Top="1" Width="9" Height="9" Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.6" />
                                 <Line StartPoint="9,9" EndPoint="15,15" Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.6" StrokeLineCap="Round" />
                             </Canvas>
                         </Border>
                     </Button>
-                    <TextBlock Grid.Column="7" VerticalAlignment="Center" Foreground="{DynamicResource TextTertiaryBrush}" FontFamily="{DynamicResource LabelFontFamily}" FontSize="11">
+                    <TextBlock Grid.Column="7" VerticalAlignment="Center" Foreground="{DynamicResource TextTertiaryBrush}" FontSize="11">
                         <Run Text="core v" /><Run Text="{Binding CoreVersion}" />
                     </TextBlock>
                     <!-- Room for the window's three buttons, drawn over this
@@ -1092,7 +913,7 @@
                                                             </Panel>
                                                         </Border>
                                                         <StackPanel VerticalAlignment="Center" Spacing="2" MaxWidth="150">
-                                                            <TextBlock Text="{Binding AuthorName}" FontWeight="{DynamicResource AuthorFontWeight}" FontSize="14" TextWrapping="Wrap" />
+                                                            <TextBlock Text="{Binding AuthorName}" FontWeight="Bold" FontSize="14" TextWrapping="Wrap" />
                                                             <!-- The dot on the avatar says which color; this says what it means. -->
                                                             <StackPanel Orientation="Horizontal" Spacing="5" IsVisible="{Binding HasPresence}">
                                                                 <Ellipse Width="8" Height="8" Fill="{Binding PresenceBrush}" VerticalAlignment="Center" />
@@ -1103,8 +924,8 @@
                                                     <Button Classes="row-button" IsVisible="{Binding !IsMine}"
                                                             Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).OpenDirectMessageWithCommand}"
                                                             CommandParameter="{Binding AuthorUserId}">
-                                                        <Border Background="{DynamicResource PrimaryButtonBrush}" CornerRadius="{DynamicResource RowRadiusValue}" Padding="10,7" HorizontalAlignment="Stretch">
-                                                            <TextBlock Text="{Binding T.SendMessage, Source={x:Static loc:Loc.Instance}}" Foreground="{DynamicResource OnPrimaryButtonBrush}" FontWeight="SemiBold" FontSize="12.5" HorizontalAlignment="Center" />
+                                                        <Border Background="{DynamicResource AccentBrush}" CornerRadius="{DynamicResource RowRadiusValue}" Padding="10,7" HorizontalAlignment="Stretch">
+                                                            <TextBlock Text="{Binding T.SendMessage, Source={x:Static loc:Loc.Instance}}" Foreground="{DynamicResource OnAccentBrush}" FontWeight="SemiBold" FontSize="12.5" HorizontalAlignment="Center" />
                                                         </Border>
                                                     </Button>
                                                 </StackPanel>
@@ -1131,9 +952,9 @@
                                     </Button>
                                     <StackPanel Grid.Column="1" Margin="10,0,0,0">
                                         <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,0,0,14" IsVisible="{Binding ShowHeader}">
-                                            <TextBlock Text="{Binding AuthorName}" FontWeight="{DynamicResource AuthorFontWeight}"
+                                            <TextBlock Text="{Binding AuthorName}" FontWeight="Bold"
                                                        FontSize="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.MessageFontSize}" />
-                                            <TextBlock Text="{Binding TimeLabel}" FontFamily="{DynamicResource LabelFontFamily}" FontSize="11.5" Foreground="{DynamicResource TextTertiaryBrush}" VerticalAlignment="Center" />
+                                            <TextBlock Text="{Binding TimeLabel}" FontSize="11.5" Foreground="{DynamicResource TextTertiaryBrush}" VerticalAlignment="Center" />
                                             <TextBlock Text="{Binding T.Sending, Source={x:Static loc:Loc.Instance}}" FontSize="11.5" FontStyle="Italic" Foreground="{DynamicResource TextTertiaryBrush}" VerticalAlignment="Center" IsVisible="{Binding IsPending}" />
                                             <!-- Sits on the header line, which already exists, so marking a
                                                  message pinned costs the row no extra height — and with the
@@ -1319,8 +1140,8 @@
                                                     <!-- The card holds two buttons: the file itself (opens
                                                          it) and, at its right edge, the download button
                                                          (asks where to save it). -->
-                                                    <Border Background="{DynamicResource AttachmentBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1"
-                                                            CornerRadius="{DynamicResource AttachmentRadius}" MaxWidth="340" HorizontalAlignment="Left">
+                                                    <Border Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1"
+                                                            CornerRadius="8" MaxWidth="340" HorizontalAlignment="Left">
                                                         <Grid ColumnDefinitions="*,Auto">
                                                             <Button Grid.Column="0" Classes="row-button" ToolTip.Tip="{Binding T.Open, Source={x:Static loc:Loc.Instance}}"
                                                                     Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).OpenAttachmentCommand}"
@@ -1335,7 +1156,7 @@
                                                                     </StackPanel>
                                                                 </Grid>
                                                             </Button>
-                                                            <Button Grid.Column="1" Classes="row-button" Width="30" Height="30" Margin="0,0,6,0" VerticalAlignment="Center" Background="{DynamicResource HeaderButtonBrush}" CornerRadius="15"
+                                                            <Button Grid.Column="1" Classes="row-button" Width="30" Height="30" Margin="0,0,6,0" VerticalAlignment="Center" Background="Transparent" CornerRadius="15"
                                                                     ToolTip.Tip="{Binding DownloadTip}"
                                                                     Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).SaveAttachmentCommand}"
                                                                     CommandParameter="{Binding}">
@@ -1367,12 +1188,12 @@
                                                             PointerEntered="OnReactionPointerEntered"
                                                             Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).ToggleReactionCommand}"
                                                             CommandParameter="{Binding}">
-                                                        <Border BorderBrush="{Binding BorderBrush}" Background="{Binding Background}" BorderThickness="1" CornerRadius="14" Padding="9,3">
+                                                        <Border BorderBrush="{Binding BorderBrush}" BorderThickness="1" CornerRadius="14" Padding="9,3">
                                                             <StackPanel Orientation="Horizontal" Spacing="5">
                                                                 <Image Source="{Binding Image}" IsVisible="{Binding Image, Converter={x:Static conv:ObjectConverters.IsNotNull}}"
                                                                        Width="23" Height="23" Stretch="Uniform" />
                                                                 <TextBlock Text="{Binding Emoji}" FontSize="18" IsVisible="{Binding Image, Converter={x:Static conv:ObjectConverters.IsNull}}" />
-                                                                <TextBlock Text="{Binding Count}" FontFamily="{DynamicResource LabelFontFamily}" FontWeight="{DynamicResource ReactionCountFontWeight}"
+                                                                <TextBlock Text="{Binding Count}" FontWeight="Bold"
                                                                            Foreground="{Binding TextBrush}" FontSize="13" VerticalAlignment="Center" />
                                                             </StackPanel>
                                                         </Border>
@@ -1384,18 +1205,9 @@
                                         <Button IsVisible="{Binding HasThreadReplies}" Classes="row-button" Margin="0,6,0,0"
                                                 Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).OpenThreadCommand}"
                                                 CommandParameter="{Binding Id}">
-                                            <!-- Accent text, or (Ark) an outlined pill with a speech bubble. -->
-                                            <Border Background="{DynamicResource ThreadPillBrush}" HorizontalAlignment="Left" BorderBrush="{DynamicResource ThreadPillBorderBrush}"
-                                                    BorderThickness="{DynamicResource ThreadPillBorderThickness}" Padding="{DynamicResource ThreadPillPadding}"
-                                                    CornerRadius="{DynamicResource ThreadPillRadius}" BoxShadow="{DynamicResource SmallCardShadow}">
-                                                <StackPanel Orientation="Horizontal" Spacing="6">
-                                                    <Path IsVisible="{DynamicResource ArkOn}" Data="M4 5h16v11H9l-5 4z" Stroke="{DynamicResource TextSecondaryBrush}"
-                                                          StrokeThickness="1.7" StrokeJoin="Round" Width="13" Height="13" Stretch="Uniform" VerticalAlignment="Center" />
-                                                    <TextBlock Foreground="{DynamicResource ThreadReplyTextBrush}" FontWeight="{DynamicResource ThreadReplyFontWeight}">
-                                                        <Run Text="{Binding ThreadReplyLabel}" />
-                                                    </TextBlock>
-                                                </StackPanel>
-                                            </Border>
+                                            <TextBlock Foreground="{DynamicResource AccentTextBrush}" FontWeight="SemiBold">
+                                                <Run Text="{Binding ThreadReplyLabel}" />
+                                            </TextBlock>
                                         </Button>
                                     </StackPanel>
                                 </Grid>
@@ -1536,9 +1348,9 @@
                     IsHitTestVisible="False"
                     HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="28,0,80,-8"
                     Padding="10,4" CornerRadius="12"
-                    Background="{DynamicResource TypingPillBrush}"
-                    BorderBrush="{DynamicResource TypingPillBorderBrush}" BorderThickness="1"
-                    BoxShadow="{DynamicResource TypingPillShadow}">
+                    Background="{DynamicResource CardBgBrush}"
+                    BorderBrush="{DynamicResource DividerStrongBrush}" BorderThickness="1"
+                    BoxShadow="{DynamicResource PopoverShadow}">
                 <StackPanel Orientation="Horizontal" Spacing="7">
                     <Path Data="M12 20h9 M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"
                           Stroke="{DynamicResource AccentTextBrush}" StrokeThickness="1.6" StrokeLineCap="Round" StrokeJoin="Round"
@@ -1549,10 +1361,9 @@
                 </StackPanel>
             </Border>
 
-            <!-- The well around the composer: nothing at all except on Ark, where it is a sunken tray. -->
-            <Border Grid.Row="3" Margin="20,10,20,16" Background="{DynamicResource ComposerWellBrush}" BorderBrush="{DynamicResource ComposerWellBorderBrush}"
-                    BorderThickness="{DynamicResource ComposerWellBorderThickness}" Padding="{DynamicResource ComposerWellPadding}" CornerRadius="{DynamicResource ComposerWellRadius}">
-            <Border x:Name="ComposerFrame" Classes="composer-frame" CornerRadius="{DynamicResource SurfaceRadiusValue}" Background="{DynamicResource ComposerBrush}" BoxShadow="{DynamicResource SmallCardShadow}">
+            <!-- The room around the composer. -->
+            <Border Grid.Row="3" Margin="20,10,20,16">
+            <Border x:Name="ComposerFrame" Classes="composer-frame" CornerRadius="{DynamicResource SurfaceRadiusValue}" Background="{DynamicResource CardBgBrush}">
                 <StackPanel>
                     <Border IsVisible="{Binding IsEditingMessage}" Background="{DynamicResource BgPanelBrush}" CornerRadius="{DynamicResource RowRadiusValue}" Margin="10,8,10,0" Padding="10,5">
                         <Grid ColumnDefinitions="Auto,*,Auto">
@@ -1652,8 +1463,8 @@
                             </Button>
                         </StackPanel>
                         <Button Grid.Column="2" Classes="row-button" Margin="6,0,0,0" Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).SendMessageCommand}">
-                            <Border Width="30" Height="30" CornerRadius="{DynamicResource PrimaryButtonRadius}" Background="{DynamicResource PrimaryButtonBrush}">
-                                <Path Data="M3 11l18-8-8 18-2.5-7.5L3 11z" Fill="{DynamicResource OnPrimaryButtonBrush}" Width="15" Height="15" Stretch="Uniform"
+                            <Border Width="30" Height="30" CornerRadius="7" Background="{DynamicResource AccentBrush}">
+                                <Path Data="M3 11l18-8-8 18-2.5-7.5L3 11z" Fill="{DynamicResource OnAccentBrush}" Width="15" Height="15" Stretch="Uniform"
                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
                             </Border>
                         </Button>
@@ -1668,8 +1479,8 @@
         <!-- THREAD PANEL — only takes up space (an Auto-sized column) while a thread is actually open, per user request. -->
         <Border x:Name="ThreadPanel" Grid.Column="2" Width="320" IsVisible="{Binding IsThreadOpen}"
                 Background="{DynamicResource ThreadGroundBrush}" BorderBrush="{DynamicResource DividerBrush}"
-                BorderThickness="{DynamicResource ThreadBorderThickness}" Margin="{DynamicResource ThreadMargin}"
-                CornerRadius="{DynamicResource PanelRadius}" ClipToBounds="True">
+                BorderThickness="1,0,0,0" Margin="0"
+                CornerRadius="0" ClipToBounds="True">
             <Grid RowDefinitions="52,*,Auto">
                 <!-- Like the channel header: with no title bar it drags the
                      window, casts the same shadow, and keeps room at its right
@@ -1680,16 +1491,13 @@
                          conversation's name lists every member and, sized to its
                          content, pushed the close button out of the panel. -->
                     <Grid ColumnDefinitions="Auto,*,Auto,Auto">
-                        <TextBlock Grid.Column="0" Text="{Binding T.Thread, Source={x:Static loc:Loc.Instance}}" FontWeight="{DynamicResource PanelTitleFontWeight}" VerticalAlignment="Center" Margin="0,0,10,0" />
+                        <TextBlock Grid.Column="0" Text="{Binding T.Thread, Source={x:Static loc:Loc.Instance}}" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,10,0" />
                         <TextBlock Grid.Column="1" Text="{Binding ActiveChannelName}" ToolTip.Tip="{Binding ActiveChannelName}" Foreground="{DynamicResource TextTertiaryBrush}"
-                                   FontFamily="{DynamicResource LabelFontFamily}" FontSize="12" VerticalAlignment="Center" HorizontalAlignment="Right"
+                                   FontSize="12" VerticalAlignment="Center" HorizontalAlignment="Right"
                                    TextTrimming="CharacterEllipsis" Margin="0,0,10,0" />
-                        <!-- Bare, or (Ark) a round outlined chip like the channel header's. -->
                         <Button Grid.Column="2" Classes="row-button" WindowDecorationProperties.ElementRole="User"
                                 Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).CloseThreadCommand}">
-                            <Border MinWidth="20" MinHeight="20" Width="{DynamicResource SectionButtonSize}" Height="{DynamicResource SectionButtonSize}"
-                                    CornerRadius="{DynamicResource SectionButtonRadius}" Background="{DynamicResource HeaderButtonBrush}"
-                                    BorderBrush="{DynamicResource HeaderButtonBorderBrush}" BorderThickness="{DynamicResource HeaderButtonBorderThickness}">
+                            <Border Width="20" Height="20" Background="Transparent">
                                 <Canvas Width="14" Height="14" VerticalAlignment="Center" HorizontalAlignment="Center">
                                     <Line StartPoint="1,1" EndPoint="13,13" Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.6" StrokeLineCap="Round" />
                                     <Line StartPoint="13,1" EndPoint="1,13" Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.6" StrokeLineCap="Round" />
@@ -1712,9 +1520,8 @@
                                 <ContentControl DataContext="{Binding ThreadRootMessage}" x:DataType="models:MessageItem"
                                                 IsVisible="{Binding HasDateSeparator}" Content="{Binding}"
                                                 ContentTemplate="{StaticResource DateSeparatorTemplate}" />
-                                <!-- The thread's opening message: plain, or (Ark) set in a card. -->
-                                <Border Background="{DynamicResource ThreadRootBrush}" BorderBrush="{DynamicResource ThreadRootBorderBrush}" BorderThickness="{DynamicResource ThreadRootBorderThickness}"
-                                        Padding="{DynamicResource ThreadRootPadding}" CornerRadius="{DynamicResource ThreadRootRadius}">
+                                <!-- The thread's opening message. -->
+                                <Border>
                                 <Grid ColumnDefinitions="30,*" DataContext="{Binding ThreadRootMessage}" x:DataType="models:MessageItem">
                                     <Button Grid.Column="0" Classes="row-button" Width="30" Height="30" VerticalAlignment="Top">
                                         <Button.Flyout>
@@ -1728,7 +1535,7 @@
                                                             </Panel>
                                                         </Border>
                                                         <StackPanel VerticalAlignment="Center" Spacing="2" MaxWidth="150">
-                                                            <TextBlock Text="{Binding AuthorName}" FontWeight="{DynamicResource AuthorFontWeight}" FontSize="14" TextWrapping="Wrap" />
+                                                            <TextBlock Text="{Binding AuthorName}" FontWeight="Bold" FontSize="14" TextWrapping="Wrap" />
                                                             <StackPanel Orientation="Horizontal" Spacing="5" IsVisible="{Binding HasPresence}">
                                                                 <Ellipse Width="8" Height="8" Fill="{Binding PresenceBrush}" VerticalAlignment="Center" />
                                                                 <TextBlock Text="{Binding PresenceLabel}" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
@@ -1738,8 +1545,8 @@
                                                     <Button Classes="row-button" IsVisible="{Binding !IsMine}"
                                                             Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).OpenDirectMessageWithCommand}"
                                                             CommandParameter="{Binding AuthorUserId}">
-                                                        <Border Background="{DynamicResource PrimaryButtonBrush}" CornerRadius="{DynamicResource RowRadiusValue}" Padding="10,7" HorizontalAlignment="Stretch">
-                                                            <TextBlock Text="{Binding T.SendMessage, Source={x:Static loc:Loc.Instance}}" Foreground="{DynamicResource OnPrimaryButtonBrush}" FontWeight="SemiBold" FontSize="12.5" HorizontalAlignment="Center" />
+                                                        <Border Background="{DynamicResource AccentBrush}" CornerRadius="{DynamicResource RowRadiusValue}" Padding="10,7" HorizontalAlignment="Stretch">
+                                                            <TextBlock Text="{Binding T.SendMessage, Source={x:Static loc:Loc.Instance}}" Foreground="{DynamicResource OnAccentBrush}" FontWeight="SemiBold" FontSize="12.5" HorizontalAlignment="Center" />
                                                         </Border>
                                                     </Button>
                                                 </StackPanel>
@@ -1759,9 +1566,9 @@
                                     </Button>
                                     <StackPanel Grid.Column="1" Margin="8,0,0,0" Spacing="1">
                                         <StackPanel Orientation="Horizontal" Spacing="6">
-                                            <TextBlock Text="{Binding AuthorName}" FontWeight="{DynamicResource AuthorFontWeight}"
+                                            <TextBlock Text="{Binding AuthorName}" FontWeight="Bold"
                                                        FontSize="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.MessageFontSize}" />
-                                            <TextBlock Text="{Binding TimeLabel}" FontFamily="{DynamicResource LabelFontFamily}" FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}" VerticalAlignment="Center" />
+                                            <TextBlock Text="{Binding TimeLabel}" FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}" VerticalAlignment="Center" />
                                             <StackPanel Orientation="Horizontal" Spacing="3" VerticalAlignment="Center" IsVisible="{Binding IsPinned}">
                                                 <Path Data="M12 17v5 M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"
                                                       Stroke="{DynamicResource AccentTextBrush}" StrokeThickness="1.7" StrokeLineCap="Round" StrokeJoin="Round"
@@ -1822,7 +1629,7 @@
 
                             <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,14">
                                 <Border Height="1" Background="{DynamicResource DividerBrush}" HorizontalAlignment="Stretch" Width="60" />
-                                <TextBlock Text="{Binding ThreadReplyCountLabel}" FontFamily="{DynamicResource LabelFontFamily}" LetterSpacing="{DynamicResource DateLabelLetterSpacing}" FontSize="11.5" Foreground="{DynamicResource TextTertiaryBrush}" />
+                                <TextBlock Text="{Binding ThreadReplyCountLabel}" LetterSpacing="0" FontSize="11.5" Foreground="{DynamicResource TextTertiaryBrush}" />
                                 <Border Height="1" Background="{DynamicResource DividerBrush}" HorizontalAlignment="Stretch" Width="60" />
                             </StackPanel>
 
@@ -1851,7 +1658,7 @@
                                                                     </Panel>
                                                                 </Border>
                                                                 <StackPanel VerticalAlignment="Center" Spacing="2" MaxWidth="150">
-                                                                    <TextBlock Text="{Binding AuthorName}" FontWeight="{DynamicResource AuthorFontWeight}" FontSize="14" TextWrapping="Wrap" />
+                                                                    <TextBlock Text="{Binding AuthorName}" FontWeight="Bold" FontSize="14" TextWrapping="Wrap" />
                                                                     <StackPanel Orientation="Horizontal" Spacing="5" IsVisible="{Binding HasPresence}">
                                                                         <Ellipse Width="8" Height="8" Fill="{Binding PresenceBrush}" VerticalAlignment="Center" />
                                                                         <TextBlock Text="{Binding PresenceLabel}" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
@@ -1861,8 +1668,8 @@
                                                             <Button Classes="row-button" IsVisible="{Binding !IsMine}"
                                                                     Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).OpenDirectMessageWithCommand}"
                                                                     CommandParameter="{Binding AuthorUserId}">
-                                                                <Border Background="{DynamicResource PrimaryButtonBrush}" CornerRadius="{DynamicResource RowRadiusValue}" Padding="10,7" HorizontalAlignment="Stretch">
-                                                                    <TextBlock Text="{Binding T.SendMessage, Source={x:Static loc:Loc.Instance}}" Foreground="{DynamicResource OnPrimaryButtonBrush}" FontWeight="SemiBold" FontSize="12.5" HorizontalAlignment="Center" />
+                                                                <Border Background="{DynamicResource AccentBrush}" CornerRadius="{DynamicResource RowRadiusValue}" Padding="10,7" HorizontalAlignment="Stretch">
+                                                                    <TextBlock Text="{Binding T.SendMessage, Source={x:Static loc:Loc.Instance}}" Foreground="{DynamicResource OnAccentBrush}" FontWeight="SemiBold" FontSize="12.5" HorizontalAlignment="Center" />
                                                                 </Border>
                                                             </Button>
                                                         </StackPanel>
@@ -1882,9 +1689,9 @@
                                             </Button>
                                             <StackPanel Grid.Column="1" Margin="8,0,0,0" Spacing="1">
                                                 <StackPanel Orientation="Horizontal" Spacing="6" IsVisible="{Binding ShowHeader}">
-                                                    <TextBlock Text="{Binding AuthorName}" FontWeight="{DynamicResource AuthorFontWeight}"
+                                                    <TextBlock Text="{Binding AuthorName}" FontWeight="Bold"
                                                                FontSize="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.MessageFontSize}" />
-                                                    <TextBlock Text="{Binding TimeLabel}" FontFamily="{DynamicResource LabelFontFamily}" FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}" VerticalAlignment="Center" />
+                                                    <TextBlock Text="{Binding TimeLabel}" FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}" VerticalAlignment="Center" />
                                                     <TextBlock Text="{Binding T.Sending, Source={x:Static loc:Loc.Instance}}" FontSize="11" FontStyle="Italic" Foreground="{DynamicResource TextTertiaryBrush}" VerticalAlignment="Center" IsVisible="{Binding IsPending}" />
                                                     <StackPanel Orientation="Horizontal" Spacing="3" VerticalAlignment="Center" IsVisible="{Binding IsPinned}">
                                                         <Path Data="M12 17v5 M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"
@@ -1949,9 +1756,9 @@
                     </StackPanel>
                 </ScrollViewer>
 
-                <Border Grid.Row="2" Margin="14,10,14,14" Background="{DynamicResource ComposerWellBrush}" BorderBrush="{DynamicResource ComposerWellBorderBrush}"
-                        BorderThickness="{DynamicResource ComposerWellBorderThickness}" Padding="{DynamicResource ComposerWellPadding}" CornerRadius="{DynamicResource ComposerWellRadius}">
-                <Border x:Name="ThreadComposerFrame" Classes="composer-frame" CornerRadius="{DynamicResource SurfaceRadiusValue}" Background="{DynamicResource ComposerBrush}" BoxShadow="{DynamicResource SmallCardShadow}" Padding="10,8">
+                <Border Grid.Row="2" Margin="14,10,14,14" Background="Transparent" BorderBrush="Transparent"
+                        BorderThickness="0" Padding="0" CornerRadius="0">
+                <Border x:Name="ThreadComposerFrame" Classes="composer-frame" CornerRadius="{DynamicResource SurfaceRadiusValue}" Background="{DynamicResource CardBgBrush}" Padding="10,8">
                     <StackPanel Spacing="4">
                         <ItemsControl ItemsSource="{Binding ThreadPendingAttachments}" IsVisible="{Binding ShowThreadPendingAttachments}">
                             <ItemsControl.ItemsPanel>
@@ -2239,8 +2046,8 @@
                                                     IsEnabled="{Binding !IsJoining}"
                                                     Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).JoinChannelCommand}"
                                                     CommandParameter="{Binding}">
-                                                <Border Background="{DynamicResource PrimaryButtonBrush}" CornerRadius="{DynamicResource RowRadiusValue}" Padding="10,5">
-                                                    <TextBlock Text="{Binding JoinLabel}" Foreground="{DynamicResource OnPrimaryButtonBrush}"
+                                                <Border Background="{DynamicResource AccentBrush}" CornerRadius="{DynamicResource RowRadiusValue}" Padding="10,5">
+                                                    <TextBlock Text="{Binding JoinLabel}" Foreground="{DynamicResource OnAccentBrush}"
                                                                FontSize="12" FontWeight="SemiBold" MinWidth="52" TextAlignment="Center" />
                                                 </Border>
                                             </Button>
@@ -2302,9 +2109,9 @@
                                                 </Border>
                                                 <StackPanel Grid.Column="1" Margin="8,0,0,0" Spacing="1">
                                                     <StackPanel Orientation="Horizontal" Spacing="6">
-                                                        <TextBlock Text="{Binding AuthorName}" FontWeight="{DynamicResource AuthorFontWeight}" FontSize="12.5" />
+                                                        <TextBlock Text="{Binding AuthorName}" FontWeight="Bold" FontSize="12.5" />
                                                         <TextBlock Text="{Binding ChannelLabel}" FontSize="11.5" Foreground="{DynamicResource TextTertiaryBrush}" />
-                                                        <TextBlock Text="{Binding TimeLabel}" FontFamily="{DynamicResource LabelFontFamily}" FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}" />
+                                                        <TextBlock Text="{Binding TimeLabel}" FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}" />
                                                     </StackPanel>
                                                     <TextBlock Text="{Binding Text}" FontSize="12.5" TextWrapping="Wrap" Foreground="{DynamicResource TextPrimaryBrush}" />
                                                 </StackPanel>
@@ -2371,7 +2178,7 @@
                                                     <StackPanel Grid.Column="1" Spacing="2">
                                                         <StackPanel Orientation="Horizontal" Spacing="8">
                                                             <TextBlock Text="{Binding AuthorName}" FontWeight="SemiBold" FontSize="13" />
-                                                            <TextBlock Text="{Binding TimeLabel}" FontFamily="{DynamicResource LabelFontFamily}" FontSize="11.5" Foreground="{DynamicResource TextTertiaryBrush}" VerticalAlignment="Center" />
+                                                            <TextBlock Text="{Binding TimeLabel}" FontSize="11.5" Foreground="{DynamicResource TextTertiaryBrush}" VerticalAlignment="Center" />
                                                         </StackPanel>
                                                         <TextBlock Text="{Binding Text}" FontSize="12.5" TextWrapping="Wrap" MaxLines="4" TextTrimming="CharacterEllipsis" />
                                                     </StackPanel>
@@ -2656,8 +2463,8 @@
                         </Border>
                     </Button>
                     <Button Classes="row-button" Command="{Binding ConfirmRenameChannelCommand}">
-                        <Border Background="{DynamicResource PrimaryButtonBrush}" CornerRadius="{DynamicResource RowRadiusValue}" Padding="12,6">
-                            <TextBlock Text="{Binding T.Save, Source={x:Static loc:Loc.Instance}}" Foreground="{DynamicResource OnPrimaryButtonBrush}" FontSize="12.5" FontWeight="SemiBold" />
+                        <Border Background="{DynamicResource AccentBrush}" CornerRadius="{DynamicResource RowRadiusValue}" Padding="12,6">
+                            <TextBlock Text="{Binding T.Save, Source={x:Static loc:Loc.Instance}}" Foreground="{DynamicResource OnAccentBrush}" FontSize="12.5" FontWeight="SemiBold" />
                         </Border>
                     </Button>
                 </StackPanel>

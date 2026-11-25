@@ -106,7 +106,7 @@ public sealed partial class AppSettings : ObservableObject
     public partial AppAccent Accent { get; set; } = AppAccent.Blue;
 
     /// <summary>
-    /// A named theme (Nord, Expresso…), or None for Almatter's own palette.
+    /// A named theme (Nord, Crème…), or None for Almatter's own palette.
     /// While one is chosen it decides what ThemeMode, Accent and
     /// ReducedContrast normally do. Those three keep their saved values all
     /// the same, so going back to None brings the user's own look back as
@@ -115,28 +115,10 @@ public sealed partial class AppSettings : ObservableObject
     [ObservableProperty]
     public partial AppNamedTheme NamedTheme { get; set; } = AppNamedTheme.None;
 
-    /// <summary>The Ark theme's pastel accent. Separate from Accent, so each theme keeps its own.</summary>
-    [ObservableProperty]
-    public partial AppArkAccent ArkAccent { get; set; } = AppArkAccent.Citron;
-
-    /// <summary>
-    /// Soft shadows under Ark's floating panels, header buttons and composer.
-    /// Measured on the CPU renderer: a scroll repaint goes from 0,09 to 0,48 ms
-    /// at 1462×1027 (0,2 to 1,2 ms at 2560×1440) — cheap, but not free.
-    /// </summary>
-    [ObservableProperty]
-    public partial bool ArkShadows { get; set; } = true;
-
-    [JsonIgnore]
-    public IBrush ArkShadowsCheckBrush => ArkShadows ? ColorTokens.Accent : Brushes.Transparent;
-
-    partial void OnArkShadowsChanged(bool value) => OnPropertyChanged(nameof(ArkShadowsCheckBrush));
-
     /// <summary>Called after the palette changes so the ticked boxes of the settings panel take the new accent.</summary>
     public void RefreshColors()
     {
         OnPropertyChanged(nameof(ReducedContrastCheckBrush));
-        OnPropertyChanged(nameof(ArkShadowsCheckBrush));
         OnPropertyChanged(nameof(LinkPreviewsCheckBrush));
         OnPropertyChanged(nameof(SoundForAllMessagesCheckBrush));
         OnPropertyChanged(nameof(CheckForUpdatesCheckBrush));
