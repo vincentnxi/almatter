@@ -17,50 +17,40 @@ internal enum TaskbarBadgeKind
 
 /// <summary>
 /// The small overlay icon Windows shows in the corner of a taskbar button
-/// (the same mechanism Teams/Outlook use for their unread badges) — a COM
-/// interop wrapper around the Shell's <c>ITaskbarList3::SetOverlayIcon</c>,
-/// since no managed API exposes this. No <c>unsafe</c> needed: COM interop
-/// marshaling is handled by the runtime, it's all ordinary P/Invoke-style
-/// declarations.
+/// (the same mechanism Teams/Outlook use for their unread badges) — a thin
+/// wrapper around the Shell's <c>ITaskbarList3::SetOverlayIcon</c>, since no
+/// managed API exposes this.
+///
+/// The COM object is reached by hand rather than through <c>[ComImport]</c>:
+/// built-in COM interop does not exist under Native AOT, and the generated
+/// alternative (<c>[GeneratedComInterface]</c>) needs AllowUnsafeBlocks. So
+/// the object comes from <c>CoCreateInstance</c>, and each method is read
+/// from its vtable slot and called through a delegate — all safe code, and
+/// the same in a normal build as in an AOT one.
 /// </summary>
 internal static class TaskbarBadge
 {
-    [ComImport]
-    [Guid("56FDF344-FD6D-11D0-958A-006097C9A090")]
-    private class TaskbarInstance
-    {
-    }
+    private static readonly Guid ClsidTaskbarList = new("56FDF344-FD6D-11D0-958A-006097C9A090");
+    private static readonly Guid IidTaskbarList3 = new("EA1AFB91-9E28-4B86-90E9-9E9F8A5EEFAF");
 
-    [ComImport]
-    [Guid("EA1AFB91-9E28-4B86-90E9-9E9F8A5EEFAF")]
-    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    private interface ITaskbarList3
-    {
-        // ITaskbarList
-        [PreserveSig] int HrInit();
-        [PreserveSig] int AddTab(IntPtr hwnd);
-        [PreserveSig] int DeleteTab(IntPtr hwnd);
-        [PreserveSig] int ActivateTab(IntPtr hwnd);
-        [PreserveSig] int SetActiveAlt(IntPtr hwnd);
+    // Positions in the ITaskbarList3 vtable, which Windows fixed for good in
+    // Windows 7: IUnknown 0-2, ITaskbarList 3-7 (HrInit first),
+    // ITaskbarList2 8, then ITaskbarList3 9-20 with SetOverlayIcon tenth.
+    private const int HrInitSlot = 3;
+    private const int SetOverlayIconSlot = 18;
 
-        // ITaskbarList2
-        [PreserveSig] int MarkFullscreenWindow(IntPtr hwnd, [MarshalAs(UnmanagedType.Bool)] bool fFullscreen);
+    private const uint ClsctxInprocServer = 1;
 
-        // ITaskbarList3 — every slot must stay in exactly this order, COM
-        // interop maps methods to the vtable positionally.
-        [PreserveSig] int SetProgressValue(IntPtr hwnd, ulong ullCompleted, ulong ullTotal);
-        [PreserveSig] int SetProgressState(IntPtr hwnd, int tbpFlags);
-        [PreserveSig] int RegisterTab(IntPtr hwndTab, IntPtr hwndMdi);
-        [PreserveSig] int UnregisterTab(IntPtr hwndTab);
-        [PreserveSig] int SetTabOrder(IntPtr hwndTab, IntPtr hwndInsertBefore);
-        [PreserveSig] int SetTabActive(IntPtr hwndTab, IntPtr hwndMdi, uint tbatFlags);
-        [PreserveSig] int ThumbBarAddButtons(IntPtr hwnd, uint cButtons, IntPtr pButtons);
-        [PreserveSig] int ThumbBarUpdateButtons(IntPtr hwnd, uint cButtons, IntPtr pButtons);
-        [PreserveSig] int ThumbBarSetImageList(IntPtr hwnd, IntPtr himl);
-        [PreserveSig] int SetOverlayIcon(IntPtr hwnd, IntPtr hIcon, [MarshalAs(UnmanagedType.LPWStr)] string? pszDescription);
-        [PreserveSig] int SetThumbnailTooltip(IntPtr hwnd, [MarshalAs(UnmanagedType.LPWStr)] string? pszTip);
-        [PreserveSig] int SetThumbnailClip(IntPtr hwnd, IntPtr prcClip);
-    }
+    [DllImport("ole32.dll")]
+    private static extern int CoCreateInstance(
+        ref Guid clsid, IntPtr outer, uint context, ref Guid iid, out IntPtr instance);
+
+    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    private delegate int HrInitFn(IntPtr self);
+
+    [UnmanagedFunctionPointer(CallingConvention.StdCall, CharSet = CharSet.Unicode)]
+    private delegate int SetOverlayIconFn(
+        IntPtr self, IntPtr hwnd, IntPtr hIcon, [MarshalAs(UnmanagedType.LPWStr)] string? description);
 
     [DllImport("user32.dll")]
     private static extern bool DestroyIcon(IntPtr hIcon);
@@ -85,26 +75,58 @@ internal static class TaskbarBadge
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool DeleteObject(IntPtr gdiObject);
 
-    private static ITaskbarList3? _taskbarList;
+    // The taskbar object and its one method we call. Kept for the life of the
+    // process, as the [ComImport] wrapper this replaces was: Windows releases
+    // it when the process exits.
+    private static IntPtr _taskbarList;
+    private static SetOverlayIconFn? _setOverlayIcon;
     private static bool _initFailed;
 
-    private static ITaskbarList3? GetTaskbarList()
+    private static SetOverlayIconFn? GetSetOverlayIcon()
     {
-        if (_taskbarList is not null || _initFailed)
+        if (_setOverlayIcon is not null || _initFailed)
         {
-            return _taskbarList;
+            return _setOverlayIcon;
         }
+        var instance = IntPtr.Zero;
         try
         {
-            var instance = (ITaskbarList3)new TaskbarInstance();
-            instance.HrInit();
+            var clsid = ClsidTaskbarList;
+            var iid = IidTaskbarList3;
+            if (CoCreateInstance(ref clsid, IntPtr.Zero, ClsctxInprocServer, ref iid, out instance) < 0
+                || instance == IntPtr.Zero)
+            {
+                _initFailed = true;
+                return null;
+            }
+
+            var vtable = Marshal.ReadIntPtr(instance);
+            var hrInit = Marshal.GetDelegateForFunctionPointer<HrInitFn>(
+                Marshal.ReadIntPtr(vtable, HrInitSlot * IntPtr.Size));
+            if (hrInit(instance) < 0)
+            {
+                _initFailed = true;
+                return null;
+            }
+
+            _setOverlayIcon = Marshal.GetDelegateForFunctionPointer<SetOverlayIconFn>(
+                Marshal.ReadIntPtr(vtable, SetOverlayIconSlot * IntPtr.Size));
             _taskbarList = instance;
+            instance = IntPtr.Zero; // ownership kept in _taskbarList
         }
         catch
         {
             _initFailed = true;
         }
-        return _taskbarList;
+        finally
+        {
+            // Only reached with a live pointer when setup failed part-way.
+            if (instance != IntPtr.Zero)
+            {
+                Marshal.Release(instance);
+            }
+        }
+        return _setOverlayIcon;
     }
 
     /// <summary>Best-effort — a failure here (an unusual shell, a locked-down environment, ...) should never take down the app, it just means no badge.</summary>
@@ -119,14 +141,14 @@ internal static class TaskbarBadge
 
         try
         {
-            if (GetTaskbarList() is not { } taskbar || hwnd == IntPtr.Zero)
+            if (GetSetOverlayIcon() is not { } setOverlayIcon || hwnd == IntPtr.Zero)
             {
                 return;
             }
 
             if (kind == TaskbarBadgeKind.None)
             {
-                taskbar.SetOverlayIcon(hwnd, IntPtr.Zero, null);
+                setOverlayIcon(_taskbarList, hwnd, IntPtr.Zero, null);
                 return;
             }
 
@@ -138,7 +160,7 @@ internal static class TaskbarBadge
             try
             {
                 var description = kind == TaskbarBadgeKind.Dot ? Loc.S.TaskbarNewMessages : Loc.S.TaskbarNotifications(count);
-                taskbar.SetOverlayIcon(hwnd, hIcon, description);
+                setOverlayIcon(_taskbarList, hwnd, hIcon, description);
             }
             finally
             {
