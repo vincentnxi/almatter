@@ -38,12 +38,18 @@
          shows the memory coming back down.
 
          System.GC.ConserveMemory (0-9, no MSBuild property of its own, hence
-         runtimeconfig.template.json next to this file) tells the collector to
+         the RuntimeHostConfigurationOption item below) tells the collector to
          work harder at compacting rather than committing more. -->
     <ServerGarbageCollection>false</ServerGarbageCollection>
     <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
     <RetainVMGarbageCollection>false</RetainVMGarbageCollection>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Set here rather than in runtimeconfig.template.json: a Native AOT
+         publish ignores that file, and this item reaches both kinds of build. -->
+    <RuntimeHostConfigurationOption Include="System.GC.ConserveMemory" Value="5" />
+  </ItemGroup>
 
   <ItemGroup>
     <Folder Include="Models\" />
