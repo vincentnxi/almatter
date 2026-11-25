@@ -19,6 +19,9 @@ internal static class ThemeResources
     /// <summary>Salon's thinner strip, as in its mockup.</summary>
     public const double SalonTitleBarHeight = 28;
 
+    /// <summary>The channel header's height: the drag band, with the window's buttons centred on it, when there is no title bar.</summary>
+    public const double HeaderTitleBarHeight = 52;
+
     /// <summary>Salon's mention badge: a red that white text reads on at 4,6:1, on both palettes.</summary>
     public const string SalonBadgeHex = "#DA373C";
 
@@ -124,17 +127,37 @@ internal static class ThemeResources
         var integratedTitle = hasPanels && (theme.ArkStyle || salon) && System.OperatingSystem.IsWindows();
         var stripHeight = !integratedTitle ? 0.0 : salon ? SalonTitleBarHeight : IntegratedTitleBarHeight;
         var top = integratedTitle ? stripHeight : gap;
+
+        // Every other theme on Windows has no title bar at all: the sidebar
+        // runs up to the top edge and the system's three buttons sit at the
+        // right of the channel header, centred on it. The header (and the
+        // sidebar's team name) drag the window; its own buttons are marked
+        // as ordinary input in MainWindow.axaml. No strip of its own, so
+        // the columns keep starting at the very top.
+        var headerTitle = hasPanels && !integratedTitle && !floating && System.OperatingSystem.IsWindows();
         if (hasPanels)
         {
-            window.ExtendClientAreaTitleBarHeightHint = integratedTitle ? stripHeight : -1;
-            window.ExtendClientAreaToDecorationsHint = integratedTitle;
+            window.ExtendClientAreaTitleBarHeightHint = integratedTitle ? stripHeight : headerTitle ? HeaderTitleBarHeight : -1;
+            window.ExtendClientAreaToDecorationsHint = integratedTitle || headerTitle;
         }
         resources["TitleStripVisible"] = integratedTitle;
         resources["TitleStripHeight"] = stripHeight;
         resources["SplitterMargin"] = new Thickness(-3, stripHeight, 0, 0);
-        resources["CaptionButtonWidth"] = salon ? 34.0 : 36.0;
+        resources["CaptionButtonWidth"] = salon ? 34.0 : headerTitle ? 46.0 : 36.0;
         resources["CaptionButtonHeight"] = salon ? SalonTitleBarHeight : IntegratedTitleBarHeight;
-        resources["WindowTitleOpacity"] = salon ? 0.0 : 1.0;
+        resources["WindowTitleOpacity"] = salon || headerTitle ? 0.0 : 1.0;
+        // Room kept free at the right of whichever header sits under the
+        // three buttons: the channel's, or the thread's while one is open.
+        resources["CaptionReserveWidth"] = headerTitle ? 3 * 46.0 + 8 : 0.0;
+        resources["HeaderTitleOn"] = headerTitle;
+        resources["CaptionGlyphTransform"] = Avalonia.Media.Transformation.TransformOperations.Parse(headerTitle ? "none" : "scale(0.8)");
+
+        // The header's shadow over the messages, in place of its bottom line.
+        // A thin strip, so cheap to redraw as the messages scroll under it
+        // (unlike a shadow the size of a whole panel, see below).
+        resources["HeaderShadow"] = !headerTitle ? default
+            : BoxShadows.Parse(theme.IsDark ? "0 10 18 -8 #BF000000, 0 2 4 -1 #59000000" : "0 8 16 -8 #47101114, 0 1 3 0 #14101114");
+        resources["HeaderBorderThickness"] = new Thickness(0, 0, 0, headerTitle ? 0 : 1);
 
         // Salon's columns sit flush, without a line between sidebar and
         // conversation (their colours part them), below the title strip.

@@ -76,6 +76,11 @@
         <SolidColorBrush x:Key="ShadowPlateBrush" Color="Transparent" />
         <x:Boolean x:Key="TitleStripVisible">False</x:Boolean>
         <x:Double x:Key="TitleStripHeight">0</x:Double>
+        <x:Boolean x:Key="HeaderTitleOn">False</x:Boolean>
+        <x:Double x:Key="CaptionReserveWidth">0</x:Double>
+        <TransformOperations x:Key="CaptionGlyphTransform">scale(0.8)</TransformOperations>
+        <BoxShadows x:Key="HeaderShadow">0 0 0 0 #00000000</BoxShadows>
+        <Thickness x:Key="HeaderBorderThickness">0,0,0,1</Thickness>
         <Thickness x:Key="SplitterMargin">-3,0,0,0</Thickness>
         <Thickness x:Key="SelectedRowBorderThickness">0</Thickness>
         <FontFamily x:Key="LabelFontFamily">Segoe UI</FontFamily>
@@ -457,6 +462,10 @@
                         :is(Button)[(WindowDecorationProperties.ElementRole)=CloseButton]">
             <Setter Property="Width" Value="{DynamicResource CaptionButtonWidth}" />
             <Setter Property="Height" Value="{DynamicResource CaptionButtonHeight}" />
+            <!-- Centred on the band: the channel header when there is no
+                 title bar, a no-op on Ark's and Salon's strip, which is
+                 the buttons' own height. -->
+            <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
         <!-- The window's name, drawn by Avalonia at the strip's left. Salon
              shows the team's name in the middle instead (the title strip
@@ -471,7 +480,11 @@
         <Style Selector=":is(Button)[(WindowDecorationProperties.ElementRole)=MinimizeButton] /template/ ContentPresenter,
                         :is(Button)[(WindowDecorationProperties.ElementRole)=MaximizeButton] /template/ ContentPresenter,
                         :is(Button)[(WindowDecorationProperties.ElementRole)=CloseButton] /template/ ContentPresenter">
-            <Setter Property="RenderTransform" Value="scale(0.8)" />
+            <!-- Smaller glyphs for Ark's and Salon's smaller buttons; full
+                 size (none) with no title bar, where the buttons have
+                 Windows' own size and a scaled glyph lands between pixels,
+                 blurring one edge of the maximize square. -->
+            <Setter Property="RenderTransform" Value="{DynamicResource CaptionGlyphTransform}" />
         </Style>
 
         <Style Selector="Button.row-button">
@@ -687,7 +700,14 @@
     <!-- Transparent: the window paints the solid ground (ThemeResources) and
          GroundBackdrop the gradient, if any; painting BgApp here too would
          only cover them. -->
-    <Grid x:Name="AppGrid" Background="Transparent">
+    <!-- "User": everything in the window is ordinary input, even where it
+         lies under the band Windows would otherwise treat as the title bar
+         (the sidebar's filter, the channel header's buttons, the panels
+         that open near the top). Only the elements marked "TitleBar" below
+         drag the window. Avalonia takes the first role it meets walking up
+         from what was clicked, so those inner marks win. Ignored while the
+         window has its system title bar. -->
+    <Grid x:Name="AppGrid" Background="Transparent" WindowDecorationProperties.ElementRole="User">
         <Grid.ColumnDefinitions>
             <!-- Width is restored from (and saved back to) settings by the
                  code-behind; the bounds live here so a dragged splitter can
@@ -737,10 +757,16 @@
                 CornerRadius="{DynamicResource PanelRadius}" ClipToBounds="True">
             <Grid RowDefinitions="Auto,Auto,*,Auto">
 
-                <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="6" Margin="14,14,14,8">
-                    <TextBlock Text="{Binding TeamName}" FontWeight="Bold" FontSize="14.5" Foreground="{DynamicResource TextPrimaryBrush}" />
-                    <Path Data="M6 9l6 6 6-6" Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="2" StrokeLineCap="Round" StrokeJoin="Round" Width="10" Height="10" Stretch="Uniform" VerticalAlignment="Center" />
-                </StackPanel>
+                <!-- With no title bar, the team's name is the top of the
+                     window: it drags it, like the channel header, from the
+                     very top edge (padding, not margin, so the band has no
+                     gap above it). -->
+                <Border Grid.Row="0" Padding="14,14,14,8" Background="Transparent" WindowDecorationProperties.ElementRole="TitleBar">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <TextBlock Text="{Binding TeamName}" FontWeight="Bold" FontSize="14.5" Foreground="{DynamicResource TextPrimaryBrush}" />
+                        <Path Data="M6 9l6 6 6-6" Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="2" StrokeLineCap="Round" StrokeJoin="Round" Width="10" Height="10" Stretch="Uniform" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Border>
 
                 <!-- Filters the favorites, channels and DMs below by name as
                      you type (Ctrl+K to jump here). Searching message text
@@ -957,8 +983,14 @@
                 </Grid>
             </Border>
 
-            <Border Grid.Row="1" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1" Padding="16,0">
-                <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto,Auto,Auto">
+            <!-- With no title bar (HeaderTitleOn), this header drags the
+                 window everywhere but its buttons (marked "User"), and casts
+                 a shadow over the messages in place of its bottom line;
+                 ZIndex keeps that shadow above the messages, declared later.
+                 Transparent, not unset, so its empty stretches are hit too. -->
+            <Border Grid.Row="1" ZIndex="1" Background="Transparent" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="{DynamicResource HeaderBorderThickness}"
+                    BoxShadow="{DynamicResource HeaderShadow}" Padding="16,0" WindowDecorationProperties.ElementRole="TitleBar">
+                <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto,Auto,Auto,Auto">
                     <Path Grid.Column="0" Data="M9 4l-1 16M16 4l-1 16M4 9h16M3 15h16" Stroke="{DynamicResource TextPrimaryBrush}" StrokeThickness="1.8"
                           Width="16" Height="16" Stretch="Uniform" VerticalAlignment="Center" />
                     <StackPanel Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center">
@@ -968,9 +1000,12 @@
                                    FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}" />
                     </StackPanel>
                     <Border Grid.Column="2" Width="1" Height="16" Background="{DynamicResource DividerStrongBrush}" Margin="12,0" />
-                    <TextBlock Grid.Column="3" Text="{Binding ActiveChannelTopic}" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-                    <!-- The header's icon buttons: bare icons, or (Ark) round outlined chips. -->
-                    <Button Grid.Column="4" Classes="row-button" ToolTip.Tip="{Binding T.ChannelMembers, Source={x:Static loc:Loc.Instance}}" Margin="4,0"
+                    <TextBlock Grid.Column="3" Text="{Binding ActiveChannelTopic}" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                               HorizontalAlignment="Left" Margin="0,0,96,0" />
+                    <!-- The 96 above: however long the topic, a stretch of bare header is left to drag the window by. -->
+                    <!-- The header's icon buttons: bare icons, or (Ark) round outlined chips.
+                         "User": clicks reach them instead of dragging the window. -->
+                    <Button Grid.Column="4" Classes="row-button" ToolTip.Tip="{Binding T.ChannelMembers, Source={x:Static loc:Loc.Instance}}" Margin="4,0" WindowDecorationProperties.ElementRole="User"
                             Command="{Binding OpenMembersPanelCommand}">
                         <Border Width="{DynamicResource HeaderButtonSize}" Height="{DynamicResource HeaderButtonSize}" CornerRadius="{DynamicResource HeaderButtonRadius}"
                                 Background="{DynamicResource HeaderButtonBrush}" BorderBrush="{DynamicResource HeaderButtonBorderBrush}" BorderThickness="{DynamicResource HeaderButtonBorderThickness}" BoxShadow="{DynamicResource SmallCardShadow}">
@@ -979,7 +1014,7 @@
                                   Width="16" Height="16" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Border>
                     </Button>
-                    <Button Grid.Column="5" Classes="row-button" ToolTip.Tip="{Binding T.PinnedMessages, Source={x:Static loc:Loc.Instance}}" Margin="4,0"
+                    <Button Grid.Column="5" Classes="row-button" ToolTip.Tip="{Binding T.PinnedMessages, Source={x:Static loc:Loc.Instance}}" Margin="4,0" WindowDecorationProperties.ElementRole="User"
                             Command="{Binding OpenPinnedPanelCommand}">
                         <Border MinWidth="{DynamicResource HeaderButtonSize}" Height="{DynamicResource HeaderButtonSize}" CornerRadius="{DynamicResource HeaderButtonRadius}" Padding="6,0"
                                 Background="{DynamicResource HeaderButtonBrush}" BorderBrush="{DynamicResource HeaderButtonBorderBrush}" BorderThickness="{DynamicResource HeaderButtonBorderThickness}" BoxShadow="{DynamicResource SmallCardShadow}">
@@ -992,7 +1027,7 @@
                         </StackPanel>
                         </Border>
                     </Button>
-                    <Button Grid.Column="6" Classes="row-button" ToolTip.Tip="{Binding T.Search, Source={x:Static loc:Loc.Instance}}" Margin="4,0"
+                    <Button Grid.Column="6" Classes="row-button" ToolTip.Tip="{Binding T.Search, Source={x:Static loc:Loc.Instance}}" Margin="4,0" WindowDecorationProperties.ElementRole="User"
                             Command="{Binding OpenSearchCommand}">
                         <Border Width="{DynamicResource HeaderButtonSize}" Height="{DynamicResource HeaderButtonSize}" CornerRadius="{DynamicResource HeaderButtonRadius}"
                                 Background="{DynamicResource HeaderButtonBrush}" BorderBrush="{DynamicResource HeaderButtonBorderBrush}" BorderThickness="{DynamicResource HeaderButtonBorderThickness}" BoxShadow="{DynamicResource SmallCardShadow}">
@@ -1005,6 +1040,10 @@
                     <TextBlock Grid.Column="7" VerticalAlignment="Center" Foreground="{DynamicResource TextTertiaryBrush}" FontFamily="{DynamicResource LabelFontFamily}" FontSize="11">
                         <Run Text="core v" /><Run Text="{Binding CoreVersion}" />
                     </TextBlock>
+                    <!-- Room for the window's three buttons, drawn over this
+                         corner when there is no title bar — unless a thread
+                         is open, whose header then sits under them instead. -->
+                    <Border Grid.Column="8" Width="{DynamicResource CaptionReserveWidth}" IsVisible="{Binding !IsThreadOpen}" />
                 </Grid>
             </Border>
 
@@ -1632,17 +1671,21 @@
                 BorderThickness="{DynamicResource ThreadBorderThickness}" Margin="{DynamicResource ThreadMargin}"
                 CornerRadius="{DynamicResource PanelRadius}" ClipToBounds="True">
             <Grid RowDefinitions="52,*,Auto">
-                <Border Grid.Row="0" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1" Padding="14,0">
+                <!-- Like the channel header: with no title bar it drags the
+                     window, casts the same shadow, and keeps room at its right
+                     for the window's buttons, drawn over it while it is open. -->
+                <Border Grid.Row="0" ZIndex="1" Background="Transparent" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="{DynamicResource HeaderBorderThickness}"
+                        BoxShadow="{DynamicResource HeaderShadow}" Padding="14,0" WindowDecorationProperties.ElementRole="TitleBar">
                     <!-- The channel name takes only what's left and trims: a group
                          conversation's name lists every member and, sized to its
                          content, pushed the close button out of the panel. -->
-                    <Grid ColumnDefinitions="Auto,*,Auto">
+                    <Grid ColumnDefinitions="Auto,*,Auto,Auto">
                         <TextBlock Grid.Column="0" Text="{Binding T.Thread, Source={x:Static loc:Loc.Instance}}" FontWeight="{DynamicResource PanelTitleFontWeight}" VerticalAlignment="Center" Margin="0,0,10,0" />
                         <TextBlock Grid.Column="1" Text="{Binding ActiveChannelName}" ToolTip.Tip="{Binding ActiveChannelName}" Foreground="{DynamicResource TextTertiaryBrush}"
                                    FontFamily="{DynamicResource LabelFontFamily}" FontSize="12" VerticalAlignment="Center" HorizontalAlignment="Right"
                                    TextTrimming="CharacterEllipsis" Margin="0,0,10,0" />
                         <!-- Bare, or (Ark) a round outlined chip like the channel header's. -->
-                        <Button Grid.Column="2" Classes="row-button"
+                        <Button Grid.Column="2" Classes="row-button" WindowDecorationProperties.ElementRole="User"
                                 Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).CloseThreadCommand}">
                             <Border MinWidth="20" MinHeight="20" Width="{DynamicResource SectionButtonSize}" Height="{DynamicResource SectionButtonSize}"
                                     CornerRadius="{DynamicResource SectionButtonRadius}" Background="{DynamicResource HeaderButtonBrush}"
@@ -1653,6 +1696,7 @@
                                 </Canvas>
                             </Border>
                         </Button>
+                        <Border Grid.Column="3" Width="{DynamicResource CaptionReserveWidth}" />
                     </Grid>
                 </Border>
 
