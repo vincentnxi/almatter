@@ -337,7 +337,7 @@ async fn run(
                     Some(Ok(Message::Text(text))) => {
                         event_count += 1;
                         if event_count <= 5 || event_count % 50 == 0 {
-                            crate::db::log("ws", &format!("event #{event_count}: {}", truncate(&text, 200)));
+                            crate::db::log("ws", &format!("event #{event_count}: {}", describe_event(&text)));
                         }
                         handle_event(&text, &user_id, &client, db).await;
                     }
@@ -397,11 +397,15 @@ async fn run(
     Ok(ended)
 }
 
-fn truncate(s: &str, max: usize) -> &str {
-    match s.char_indices().nth(max) {
-        Some((idx, _)) => &s[..idx],
-        None => s,
-    }
+/// What core.log says about one live event: its kind and size, never its
+/// contents. The log is the file a user attaches to a bug report, and an
+/// event carries what was said, by whom, in which private channel.
+fn describe_event(text: &str) -> String {
+    let kind = serde_json::from_str::<serde_json::Value>(text)
+        .ok()
+        .and_then(|v| v.get("event").and_then(|e| e.as_str()).map(str::to_owned))
+        .unwrap_or_else(|| "(no event name)".to_owned());
+    format!("{kind}, {} bytes", text.len())
 }
 
 async fn handle_event(text: &str, user_id: &str, client: &MattermostClient, db: &'static Mutex<Database>) {
@@ -523,7 +527,9 @@ async fn handle_event(text: &str, user_id: &str, client: &MattermostClient, db: 
         Err(e) => {
             // Never silent: a post this can't read is a message that simply
             // never shows up, with nothing anywhere to say one went missing.
-            crate::db::log("ws", &format!("dropped an unreadable live post: {e} — {}", truncate(post_json, 400)));
+            // The parser's error names the field and position, which is what
+            // a fix needs; the post itself (its text) stays out of the log.
+            crate::db::log("ws", &format!("dropped an unreadable live post ({} bytes): {e}", post_json.len()));
             return;
         }
     };
