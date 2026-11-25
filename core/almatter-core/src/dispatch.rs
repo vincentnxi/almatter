@@ -1454,6 +1454,10 @@ async fn write_atomically(path: std::path::PathBuf, bytes: Vec<u8>) -> Result<()
 /// the names it reserves for devices ("con", "nul.txt", "COM1") get an
 /// underscore in front. The message keeps showing the original name; only the
 /// file on disk is renamed.
+///
+/// The invisible characters that reverse the direction of text are dropped
+/// (see `is_direction_control`): "facture\u{202E}fdp.exe" would otherwise sit
+/// in the downloads folder showing as "factureexe.pdf" in the file manager.
 fn sanitize_file_name(file_name: &str, fallback: &str) -> String {
     let Some(base) = std::path::Path::new(file_name)
         .file_name()
@@ -1465,6 +1469,7 @@ fn sanitize_file_name(file_name: &str, fallback: &str) -> String {
 
     let cleaned: String = base
         .chars()
+        .filter(|&c| !is_direction_control(c))
         .map(|c| if c.is_control() || "<>:\"/\\|?*".contains(c) { '_' } else { c })
         .collect();
     let cleaned = cleaned.trim_end_matches(['.', ' ']);
@@ -1482,6 +1487,14 @@ fn sanitize_file_name(file_name: &str, fallback: &str) -> String {
     } else {
         cleaned.to_string()
     }
+}
+
+/// The Unicode marks, embeddings, overrides and isolates that change the
+/// direction of the text around them. `char::is_control` leaves them alone:
+/// they are "format" characters, not control ones. Kept in step with
+/// `AttachmentItem.WithoutDirectionControls` in the app.
+fn is_direction_control(c: char) -> bool {
+    matches!(c, '\u{061C}' | '\u{200E}' | '\u{200F}' | '\u{202A}'..='\u{202E}' | '\u{2066}'..='\u{2069}')
 }
 
 async fn ensure_file_cached(
@@ -2571,6 +2584,18 @@ mod tests {
         // either way, no separator may survive into the name.
         let name = sanitize_file_name("a\\b.txt", "f1");
         assert!(!name.contains('\\') && !name.contains('/'), "{name}");
+    }
+
+    /// A right-to-left override makes "facture" + U+202E + "fdp.exe" read as
+    /// "factureexe.pdf": the file on disk keeps its real extension in view.
+    #[test]
+    fn sanitize_file_name_drops_text_direction_controls() {
+        assert_eq!(sanitize_file_name("facture\u{202E}fdp.exe", "f1"), "facturefdp.exe");
+        assert_eq!(sanitize_file_name("\u{2067}photo\u{2069}.scr", "f1"), "photo.scr");
+        assert_eq!(sanitize_file_name("a\u{200F}\u{200E}\u{061C}b.txt", "f1"), "ab.txt");
+        assert_eq!(sanitize_file_name("\u{202E}", "f1"), "f1", "nothing left: fall back to the id");
+        // Arabic and Hebrew letters themselves are kept.
+        assert_eq!(sanitize_file_name("تقرير.pdf", "f1"), "تقرير.pdf");
     }
 
     /// Two downloads of the same picture at once: the loser must not fail

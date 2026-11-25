@@ -1,3 +1,4 @@
+using System;
 using Almatter.App.Localization;
 using CommunityToolkit.Mvvm.ComponentModel;
 
@@ -7,7 +8,24 @@ namespace Almatter.App.Models;
 public sealed partial class AttachmentItem : PictureItem
 {
     public required string Id { get; init; }
-    public required string FileName { get; init; }
+
+    /// <summary>
+    /// The name as sent, minus the invisible characters that reverse the
+    /// direction of the text. "facture" + U+202E + "fdp.exe", with a right-to-left
+    /// override before "fdp", is shown as "factureexe.pdf": the trick that
+    /// passes a program off as a document. Everything built from this name —
+    /// the card, its tooltip, the name proposed when saving — gets it without
+    /// them, so the extension on screen is the real one. The core strips the
+    /// same characters from the file written to disk.
+    /// </summary>
+    public required string FileName
+    {
+        get => _fileName;
+        init => _fileName = WithoutDirectionControls(value);
+    }
+
+    private readonly string _fileName = "";
+
     public required long SizeBytes { get; init; }
 
     public string SizeLabel => FormatSize(SizeBytes);
@@ -47,6 +65,31 @@ public sealed partial class AttachmentItem : PictureItem
         OnPropertyChanged(nameof(SizeLabel));
         OnPropertyChanged(nameof(DownloadTip));
     }
+
+    /// <summary>
+    /// Drops the Unicode marks and embeddings that change the direction of
+    /// text (U+061C, U+200E-200F, U+202A-202E, U+2066-2069). Kept in step
+    /// with <c>is_direction_control</c> in the core's dispatch.rs.
+    /// </summary>
+    public static string WithoutDirectionControls(string name)
+    {
+        if (!name.AsSpan().ContainsAny(DirectionControls))
+        {
+            return name;
+        }
+        var kept = new System.Text.StringBuilder(name.Length);
+        foreach (var c in name)
+        {
+            if (!DirectionControls.Contains(c))
+            {
+                kept.Append(c);
+            }
+        }
+        return kept.ToString();
+    }
+
+    private static readonly System.Buffers.SearchValues<char> DirectionControls = System.Buffers.SearchValues.Create(
+        [(char)0x061C, (char)0x200E, (char)0x200F, (char)0x202A, (char)0x202B, (char)0x202C, (char)0x202D, (char)0x202E, (char)0x2066, (char)0x2067, (char)0x2068, (char)0x2069]);
 
     /// <summary>"340 Ko", "1,2 Mo" in French; "340 KB", "1.2 MB" in English.</summary>
     public static string FormatSize(long bytes)
