@@ -167,7 +167,8 @@ public sealed partial class AppSettings : ObservableObject
     /// For modest machines: no drop shadows (each is a blur the processor
     /// renderer computes, and some sit over the scrolling messages) and no
     /// animations (the thread panel opens and closes at
-    /// once instead of sliding, which re-lays the conversation every frame).
+    /// once instead of sliding, which re-lays the conversation every frame;
+    /// scroll bars stay at full size instead of growing under the pointer).
     /// Off by default. Takes effect immediately.
     /// </summary>
     [ObservableProperty]

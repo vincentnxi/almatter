@@ -21,6 +21,36 @@ internal static class ThemeResources
     public const double HeaderTitleBarHeight = 52;
 
     /// <summary>
+    /// Fluent's scroll bars sit thin and grow, animated, under the pointer.
+    /// In performance mode they stay at full size instead, so nothing moves.
+    /// Is&lt;ScrollViewer&gt; also reaches the classes derived from it (the
+    /// message tables). Held at application level, so menus and flyouts,
+    /// which live outside the windows' trees, follow too; adding or removing
+    /// it restyles what is already on screen.
+    /// </summary>
+    private static readonly Style NoScrollBarMotion = new(x => x.Is<ScrollViewer>())
+    {
+        Setters = { new Setter(ScrollViewer.AllowAutoHideProperty, false) },
+    };
+
+    private static void ApplyScrollBarMotion(bool performanceMode)
+    {
+        if (Application.Current?.Styles is not { } styles)
+        {
+            return;
+        }
+        var present = styles.Contains(NoScrollBarMotion);
+        if (performanceMode && !present)
+        {
+            styles.Add(NoScrollBarMotion);
+        }
+        else if (!performanceMode && present)
+        {
+            styles.Remove(NoScrollBarMotion);
+        }
+    }
+
+    /// <summary>
     /// Also sets Application.RequestedThemeVariant, which is what makes
     /// Avalonia's own Fluent chrome — scrollbars, flyout and menu
     /// backgrounds, tooltips, text selection, the caret, TextBox borders —
@@ -46,6 +76,8 @@ internal static class ThemeResources
                     _ => ThemeVariant.Default,
                 };
         }
+
+        ApplyScrollBarMotion(settings.PerformanceMode);
 
         var theme = ColorTokens.Theme;
         var resources = window.Resources;
