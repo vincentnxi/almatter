@@ -18,7 +18,7 @@ internal static class SettingsStore
         try
         {
             var json = File.ReadAllText(FilePath);
-            var loaded = JsonSerializer.Deserialize<AppSettings>(json);
+            var loaded = JsonSerializer.Deserialize(json, StorageJsonContext.Default.AppSettings);
             if (loaded is not null)
             {
                 // The size is free now, so old saved values (13, 14,5, 16,5…)
@@ -44,7 +44,7 @@ internal static class SettingsStore
             {
                 Directory.CreateDirectory(dir);
             }
-            AtomicFile.WriteAllText(FilePath, JsonSerializer.Serialize(settings));
+            AtomicFile.WriteAllText(FilePath, JsonSerializer.Serialize(settings, StorageJsonContext.Default.AppSettings));
         }
         catch
         {

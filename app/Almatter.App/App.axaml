@@ -1,15 +1,10 @@
 <Application xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="Almatter.App.App"
-             xmlns:local="using:Almatter.App"
              RequestedThemeVariant="Default">
              <!-- "Default" follows the OS. Both windows overwrite this at
                   startup from the saved preference (see ThemeResources.Apply):
                   Default only survives when that preference IS "Système". -->
-
-    <Application.DataTemplates>
-        <local:ViewLocator />
-    </Application.DataTemplates>
 
     <!-- Context menus drawn the way the OS draws its own, rather than in the
          app's palette: a menu is the one surface people expect to look like

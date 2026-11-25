@@ -46,7 +46,7 @@ internal static class SessionStore
             {
                 Directory.CreateDirectory(dir);
             }
-            var json = JsonSerializer.SerializeToUtf8Bytes(session);
+            var json = JsonSerializer.SerializeToUtf8Bytes(session, StorageJsonContext.Default.Session);
             var encrypted = ProtectedData.Protect(json, Entropy, DataProtectionScope.CurrentUser);
             AtomicFile.WriteAllBytes(FilePath, encrypted);
         }
@@ -67,7 +67,7 @@ internal static class SessionStore
         {
             var encrypted = File.ReadAllBytes(FilePath);
             var json = ProtectedData.Unprotect(encrypted, Entropy, DataProtectionScope.CurrentUser);
-            return JsonSerializer.Deserialize<Session>(json);
+            return JsonSerializer.Deserialize(json, StorageJsonContext.Default.Session);
         }
         catch
         {

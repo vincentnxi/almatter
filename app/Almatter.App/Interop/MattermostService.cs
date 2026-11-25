@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.Json.Serialization.Metadata;
 using System.Threading.Tasks;
 
 namespace Almatter.App.Interop;
@@ -770,7 +771,9 @@ public sealed class MattermostService
         var requestJson = request.ToJsonString();
         var responseJson = await Task.Run(() => NativeCore.Call(requestJson));
 
-        var envelope = JsonSerializer.Deserialize<Envelope<TData>>(responseJson)
+        var typeInfo = CoreJsonContext.Default.GetTypeInfo(typeof(Envelope<TData>)) as JsonTypeInfo<Envelope<TData>>
+            ?? throw new InvalidOperationException($"Envelope<{typeof(TData).Name}> is missing from CoreJsonContext.");
+        var envelope = JsonSerializer.Deserialize(responseJson, typeInfo)
             ?? throw new MattermostServiceException("Empty response from the core.");
 
         if (!envelope.Ok || envelope.Data is null)
