@@ -554,6 +554,20 @@
 
                     <Border Classes="separator" />
 
+                    <Button Classes="row-button" Command="{Binding TogglePerformanceModeCommand}">
+                        <Grid ColumnDefinitions="*,Auto" Background="Transparent">
+                            <StackPanel Grid.Column="0" Spacing="2">
+                                <TextBlock Classes="setting-label" Text="{Binding T.PerformanceMode, Source={x:Static loc:Loc.Instance}}" />
+                                <TextBlock Classes="setting-hint" Text="{Binding T.PerformanceModeHint, Source={x:Static loc:Loc.Instance}}" />
+                            </StackPanel>
+                            <Border Grid.Column="1" Classes="check" Background="{Binding Settings.PerformanceModeCheckBrush}">
+                                <Path IsVisible="{Binding Settings.PerformanceMode}" Data="M4 9l3 3 6-7" />
+                            </Border>
+                        </Grid>
+                    </Button>
+
+                    <Border Classes="separator" />
+
                     <!-- New versions: the switch, then the installed version and a
                          check on demand, which works whether the switch is on or not. -->
                     <StackPanel Spacing="10">

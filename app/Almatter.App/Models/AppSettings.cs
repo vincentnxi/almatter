@@ -164,6 +164,21 @@ public sealed partial class AppSettings : ObservableObject
     partial void OnShowLinkPreviewsChanged(bool value) => OnPropertyChanged(nameof(LinkPreviewsCheckBrush));
 
     /// <summary>
+    /// For modest machines: no drop shadows (each is a blur the processor
+    /// renderer computes, and some sit over the scrolling messages) and no
+    /// animations (the thread panel opens and closes at
+    /// once instead of sliding, which re-lays the conversation every frame).
+    /// Off by default. Takes effect immediately.
+    /// </summary>
+    [ObservableProperty]
+    public partial bool PerformanceMode { get; set; }
+
+    [JsonIgnore]
+    public IBrush PerformanceModeCheckBrush => PerformanceMode ? ColorTokens.Accent : Brushes.Transparent;
+
+    partial void OnPerformanceModeChanged(bool value) => OnPropertyChanged(nameof(PerformanceModeCheckBrush));
+
+    /// <summary>
     /// Every notification makes a sound, not only the ones aimed at this
     /// user (see DesktopNotification.IsPersonal). Those keep their 🔔 either
     /// way, so they still stand out. Off by default: in a busy team a sound

@@ -82,8 +82,10 @@ internal static class ThemeResources
         resources["PresenceOnlineBrush"] = ColorTokens.Solid(theme.PresenceOnlineHex);
         resources["PresenceAwayBrush"] = ColorTokens.Solid(theme.PresenceAwayHex);
         resources["PresenceOfflineBrush"] = ColorTokens.Solid(theme.PresenceOfflineHex);
-        resources["PopoverShadow"] = BoxShadows.Parse(theme.PopoverShadow);
-        resources["CardShadow"] = BoxShadows.Parse(theme.CardShadow);
+        // Performance mode drops every shadow: empty BoxShadows draw nothing.
+        var shadows = !settings.PerformanceMode;
+        resources["PopoverShadow"] = shadows ? BoxShadows.Parse(theme.PopoverShadow) : default(BoxShadows);
+        resources["CardShadow"] = shadows ? BoxShadows.Parse(theme.CardShadow) : default(BoxShadows);
         resources["RowRadiusValue"] = new CornerRadius(theme.RowRadius);
         resources["SurfaceRadiusValue"] = new CornerRadius(theme.SurfaceRadius);
 
@@ -107,9 +109,11 @@ internal static class ThemeResources
 
         // The header's shadow over the messages, in place of its bottom line.
         // A thin strip, so cheap to redraw as the messages scroll under it.
-        resources["HeaderShadow"] = !headerTitle ? default
+        // Without shadows (performance mode) the plain line comes back.
+        var headerShadow = headerTitle && shadows;
+        resources["HeaderShadow"] = !headerShadow ? default
             : BoxShadows.Parse(theme.IsDark ? "0 10 18 -8 #BF000000, 0 2 4 -1 #59000000" : "0 8 16 -8 #47101114, 0 1 3 0 #14101114");
-        resources["HeaderBorderThickness"] = new Thickness(0, 0, 0, headerTitle ? 0 : 1);
+        resources["HeaderBorderThickness"] = new Thickness(0, 0, 0, headerShadow ? 0 : 1);
 
         // The red "Nouveau" rule (its label white, or near black on a red too
         // light for white text), and a message naming the reader tinted with

@@ -1040,6 +1040,20 @@ public partial class MainWindow : Window
     /// </summary>
     private void SlideThreadPanel(bool open)
     {
+        // Performance mode: no slide, the panel is simply there or gone.
+        // Ending the slide here also lets a running one stop at its next
+        // frame without ever putting the panel back.
+        if (DataContext is MainViewModel { Settings.PerformanceMode: true })
+        {
+            _threadSlideTo = open ? ThreadPanelWidth : 0;
+            _threadSlideStart = 0;
+            _threadSlideFrom = _threadSlideTo;
+            ThreadPanel.Width = _threadSlideTo;
+            ThreadPanel.IsVisible = open;
+            HeaderCaptionReserve.IsVisible = !open;
+            return;
+        }
+
         _threadSlideFrom = ThreadPanel.Width;
         _threadSlideTo = open ? ThreadPanelWidth : 0;
         _threadSlideStart = System.Diagnostics.Stopwatch.GetTimestamp();

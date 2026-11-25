@@ -226,6 +226,8 @@ public sealed partial class Strings
     public required string SoundForAllMessagesHint { get; init; }
     public required string LinkPreviews { get; init; }
     public required string LinkPreviewsHint { get; init; }
+    public required string PerformanceMode { get; init; }
+    public required string PerformanceModeHint { get; init; }
     public required string SettingsAccount { get; init; }
     public required string LogOut { get; init; }
 

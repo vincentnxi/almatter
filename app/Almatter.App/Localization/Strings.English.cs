@@ -190,6 +190,8 @@ public sealed partial class Strings
         SoundForAllMessagesHint = "Otherwise only the 🔔 notifications meant for you make a sound.",
         LinkPreviews = "Link previews",
         LinkPreviewsHint = "Shows the page's title and picture under messages that contain a link.",
+        PerformanceMode = "Performance mode",
+        PerformanceModeHint = "Turns off shadows and animations to lighten drawing on modest computers.",
         SettingsAccount = "Account",
         LogOut = "Sign out",
         CheckForUpdates = "Check for new versions",

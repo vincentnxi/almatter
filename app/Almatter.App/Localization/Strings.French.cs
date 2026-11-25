@@ -192,6 +192,8 @@ public sealed partial class Strings
         SoundForAllMessagesHint = "Sinon, seules les notifications 🔔 qui vous sont destinées font du bruit.",
         LinkPreviews = "Aperçus de liens",
         LinkPreviewsHint = "Affiche le titre et l'image de la page sous les messages qui contiennent un lien.",
+        PerformanceMode = "Mode performances",
+        PerformanceModeHint = "Supprime les ombres et les animations pour alléger l'affichage sur les ordinateurs modestes.",
         SettingsAccount = "Compte",
         LogOut = "Se déconnecter",
         CheckForUpdates = "Vérifier les nouvelles versions",

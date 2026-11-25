@@ -127,6 +127,9 @@ than 2.0 s. None of that is guaranteed elsewhere — a laptop with Intel graphic
 lighter driver — so it is a setting: add `"UseGpuRendering": true` to
 `%LOCALAPPDATA%\Almatter\settings.json` and restart.
 
+On a modest computer, **Performance mode** (settings, General) turns off the drop
+shadows and the animations, which give the processor extra drawing work.
+
 ## Building from source
 
 ### Prerequisites
@@ -343,6 +346,9 @@ processeur occupe 65 Mo là où le chemin graphique en occupe 80, et la fenêtre
 0,9 s au lieu de 2,0 s. Rien de tout cela n'est garanti ailleurs — un portable à carte
 Intel a un pilote bien plus léger — d'où un réglage : ajouter `"UseGpuRendering": true`
 dans `%LOCALAPPDATA%\Almatter\settings.json`, puis relancer.
+
+Sur un ordinateur modeste, le **Mode performances** (réglages, Général) supprime les
+ombres portées et les animations, qui donnent du travail de dessin en plus au processeur.
 
 ## Compiler depuis les sources
 

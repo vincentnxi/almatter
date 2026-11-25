@@ -1026,6 +1026,11 @@ public partial class MainViewModel : ViewModelBase
                 // window resources, AppFontFamily among them.
                 ThemeResourcesChanged?.Invoke(this, EventArgs.Empty);
             }
+            else if (e.PropertyName == nameof(AppSettings.PerformanceMode))
+            {
+                // The shadows are window resources too.
+                ThemeResourcesChanged?.Invoke(this, EventArgs.Empty);
+            }
             else if (e.PropertyName == nameof(AppSettings.MessageFontSize))
             {
                 RefreshFontSizeSelection();
@@ -4706,6 +4711,9 @@ public partial class MainViewModel : ViewModelBase
 
     [RelayCommand]
     private void ToggleLinkPreviews() => Settings.ShowLinkPreviews = !Settings.ShowLinkPreviews;
+
+    [RelayCommand]
+    private void TogglePerformanceMode() => Settings.PerformanceMode = !Settings.PerformanceMode;
 
     [RelayCommand]
     private void ToggleReducedContrast() => Settings.ReducedContrast = !Settings.ReducedContrast;
