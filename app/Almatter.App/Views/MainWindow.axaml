@@ -863,8 +863,10 @@
                     </TextBlock>
                     <!-- Room for the window's three buttons, drawn over this
                          corner when there is no title bar — unless a thread
-                         is open, whose header then sits under them instead. -->
-                    <Border Grid.Column="8" Width="{DynamicResource CaptionReserveWidth}" IsVisible="{Binding !IsThreadOpen}" />
+                         is fully open, whose header then sits under them
+                         instead. Shown and hidden by the code-behind, in step
+                         with the thread panel's slide. -->
+                    <Border x:Name="HeaderCaptionReserve" Grid.Column="8" Width="{DynamicResource CaptionReserveWidth}" />
                 </Grid>
             </Border>
 
@@ -1476,37 +1478,54 @@
         </Grid>
         </Border>
 
-        <!-- THREAD PANEL — only takes up space (an Auto-sized column) while a thread is actually open, per user request. -->
-        <Border x:Name="ThreadPanel" Grid.Column="2" Width="320" IsVisible="{Binding IsThreadOpen}"
+        <!-- THREAD PANEL — only takes up space (an Auto-sized column) while a thread is actually open, per user request.
+             It slides in from the right, pushing the conversation over: the
+             code-behind grows its width from 0 to 320 (and back on close),
+             hiding it once it is closed. Its content keeps its full width,
+             held against the panel's moving left edge and clipped, so it
+             slides in whole instead of being squeezed and re-wrapped at every
+             step. -->
+        <Border x:Name="ThreadPanel" Grid.Column="2" Width="0" IsVisible="False"
                 Background="{DynamicResource ThreadGroundBrush}" BorderBrush="{DynamicResource DividerBrush}"
                 BorderThickness="1,0,0,0" Margin="0"
                 CornerRadius="0" ClipToBounds="True">
-            <Grid RowDefinitions="52,*,Auto">
+            <Grid RowDefinitions="52,*,Auto" Width="319" HorizontalAlignment="Left">
                 <!-- Like the channel header: with no title bar it drags the
                      window, casts the same shadow, and keeps room at its right
-                     for the window's buttons, drawn over it while it is open. -->
+                     for the window's buttons, drawn over it while it is open.
+                     No close button here: right under the window's own close
+                     button, one click too far shut the whole app. -->
                 <Border Grid.Row="0" ZIndex="1" Background="Transparent" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="{DynamicResource HeaderBorderThickness}"
                         BoxShadow="{DynamicResource HeaderShadow}" Padding="14,0" WindowDecorationProperties.ElementRole="TitleBar">
                     <!-- The channel name takes only what's left and trims: a group
-                         conversation's name lists every member and, sized to its
-                         content, pushed the close button out of the panel. -->
-                    <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+                         conversation's name lists every member. -->
+                    <Grid ColumnDefinitions="Auto,*,Auto">
                         <TextBlock Grid.Column="0" Text="{Binding T.Thread, Source={x:Static loc:Loc.Instance}}" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,10,0" />
                         <TextBlock Grid.Column="1" Text="{Binding ActiveChannelName}" ToolTip.Tip="{Binding ActiveChannelName}" Foreground="{DynamicResource TextTertiaryBrush}"
                                    FontSize="12" VerticalAlignment="Center" HorizontalAlignment="Right"
                                    TextTrimming="CharacterEllipsis" Margin="0,0,10,0" />
-                        <Button Grid.Column="2" Classes="row-button" WindowDecorationProperties.ElementRole="User"
-                                Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).CloseThreadCommand}">
-                            <Border Width="20" Height="20" Background="Transparent">
-                                <Canvas Width="14" Height="14" VerticalAlignment="Center" HorizontalAlignment="Center">
-                                    <Line StartPoint="1,1" EndPoint="13,13" Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.6" StrokeLineCap="Round" />
-                                    <Line StartPoint="13,1" EndPoint="1,13" Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.6" StrokeLineCap="Round" />
-                                </Canvas>
-                            </Border>
-                        </Button>
-                        <Border Grid.Column="3" Width="{DynamicResource CaptionReserveWidth}" />
+                        <Border Grid.Column="2" Width="{DynamicResource CaptionReserveWidth}" />
                     </Grid>
                 </Border>
+
+                <!-- Close: a round button floating at the panel's top right,
+                     just under its header, drawn like the "jump to latest"
+                     arrow over the conversation. Its ZIndex keeps it above
+                     the messages scrolling under it. -->
+                <Button Grid.Row="1" ZIndex="2" Classes="row-button"
+                        HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,10,14,0"
+                        Width="34" Height="34" ToolTip.Tip="{Binding T.Close, Source={x:Static loc:Loc.Instance}}"
+                        Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).CloseThreadCommand}">
+                    <Border Width="34" Height="34" CornerRadius="17"
+                            Background="{DynamicResource CardBgBrush}"
+                            BorderBrush="{DynamicResource DividerStrongBrush}" BorderThickness="1"
+                            BoxShadow="{DynamicResource PopoverShadow}">
+                        <Path Data="M6 6 18 18 M18 6 6 18" Stroke="{DynamicResource TextSecondaryBrush}"
+                              StrokeThickness="1.8" StrokeLineCap="Round" StrokeJoin="Round"
+                              Width="12" Height="12" Stretch="Uniform"
+                              HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                </Button>
 
                 <ScrollViewer Grid.Row="1" x:Name="ThreadScroller">
                     <StackPanel Margin="14">
@@ -1520,8 +1539,10 @@
                                 <ContentControl DataContext="{Binding ThreadRootMessage}" x:DataType="models:MessageItem"
                                                 IsVisible="{Binding HasDateSeparator}" Content="{Binding}"
                                                 ContentTemplate="{StaticResource DateSeparatorTemplate}" />
-                                <!-- The thread's opening message. -->
-                                <Border>
+                                <!-- The thread's opening message. Kept clear of the
+                                     close button floating at the top right, so it
+                                     never hides the end of its first lines. -->
+                                <Border Margin="0,0,34,0">
                                 <Grid ColumnDefinitions="30,*" DataContext="{Binding ThreadRootMessage}" x:DataType="models:MessageItem">
                                     <Button Grid.Column="0" Classes="row-button" Width="30" Height="30" VerticalAlignment="Top">
                                         <Button.Flyout>

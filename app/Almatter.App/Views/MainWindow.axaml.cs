@@ -169,6 +169,24 @@ public partial class MainWindow : Window
             }
 
             vm.SettingsRequested += (_, _) => ShowSettingsWindow(vm);
+
+            // The thread panel slides in and out rather than popping. A
+            // thread already open when the window gets its view model shows
+            // at once: there is nothing for the eye to follow yet.
+            if (vm.IsThreadOpen)
+            {
+                ThreadPanel.IsVisible = true;
+                ThreadPanel.Width = ThreadPanelWidth;
+                HeaderCaptionReserve.IsVisible = false;
+            }
+            vm.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName == nameof(MainViewModel.IsThreadOpen))
+                {
+                    SlideThreadPanel(vm.IsThreadOpen);
+                }
+            };
+
             vm.PropertyChanged += (_, e) =>
             {
                 // CloseSettingsCommand (Escape in the settings window).
@@ -1003,6 +1021,61 @@ public partial class MainWindow : Window
 
     /// <summary>The composer that will receive the dragged files outlines itself in the accent colour (the "drop-target" style in the XAML).</summary>
     private static void SetDropHighlight(Border composer, bool on) => composer.Classes.Set("drop-target", on);
+
+    private const double ThreadPanelWidth = 320;
+    private static readonly TimeSpan ThreadSlideDuration = TimeSpan.FromMilliseconds(220);
+
+    private double _threadSlideFrom;
+    private double _threadSlideTo;
+    private long _threadSlideStart;
+    private bool _threadSlideRunning;
+
+    /// <summary>
+    /// Opens or closes the thread panel by growing or shrinking its width a
+    /// little on every frame, so the conversation beside it is pushed over
+    /// rather than jumping. Driven by hand, one frame at a time, instead of
+    /// an Avalonia transition: a transition briefly reports the target width
+    /// before animating, which would hide the panel the moment it starts to
+    /// close. Asking again mid-slide simply turns it around from where it is.
+    /// </summary>
+    private void SlideThreadPanel(bool open)
+    {
+        _threadSlideFrom = ThreadPanel.Width;
+        _threadSlideTo = open ? ThreadPanelWidth : 0;
+        _threadSlideStart = System.Diagnostics.Stopwatch.GetTimestamp();
+        if (open)
+        {
+            ThreadPanel.IsVisible = true;
+        }
+        if (!_threadSlideRunning)
+        {
+            _threadSlideRunning = true;
+            RequestAnimationFrame(OnThreadSlideFrame);
+        }
+    }
+
+    private void OnThreadSlideFrame(TimeSpan _)
+    {
+        var progress = Math.Min(1.0,
+            System.Diagnostics.Stopwatch.GetElapsedTime(_threadSlideStart) / ThreadSlideDuration);
+        // Fast at first, settling gently into place (cubic ease-out).
+        var eased = 1 - Math.Pow(1 - progress, 3);
+        ThreadPanel.Width = _threadSlideFrom + (_threadSlideTo - _threadSlideFrom) * eased;
+        // The channel header leaves room for the window's buttons until the
+        // thread header is fully there to sit under them.
+        HeaderCaptionReserve.IsVisible = ThreadPanel.Width < ThreadPanelWidth;
+
+        if (progress < 1)
+        {
+            RequestAnimationFrame(OnThreadSlideFrame);
+            return;
+        }
+        _threadSlideRunning = false;
+        if (_threadSlideTo == 0)
+        {
+            ThreadPanel.IsVisible = false;
+        }
+    }
 
     private bool IsOverOpenThread(DragEventArgs e) =>
         DataContext is MainViewModel { IsThreadOpen: true }
