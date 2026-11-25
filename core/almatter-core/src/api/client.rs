@@ -109,6 +109,11 @@ pub enum ApiError {
     /// message goes to core.log rather than on screen.
     #[error("The server sent a response this app cannot read ({path}).")]
     UnexpectedResponse { path: String },
+    /// An API route built from an id holding something other than letters,
+    /// digits and the few signs ids and emoji names use: refused before
+    /// sending, so the session token never goes to a route nobody wrote.
+    #[error("refused to call an unexpected server address ({0:?})")]
+    UnsafeRoute(String),
     /// The server refused the session token: it expired, was revoked, or the
     /// password changed since. Nothing short of signing in again helps, and
     /// until then every call fails the same way while the app carries on
@@ -193,14 +198,27 @@ impl MattermostClient {
         self
     }
 
-    fn url(&self, path: &str) -> String {
-        format!("{}/api/v4{}", self.base_url.trim_end_matches('/'), path)
+    /// The full address of an API route. Every route carries the session
+    /// token, and most are built from ids the server sent (a post's, a
+    /// user's, an emoji's name): an id holding "../" or "%2F" would make the
+    /// same request — a DELETE, say — reach another route than the one
+    /// written here. The server checks the ids it hands out, so none does
+    /// today; this refuses one anyway, before anything is sent. A route is
+    /// only letters, digits, "/", "_", "-" and "+" (emoji names such as
+    /// "+1" or "e-mail"); the query after "?" is not checked, being built
+    /// from numbers and this app's own words.
+    fn url(&self, path: &str) -> Result<String, ApiError> {
+        let route = path.split('?').next().unwrap_or(path);
+        if !route.chars().all(|c| c.is_ascii_alphanumeric() || "/_-+".contains(c)) {
+            return Err(ApiError::UnsafeRoute(route.to_string()));
+        }
+        Ok(format!("{}/api/v4{}", self.base_url.trim_end_matches('/'), path))
     }
 
     /// Verifies the server is reachable — used before login and as the
     /// reconnect probe once the app is back online.
     pub async fn ping(&self) -> Result<bool, ApiError> {
-        let resp = self.http.get(self.url("/system/ping")).send().await?;
+        let resp = self.http.get(self.url("/system/ping")?).send().await?;
         Ok(resp.status().is_success())
     }
 
@@ -216,7 +234,7 @@ impl MattermostClient {
         let client = Self::new(base_url);
         let resp = client
             .http
-            .post(client.url("/users/login"))
+            .post(client.url("/users/login")?)
             .json(&serde_json::json!({ "login_id": login_id, "password": password }))
             .send()
             .await?;
@@ -245,7 +263,7 @@ impl MattermostClient {
     /// than as an expired session, whose answer is a sign-in screen the user
     /// is on their way to anyway.
     pub async fn logout(&self) -> Result<(), ApiError> {
-        let mut req = self.http.post(self.url("/users/logout"));
+        let mut req = self.http.post(self.url("/users/logout")?);
         if let Some(token) = &self.token {
             req = req.bearer_auth(token);
         }
@@ -535,7 +553,7 @@ impl MattermostClient {
 
     /// Deletes an already-sent message — same permission note as `update_post`.
     pub async fn delete_post(&self, post_id: &str) -> Result<(), ApiError> {
-        let mut req = self.http.delete(self.url(&format!("/posts/{post_id}")));
+        let mut req = self.http.delete(self.url(&format!("/posts/{post_id}"))?);
         if let Some(token) = &self.token {
             req = req.bearer_auth(token);
         }
@@ -559,7 +577,7 @@ impl MattermostClient {
             .text("channel_id", channel_id.to_string())
             .part("files", part);
 
-        let mut req = upload_http_client().post(self.url("/files")).multipart(form);
+        let mut req = upload_http_client().post(self.url("/files")?).multipart(form);
         if let Some(token) = &self.token {
             req = req.bearer_auth(token);
         }
@@ -633,7 +651,7 @@ impl MattermostClient {
         emoji_name: &str,
     ) -> Result<(), ApiError> {
         let mut req = self.http.delete(
-            self.url(&format!("/users/{user_id}/posts/{post_id}/reactions/{emoji_name}")),
+            self.url(&format!("/users/{user_id}/posts/{post_id}/reactions/{emoji_name}"))?,
         );
         if let Some(token) = &self.token {
             req = req.bearer_auth(token);
@@ -678,7 +696,7 @@ impl MattermostClient {
     /// Raw image bytes for one custom emoji — not JSON, so this bypasses
     /// `get_json` and reads the response body directly.
     pub async fn get_emoji_image(&self, emoji_id: &str) -> Result<Vec<u8>, ApiError> {
-        let mut req = self.http.get(self.url(&format!("/emoji/{emoji_id}/image")));
+        let mut req = self.http.get(self.url(&format!("/emoji/{emoji_id}/image"))?);
         if let Some(token) = &self.token {
             req = req.bearer_auth(token);
         }
@@ -694,7 +712,7 @@ impl MattermostClient {
     /// Raw bytes for one message attachment — same shape as
     /// `get_emoji_image`, just a different endpoint.
     pub async fn get_file_bytes(&self, file_id: &str) -> Result<Vec<u8>, ApiError> {
-        let mut req = self.http.get(self.url(&format!("/files/{file_id}")));
+        let mut req = self.http.get(self.url(&format!("/files/{file_id}"))?);
         if let Some(token) = &self.token {
             req = req.bearer_auth(token);
         }
@@ -714,7 +732,7 @@ impl MattermostClient {
     /// decode whatever was uploaded. (The server's "thumbnail" endpoint is no
     /// use here: 120 × 100, too coarse for the size a picture is shown at.)
     pub async fn get_file_preview(&self, file_id: &str) -> Result<Vec<u8>, ApiError> {
-        let mut req = self.http.get(self.url(&format!("/files/{file_id}/preview")));
+        let mut req = self.http.get(self.url(&format!("/files/{file_id}/preview"))?);
         if let Some(token) = &self.token {
             req = req.bearer_auth(token);
         }
@@ -731,7 +749,7 @@ impl MattermostClient {
     /// here (a generated default avatar if they never set a custom one),
     /// so this only fails for a genuinely unreachable server or unknown user.
     pub async fn get_user_avatar(&self, user_id: &str) -> Result<Vec<u8>, ApiError> {
-        let mut req = self.http.get(self.url(&format!("/users/{user_id}/image")));
+        let mut req = self.http.get(self.url(&format!("/users/{user_id}/image"))?);
         if let Some(token) = &self.token {
             req = req.bearer_auth(token);
         }
@@ -816,7 +834,7 @@ impl MattermostClient {
     }
 
     async fn get_json<T: serde::de::DeserializeOwned>(&self, path: &str) -> Result<T, ApiError> {
-        let mut req = self.http.get(self.url(path));
+        let mut req = self.http.get(self.url(path)?);
         if let Some(token) = &self.token {
             req = req.bearer_auth(token);
         }
@@ -829,7 +847,7 @@ impl MattermostClient {
         path: &str,
         body: &B,
     ) -> Result<T, ApiError> {
-        let mut req = self.http.post(self.url(path)).json(body);
+        let mut req = self.http.post(self.url(path)?).json(body);
         if let Some(token) = &self.token {
             req = req.bearer_auth(token);
         }
@@ -842,7 +860,7 @@ impl MattermostClient {
         path: &str,
         body: &B,
     ) -> Result<T, ApiError> {
-        let mut req = self.http.put(self.url(path)).json(body);
+        let mut req = self.http.put(self.url(path)?).json(body);
         if let Some(token) = &self.token {
             req = req.bearer_auth(token);
         }
@@ -1163,6 +1181,26 @@ mod tests {
 
         assert_eq!(token, "abc123");
         assert_eq!(user.username, "jdupont");
+    }
+
+    /// An id from the server that would steer a request carrying the token
+    /// to another route is refused before anything is sent.
+    #[test]
+    fn url_refuses_a_route_that_could_lead_elsewhere() {
+        let client = MattermostClient::new("https://chat.example.com/");
+        assert_eq!(
+            client.url("/users/u1/posts/p1/reactions/+1").unwrap(),
+            "https://chat.example.com/api/v4/users/u1/posts/p1/reactions/+1"
+        );
+        assert!(client.url("/emoji/x/image").is_ok());
+        assert!(client.url("/reactions/e-mail_2").is_ok());
+        assert!(client.url("/channels/c1/posts?since=17&per_page=30").is_ok(), "the query is not checked");
+        for bad in ["/posts/../users/me", "/posts/%2e%2e", "/posts/a b", "/posts/x\\y", "/reactions/a:b", "/posts/x#y", "/files/x.exe"] {
+            assert!(
+                matches!(client.url(bad), Err(ApiError::UnsafeRoute(_))),
+                "{bad:?} should be refused"
+            );
+        }
     }
 
     #[test]

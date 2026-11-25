@@ -3360,6 +3360,14 @@ public partial class MainViewModel : ViewModelBase
     /// hand the drives over (.rdp), ClickOnce shortcuts, troubleshooting
     /// packages (.diagcab), disk images that open as a folder of programs,
     /// Python scripts, and theme, search and shell-command files.
+    ///
+    /// The last lines add what opens an installer or a trust decision rather
+    /// than a document: certificates (a click starts the wizard that installs
+    /// one, and a root certificate installed on a stranger's say-so lets its
+    /// owner read the user's HTTPS traffic), Office and Visual Studio add-ins,
+    /// cabinet archives, saved web pages (.mht, a long-time phishing carrier),
+    /// AutoHotkey and Perl scripts, old shell scraps, and the Linux packages
+    /// and shell scripts a double-click can install or run.
     /// </summary>
     private static readonly HashSet<string> ProgramFileExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -3372,6 +3380,10 @@ public partial class MainViewModel : ViewModelBase
         ".ws", ".wsc", ".scf", ".website", ".searchconnector-ms", ".theme", ".themepack", ".deskthemepack",
         ".msu", ".inf", ".ins", ".isp", ".jnlp", ".xbap", ".mde", ".accde", ".ade", ".adp",
         ".ps1xml", ".ps2", ".psc1", ".psd1", ".pssc", ".cdxml",
+        ".cer", ".crt", ".der", ".p7b", ".p7c", ".spc", ".pfx", ".p12", ".sst", ".stl",
+        ".vsto", ".xla", ".xlam", ".ppa", ".ppam", ".vsix", ".cab", ".mht", ".mhtml",
+        ".ahk", ".pl", ".vb", ".shb", ".shs", ".msh", ".msh1", ".msh2", ".mshxml", ".msh1xml", ".msh2xml",
+        ".deb", ".rpm", ".flatpakref", ".bash", ".zsh", ".csh", ".ksh",
     };
 
     /// <summary>
