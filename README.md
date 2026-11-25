@@ -154,7 +154,9 @@ For a release build, use `cargo build --release -p almatter-ffi` and
 `dotnet build -c Release`: each configuration picks up the matching Rust build.
 
 > If Almatter is already running (including minimised to the notification area), Windows
-> locks its files and the new build won't replace them. Quit it first.
+> locks its files and the new build won't replace them. Quit it first. Since only one copy
+> runs at a time, a development build started next to the installed Almatter would anyway
+> just bring the installed one's window forward and exit.
 
 ### Run the tests
 
@@ -375,7 +377,9 @@ correspondante.
 
 > Si Almatter est déjà ouvert (y compris réduit dans la zone de notification), Windows
 > verrouille ses fichiers et la nouvelle compilation ne les remplace pas. Quittez-le
-> d'abord.
+> d'abord. Comme un seul exemplaire tourne à la fois, une version de développement lancée
+> à côté d'Almatter installé se contenterait de toute façon de ramener la fenêtre de
+> celui-ci au premier plan, puis de se fermer.
 
 ### Lancer les tests
 

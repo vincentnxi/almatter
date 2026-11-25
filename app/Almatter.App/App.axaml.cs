@@ -3,6 +3,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
+using Avalonia.Threading;
 using Almatter.App.Diagnostics;
 using Almatter.App.Localization;
 using Almatter.App.Models;
@@ -35,9 +36,34 @@ public partial class App : Application
             {
                 ShowLoginWindow(desktop);
             }
+
+            // Launching Almatter again brings this copy's window forward.
+            SingleInstance.StartListening(() => Dispatcher.UIThread.Post(() => BringToFront(desktop)));
         }
 
         base.OnFrameworkInitializationCompleted();
+    }
+
+    /// <summary>
+    /// Shows whichever window is current (login or main), restored if it was
+    /// minimised and given the focus.
+    /// </summary>
+    private static void BringToFront(IClassicDesktopStyleApplicationLifetime desktop)
+    {
+        if (desktop.MainWindow is not { } window)
+        {
+            return;
+        }
+        if (!window.IsVisible)
+        {
+            window.Show();
+        }
+        if (window.WindowState == WindowState.Minimized
+            && !SingleInstance.RestoreWindow(window.TryGetPlatformHandle()?.Handle ?? IntPtr.Zero))
+        {
+            window.WindowState = WindowState.Normal;
+        }
+        window.Activate();
     }
 
     /// <summary>

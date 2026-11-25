@@ -14,6 +14,15 @@ sealed class Program
     public static void Main(string[] args)
     {
         CrashLogger.Install();
+
+        // Before Avalonia and before anything opens the cache or settings: a
+        // second copy only hands over to the running one, then exits.
+        if (!SingleInstance.TryClaim())
+        {
+            SingleInstance.SignalRunningInstance();
+            return;
+        }
+
         try
         {
             BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
