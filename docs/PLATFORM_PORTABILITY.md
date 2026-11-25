@@ -62,7 +62,7 @@ contraire.
 | Notifications de mention (+ icône de la zone de notification) | `Services/DesktopNotifier.cs` (`WindowsTrayNotifier`), utilisé via l'interface `IDesktopNotifier` | `Shell_NotifyIconW` (shell32, P/Invoke sans `unsafe`) ; le clic revient comme message fenêtre, reçu par `Win32Properties.AddWndProcHookCallback` d'Avalonia ; l'avatar de l'auteur devient une icône via `CreateIconFromResourceEx` (user32), à partir du PNG rond que dessine `Services/RoundAvatar.cs` (Skia, portable) | Écrire une implémentation de `IDesktopNotifier` par OS et la brancher dans `DesktopNotifier.Create` — hors Windows, elle renvoie aujourd'hui une implémentation vide (l'app marche, sans notifications). Linux : `org.freedesktop.Notifications` (D-Bus), qui gère aussi le clic (signal `ActionInvoked`). macOS : `UNUserNotificationCenter`. |
 | Barre de titre sombre | `Views/MainWindow.axaml.cs` (`ApplyTitleBarTheme`, P/Invoke `dwmapi.dll`) | `DwmSetWindowAttribute` (Windows uniquement) | macOS : `NSWindow.appearance` (interop Cocoa/Avalonia natif). Linux : dépend du gestionnaire de fenêtres, généralement non pilotable depuis l'appli — probablement à laisser tomber ou no-op. |
 | Pas de barre de titre (fenêtre principale, tous les thèmes) | `Views/ThemeResources.cs` (`headerTitle`, `HeaderTitleBarHeight`), en-têtes du canal et du fil, nom de l'équipe, `AppGrid` et styles des boutons de fenêtre dans `MainWindow.axaml` | `ExtendClientAreaToDecorationsHint` d'Avalonia : la fenêtre s'étend sous la barre de titre et Avalonia dessine lui-même les boutons réduire/agrandir/fermer. La hauteur de barre vaut celle de l'en-tête du canal (52), les trois boutons y sont centrés, et le nom de la fenêtre est masqué (opacité de `PART_TitleTextPanel`, panneau du gabarit Fluent `WindowDrawnDecorations`). `AppGrid` porte le rôle `User` pour que tout reste cliquable sous cette bande ; seuls l'en-tête du canal, celui du fil et le nom de l'équipe portent `WindowDecorationProperties.ElementRole="TitleBar"` (ils déplacent la fenêtre), leurs boutons repassant en `User`. Une colonne vide (`CaptionReserveWidth`) garde la place des boutons de la fenêtre. Réservé à Windows par un `OperatingSystem.IsWindows()` ; ailleurs, la barre du système reste | Linux : selon le compositeur (Wayland surtout), l'extension marche mal ou pas du tout — garder la barre du système. macOS : Avalonia sait étendre sous la barre en gardant les feux tricolores natifs, mais ils sont à gauche : il faudrait réserver la place dans le nom de l'équipe plutôt qu'à droite de l'en-tête. |
-| Badge sur l'icône (barre des tâches) | `Services/TaskbarBadge.cs` (interop COM `ITaskbarList3`, `CreateIconIndirect`) | Shell Windows uniquement. Le **dessin** de la pastille (`RenderPixels`) passe par Skia et est portable ; seule sa pose sur le bouton est propre à Windows | macOS : `NSDockTile.badgeLabel` (interop Cocoa). Linux : pas d'équivalent standard (quelques DE supportent l'API Unity Launcher, la plupart non) — no-op probable. |
+| Badge sur l'icône (barre des tâches) | `Services/TaskbarBadge.cs` (COM `ITaskbarList3` obtenu par `CoCreateInstance`, méthodes appelées par leur position dans la vtable via des délégués — pas de `[ComImport]`, absent en Native AOT, ni d'`unsafe` ; `CreateIconIndirect`) | Shell Windows uniquement. Le **dessin** de la pastille (`RenderPixels`) passe par Skia et est portable ; seule sa pose sur le bouton est propre à Windows | macOS : `NSDockTile.badgeLabel` (interop Cocoa). Linux : pas d'équivalent standard (quelques DE supportent l'API Unity Launcher, la plupart non) — no-op probable. |
 | Présence « disponible » tenue à jour (inactivité du poste) | `Services/SystemIdle.cs`, utilisé par `ReportActivityAsync` dans `MainViewModel` | `GetLastInputInfo` (user32, P/Invoke sans `unsafe`) : temps écoulé depuis la dernière saisie clavier/souris sur tout le poste. Tant qu'il est sous 5 min, l'app signale chaque minute au serveur que l'utilisateur est actif (sinon le serveur le passe « absent ») | Hors Windows, `IdleTime()` renvoie `null` et l'app se considère toujours active : on reste « disponible » tant qu'elle tourne. Linux : `org.freedesktop.ScreenSaver.GetSessionIdleTime` (D-Bus) ou XScreenSaver sous X11 ; macOS : `CGEventSourceSecondsSinceLastEventType`. |
 | Choix du moteur de rendu (processeur par défaut) | `Program.cs` (`RenderingMode`), réglage `AppSettings.UseGpuRendering` | `Win32PlatformOptions { RenderingMode = [Win32RenderingMode.Software] }`. Sur Windows le chemin GPU d'Avalonia passe par ANGLE → Direct3D, ce qui charge le pilote graphique dans le processus : mesuré ici, deux bibliothèques NVIDIA (~190 Mo de code mappé) et 55 threads de plus, pour un gain nul en CPU de rendu. Voir le commentaire de `UseGpuRendering` pour les chiffres | Le raisonnement est le même ailleurs mais **non mesuré** : l'équivalent est `X11PlatformOptions { RenderingMode = [X11RenderingMode.Software] }` (Linux) et `AvaloniaNativePlatformOptions` (macOS). À mesurer avant de reprendre le même défaut — un pilote Mesa/Intel est bien plus léger qu'un pilote NVIDIA, et le réglage existe déjà pour basculer. |
 | Session persistée de façon sécurisée | `Services/SessionStore.cs` | `System.Security.Cryptography.ProtectedData` (DPAPI, Windows uniquement) — paquet NuGet explicite depuis le retrait de Windows Forms, qui l'apportait implicitement. Hors Windows, `Save` n'écrit rien et `Load` ne renvoie rien : **la session n'est pas mémorisée et l'app redemande le mot de passe à chaque lancement**, plutôt que de poser le jeton en clair sur le disque | macOS : Keychain (interop Security.framework). Linux : Secret Service / libsecret (D-Bus), avec repli sur un fichier à permissions restreintes si indisponible. |
@@ -73,14 +73,30 @@ contraire.
 ### Installation
 
 `installer/` (script Inno Setup `Almatter.iss` + `build-installer.ps1`) est entièrement
-propre à Windows : publication `win-x64` dépendante du runtime, installation par
-utilisateur, téléchargement et installation du runtime .NET 10 s'il manque (détecté dans
-`Program Files\dotnet\shared\Microsoft.NETCore.App\10.*`). Rien n'y est réutilisable
-tel quel. Pistes : macOS, un `.app` signé et notarié dans un `.dmg` (runtime embarqué,
-pas d'installeur de dépendances sur ce système) ; Linux, AppImage ou Flatpak, où le
-runtime .NET peut être embarqué ou pris dans le SDK Flatpak freedesktop/dotnet.
-Le script de publication devra aussi viser le bon RID (`osx-arm64`, `linux-x64`) et
-copier `libalmatter_ffi.dylib`/`.so` (voir le point 4 ci-dessous).
+propre à Windows : publication `win-x64` en Native AOT, installation par utilisateur.
+Rien n'y est réutilisable tel quel. Pistes : macOS, un `.app` signé et notarié dans un
+`.dmg` ; Linux, AppImage ou Flatpak. Le script de publication devra aussi viser le bon
+RID (`osx-arm64`, `linux-x64`) et copier `libalmatter_ffi.dylib`/`.so` (voir le point 4
+ci-dessous).
+
+**Native AOT depuis le 2026-11-25** (`<PublishAot>` dans le csproj) : `dotnet publish`
+produit un exécutable natif qui embarque ce qu'il faut de .NET, donc rien à installer à
+côté, sur aucun OS. Deux conséquences pour le portage :
+
+- **Une compilation par OS, sur cet OS.** Native AOT ne compile pas d'un système vers un
+  autre : le paquet Linux se publie sur Linux, celui de macOS sur un Mac. L'éditeur de
+  liens natif de la plateforme est requis — sous Windows les outils C++ de Visual Studio
+  (déjà nécessaires à Rust ; `build-installer.ps1` ajoute au PATH le dossier de
+  `vswhere.exe`, que l'outil AOT cherche) ; sous Linux `clang` et `zlib1g-dev` ; sous
+  macOS les outils en ligne de commande de Xcode.
+- **Pas de réflexion.** Tout code chargé dynamiquement par son nom ou sérialisé par
+  réflexion casse à l'exécution, pas à la compilation : les avertissements IL2xxx/IL3xxx
+  de `dotnet publish` doivent rester à zéro (`build-installer.ps1` s'arrête sur le
+  premier). L'interop COM classique (`[ComImport]`) n'existe pas non plus — voir la ligne
+  du badge ci-dessus. Les `DllImport` simples, eux, fonctionnent tels quels.
+
+`dotnet build` (et donc `build-linux.yml` et le lancement en développement) n'est pas
+concerné : il produit toujours une version classique, compilée à la volée.
 `installer/test-in-sandbox.ps1` teste l'installation sur un Windows vierge via Windows
 Sandbox ; l'équivalent ailleurs serait une VM ou un conteneur propre.
 

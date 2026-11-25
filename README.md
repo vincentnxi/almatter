@@ -70,9 +70,8 @@ fraction of that, and to stay usable on older machines.
    [Releases page](https://github.com/vincentnxi/almatter/releases).
 2. Run it. Almatter installs for your user only and needs no administrator rights.
 
-Almatter runs on Microsoft's .NET 10 runtime. If it isn't already on your computer, the
-installer downloads it (about 30 MB, checked against a pinned SHA-256) and installs it —
-that single step asks for Windows' permission.
+Nothing else needs to be installed: Almatter is compiled ahead of time into native code
+and brings what it needs with it.
 
 > The installer is not code-signed yet, so Windows SmartScreen may warn about an
 > unknown publisher. Choose *More info → Run anyway* to continue.
@@ -180,14 +179,14 @@ node tools\generate-emoji-shortcodes.js
 powershell -ExecutionPolicy Bypass -File installer\build-installer.ps1
 ```
 
-This builds the Rust core in release mode, publishes the app for `win-x64`, and compiles
+This builds the Rust core in release mode, publishes the app for `win-x64` with Native AOT
+(it uses the same Visual Studio C++ build tools as Rust), and compiles
 `installer\output\Almatter-Setup-<version>.exe`. The version comes from `<Version>` in
 `app/Almatter.App/Almatter.App.csproj`.
 
 `installer\test-in-sandbox.ps1` then installs that setup in a clean
 [Windows Sandbox](https://learn.microsoft.com/windows/security/application-security/application-isolation/windows-sandbox/windows-sandbox-overview)
-and checks that the app starts. Expect about six minutes there: the .NET runtime install
-is much slower in the Sandbox than on a real PC.
+and checks that the app starts.
 
 <a id="other-platforms-en"></a>
 
@@ -283,10 +282,8 @@ rester utilisable sur des machines anciennes.
 2. Lancez-le. Almatter s'installe pour votre seul compte utilisateur, sans droits
    d'administrateur.
 
-Almatter fonctionne avec le moteur .NET 10 de Microsoft. S'il n'est pas déjà présent sur
-l'ordinateur, l'installeur le télécharge (environ 30 Mo, vérifié par une empreinte
-SHA-256 fixée à l'avance) et l'installe — c'est la seule étape qui demande l'autorisation
-de Windows.
+Rien d'autre à installer : Almatter est compilé à l'avance en code natif et apporte avec
+lui tout ce dont il a besoin.
 
 > L'installeur n'est pas encore signé : Windows SmartScreen peut signaler un éditeur
 > inconnu. Cliquez sur *Informations complémentaires → Exécuter quand même*.
@@ -403,14 +400,14 @@ node tools\generate-emoji-shortcodes.js
 powershell -ExecutionPolicy Bypass -File installer\build-installer.ps1
 ```
 
-Le script compile le cœur Rust en mode release, publie l'application pour `win-x64` et
+Le script compile le cœur Rust en mode release, publie l'application pour `win-x64` en
+Native AOT (avec les mêmes outils de compilation C++ de Visual Studio que Rust) et
 produit `installer\output\Almatter-Setup-<version>.exe`. Le numéro de version provient de
 `<Version>` dans `app/Almatter.App/Almatter.App.csproj`.
 
 `installer\test-in-sandbox.ps1` installe ensuite ce fichier dans une
 [Windows Sandbox](https://learn.microsoft.com/fr-fr/windows/security/application-security/application-isolation/windows-sandbox/windows-sandbox-overview)
-vierge et vérifie que l'application démarre. Comptez environ six minutes : l'installation
-de .NET y est beaucoup plus lente que sur un vrai PC.
+vierge et vérifie que l'application démarre.
 
 <a id="autres-plateformes"></a>
 

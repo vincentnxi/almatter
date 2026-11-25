@@ -43,6 +43,23 @@
     <ServerGarbageCollection>false</ServerGarbageCollection>
     <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
     <RetainVMGarbageCollection>false</RetainVMGarbageCollection>
+
+    <!-- Native AOT: `dotnet publish -r <rid>` compiles the whole app ahead
+         of time into one native executable. No .NET runtime to install, no
+         JIT compiler loaded at startup. Measured on 2026-11-25 against the
+         framework-dependent build of the same code: the window appears in
+         about 0.1 s instead of 0.8 s, and about 40 MB less memory is in use
+         (working set 113 vs 154 MB; private memory 68 vs 75 MB).
+
+         Only `dotnet publish` is affected: `dotnet build` and F5 still give
+         an ordinary JIT build. Publishing needs the platform's native
+         linker (on Windows the Visual Studio C++ build tools, which the
+         Rust core needs anyway) and only works for the OS it runs on.
+
+         Every reflection-based API is off limits from here on: the
+         compiler's warnings (IL2xxx, IL3xxx) must stay at zero, a new one
+         is a real break in the published app. -->
+    <PublishAot>true</PublishAot>
   </PropertyGroup>
 
   <ItemGroup>

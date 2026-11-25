@@ -1,8 +1,8 @@
 # Builds installer\output\Almatter-Setup-<version>.exe from scratch:
 #   1. the Rust core in release mode (almatter_ffi.dll),
-#   2. the app published framework-dependent for win-x64 into installer\publish,
-#   3. the Inno Setup script, with the version taken from Almatter.App.csproj
-#      and the newest .NET 10 runtime looked up and verified (see below).
+#   2. the app compiled with Native AOT for win-x64 into installer\publish
+#      (one native Almatter.exe: no .NET runtime to install on the user's PC),
+#   3. the Inno Setup script, with the version taken from Almatter.App.csproj.
 #
 # Usage (from any folder):  powershell -ExecutionPolicy Bypass -File installer\build-installer.ps1
 
@@ -42,66 +42,38 @@ finally {
     Pop-Location
 }
 
-Write-Host '== Publishing the app'
+Write-Host '== Publishing the app (Native AOT)'
+# The AOT linker step finds the Visual Studio C++ tools through vswhere.exe,
+# looked up on PATH. The Visual Studio Installer puts it in its own folder
+# without adding that folder to PATH, so a PC with only the Build Tools fails
+# at the very last step with a garbled link.exe command line.
+$vsInstaller = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer'
+if (-not (Get-Command 'vswhere.exe' -ErrorAction SilentlyContinue) -and (Test-Path (Join-Path $vsInstaller 'vswhere.exe'))) {
+    $env:PATH = "$vsInstaller;$env:PATH"
+}
 if (Test-Path $publishDir) { Remove-Item $publishDir -Recurse -Force }
-& dotnet publish $appProject -c Release -r win-x64 --self-contained false -o $publishDir
-if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed ($LASTEXITCODE)" }
+# PublishAot comes from the csproj. Warnings are listed rather than
+# tolerated silently: under AOT, a trim or AOT warning is a feature that may
+# fail at run time, not a style remark.
+# MSBuild prints warnings and errors on standard output, so Tee-Object sees
+# them all; no 2>&1, which Windows PowerShell 5.1 turns into a terminating
+# error under $ErrorActionPreference = 'Stop'.
+& dotnet publish $appProject -c Release -r win-x64 -o $publishDir | Tee-Object -Variable publishLog
+$publishExit = $LASTEXITCODE
+if ($publishExit -ne 0) { throw "dotnet publish failed ($publishExit)" }
+$aotWarnings = $publishLog | Select-String -Pattern 'warning (IL\d{4}|CS\d{4}|MSB\d{4})|warning :' | Select-Object -ExpandProperty Line -Unique
+if ($aotWarnings) { throw "dotnet publish reported warnings; fix them before shipping:`n$($aotWarnings -join "`n")" }
 
 # The csproj only copies the Rust DLL when it exists, so a missing one would
 # otherwise produce an installer for an app that cannot start.
 $ffi = Join-Path $publishDir 'almatter_ffi.dll'
 if (-not (Test-Path $ffi)) { throw "almatter_ffi.dll is missing from $publishDir" }
 
-# The .NET runtime Setup installs when it is missing: always the newest 10.0.x
-# at build time, so every installer hands out the latest security fixes
-# without a manual bump. Setup itself still checks the download against a
-# SHA-256 baked in here, so nothing unverified ever runs on a user's PC.
-# What earns that SHA-256 our trust: the file matches the SHA-512 Microsoft
-# publishes in its release list, and carries a valid Microsoft signature.
-Write-Host '== Latest .NET 10 runtime'
-$ProgressPreference = 'SilentlyContinue'   # Windows PowerShell downloads crawl with the progress bar on
-$metadata = Invoke-RestMethod 'https://builds.dotnet.microsoft.com/dotnet/release-metadata/10.0/releases.json'
-$dotnetVersion = $metadata.'latest-runtime'
-$release = $metadata.releases | Where-Object { $_.runtime.version -eq $dotnetVersion } | Select-Object -First 1
-$file = $release.runtime.files | Where-Object { $_.name -eq 'dotnet-runtime-win-x64.exe' } | Select-Object -First 1
-# These values end up inside the Inno Setup script, so anything off the
-# expected shape stops the build rather than being pasted in.
-if ($dotnetVersion -notmatch '^10\.0\.\d+$') { throw "Unexpected .NET runtime version '$dotnetVersion'" }
-$dotnetUrl = "https://builds.dotnet.microsoft.com/dotnet/Runtime/$dotnetVersion/dotnet-runtime-$dotnetVersion-win-x64.exe"
-if (-not $file -or $file.url -ne $dotnetUrl) { throw "Unexpected .NET runtime download '$($file.url)', expected $dotnetUrl" }
-if ($file.hash -notmatch '^[0-9a-fA-F]{128}$') { throw "Unexpected SHA-512 '$($file.hash)' for $dotnetUrl" }
-
-# Downloaded into a folder with an unguessable name, and both hashes are taken
-# from one read of the bytes: the SHA-256 baked into Setup is then provably the
-# hash of the file whose SHA-512 matched Microsoft's list. The file is hashed
-# again after the signature check, so a swap in between is caught too.
-$dotnetDir = Join-Path ([IO.Path]::GetTempPath()) ("almatter-dotnet-" + [guid]::NewGuid().ToString('N'))
-New-Item -ItemType Directory -Path $dotnetDir | Out-Null
-$dotnetFile = Join-Path $dotnetDir "dotnet-runtime-$dotnetVersion-win-x64.exe"
-function Get-BytesHash([byte[]] $bytes, [string] $algorithm) {
-    $hasher = [Security.Cryptography.HashAlgorithm]::Create($algorithm)
-    try { return ([BitConverter]::ToString($hasher.ComputeHash($bytes)) -replace '-', '') }
-    finally { $hasher.Dispose() }
-}
-try {
-    Invoke-WebRequest $dotnetUrl -OutFile $dotnetFile -UseBasicParsing
-    $bytes = [IO.File]::ReadAllBytes($dotnetFile)
-    $sha512 = Get-BytesHash $bytes 'SHA512'
-    if ($sha512 -ne $file.hash.ToUpperInvariant()) { throw "$dotnetUrl has SHA-512 $sha512, Microsoft lists $($file.hash)" }
-    $dotnetSha256 = (Get-BytesHash $bytes 'SHA256').ToLowerInvariant()
-    $signature = Get-AuthenticodeSignature $dotnetFile
-    if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch '(^|, )O=Microsoft Corporation(,|$)') {
-        throw "$dotnetUrl is not validly signed by Microsoft ($($signature.Status), $($signature.SignerCertificate.Subject))"
-    }
-    if ((Get-FileHash $dotnetFile -Algorithm SHA512).Hash -ne $sha512) { throw "$dotnetFile changed during verification" }
-}
-finally {
-    Remove-Item $dotnetDir -Recurse -Force -ErrorAction SilentlyContinue
-}
-Write-Host "   $dotnetVersion, SHA-256 $dotnetSha256"
+# A leftover from the framework-dependent days would mean a stale build.
+if (Test-Path (Join-Path $publishDir 'Almatter.dll')) { throw "Almatter.dll in ${publishDir}: the publish was not Native AOT" }
 
 Write-Host '== Compiling the installer'
-& $iscc "/DAppVersion=$version" "/DDotNetVersion=$dotnetVersion" "/DDotNetUrl=$dotnetUrl" "/DDotNetSha256=$dotnetSha256" (Join-Path $installerDir 'Almatter.iss')
+& $iscc "/DAppVersion=$version" (Join-Path $installerDir 'Almatter.iss')
 if ($LASTEXITCODE -ne 0) { throw "ISCC failed ($LASTEXITCODE)" }
 
 $setup = Join-Path $installerDir "output\Almatter-Setup-$version.exe"
