@@ -465,7 +465,15 @@
              perf work), any realized row's height changing at all makes the
              panel recompute its scroll position — visible as the whole
              conversation jumping around on hover. -->
+        <!-- Round buttons casting a shadow. A Button clips what it draws to
+             its own square, which cut the shadow's blur off at the edges:
+             only its darkest part, under the circle's two lower corners,
+             stayed, as two black square corners. -->
+        <Style Selector="Button.shadowed">
+            <Setter Property="ClipToBounds" Value="False" />
+        </Style>
         <Style Selector="Button.hover-reveal-btn">
+            <Setter Property="ClipToBounds" Value="False" />
             <Setter Property="Opacity" Value="0" />
             <Setter Property="IsHitTestVisible" Value="False" />
         </Style>
@@ -1325,7 +1333,7 @@
                  away from it. Clicking it returns to the newest message AND
                  resumes live updates, which is the one gesture that reliably
                  leaves the "looking at an older message" state. -->
-            <Button Grid.Row="2" Classes="row-button" IsVisible="{Binding ShowReturnToLiveButton}"
+            <Button Grid.Row="2" Classes="row-button shadowed" IsVisible="{Binding ShowReturnToLiveButton}"
                     HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,28,14"
                     Width="34" Height="34" ToolTip.Tip="{Binding T.JumpToLatest, Source={x:Static loc:Loc.Instance}}"
                     Command="{Binding ReturnToLiveTailCommand}">
@@ -1512,7 +1520,7 @@
                      just under its header, drawn like the "jump to latest"
                      arrow over the conversation. Its ZIndex keeps it above
                      the messages scrolling under it. -->
-                <Button Grid.Row="1" ZIndex="2" Classes="row-button"
+                <Button Grid.Row="1" ZIndex="2" Classes="row-button shadowed"
                         HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,10,14,0"
                         Width="34" Height="34" ToolTip.Tip="{Binding T.Close, Source={x:Static loc:Loc.Instance}}"
                         Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).CloseThreadCommand}">
