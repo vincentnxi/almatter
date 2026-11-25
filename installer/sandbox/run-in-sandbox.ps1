@@ -2,6 +2,11 @@
 # test-in-sandbox.ps1. Installs Almatter silently, then records what a
 # first-time user's PC would go through into C:\Almatter\results\report.txt,
 # which lands in installer\sandbox-results on the host.
+#
+# With an older setup in C:\Almatter\previous (test-in-sandbox.ps1
+# -UpgradeFrom), that version is installed and left running first, so the
+# report shows an update as a user would get it: whether Setup closed the
+# running app, and which files are left in the app folder afterwards.
 
 $results = 'C:\Almatter\results'
 $report = Join-Path $results 'report.txt'
@@ -23,13 +28,63 @@ Write-Report "Windows: $((Get-CimInstance Win32_OperatingSystem).Caption) $((Get
 Write-Report "vcruntime140.dll in System32 before install: $(Test-Path "$env:windir\System32\vcruntime140.dll")"
 Write-Report ".NET 10 before install: '$(Get-DotNet10)'"
 
-$setup = Get-ChildItem 'C:\Almatter\setup' -Filter 'Almatter-Setup-*.exe' | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+function Write-AppFolder([string]$label) {
+    $files = Get-ChildItem $app -File -ErrorAction SilentlyContinue
+    $byType = ($files | Group-Object Extension | Sort-Object Name | ForEach-Object { "$($_.Count) $($_.Name)" }) -join ', '
+    Write-Report "$label`: $($files.Count) files in the app folder ($byType)"
+}
+
+$previous = Get-ChildItem 'C:\Almatter\previous' -Filter 'Almatter-Setup-*.exe' -ErrorAction SilentlyContinue | Select-Object -First 1
+$oldAlmatter = $null
+if ($previous) {
+    Write-Report "UPGRADE TEST: first installing the older $($previous.Name) /VERYSILENT"
+    $started = Get-Date
+    $process = Start-Process $previous.FullName -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', "/LOG=$results\setup-previous.log" -Wait -PassThru
+    Write-Report "Older setup exit code: $($process.ExitCode) after $([int]((Get-Date) - $started).TotalSeconds) s"
+    Write-Report ".NET 10 after the older install: '$(Get-DotNet10)'"
+    Write-AppFolder 'Before the update'
+    $oldVersion = (Get-Item "$app\Almatter.exe" -ErrorAction SilentlyContinue).VersionInfo.ProductVersion
+    Write-Report "Older Almatter.exe version: '$oldVersion'"
+
+    # Left running, as on a user's PC: Setup has to close it to replace
+    # Almatter.exe (CloseApplications=yes in Almatter.iss).
+    if (Test-Path "$app\Almatter.exe") {
+        $oldAlmatter = Start-Process "$app\Almatter.exe" -PassThru
+        Start-Sleep -Seconds 15
+        $oldAlmatter.Refresh()
+        Write-Report "Older Almatter running before the update: $(-not $oldAlmatter.HasExited)"
+    }
+}
+
+$setup =Get-ChildItem 'C:\Almatter\setup' -Filter 'Almatter-Setup-*.exe' | Sort-Object LastWriteTime -Descending | Select-Object -First 1
 Write-Report "Running $($setup.Name) /VERYSILENT"
 $started = Get-Date
 $process = Start-Process $setup.FullName -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', "/LOG=$results\setup.log" -Wait -PassThru
 Write-Report "Setup exit code: $($process.ExitCode) after $([int]((Get-Date) - $started).TotalSeconds) s"
 Write-Report ".NET 10 after install: '$(Get-DotNet10)'"
 Write-Report "Almatter.exe installed: $(Test-Path "$app\Almatter.exe")"
+
+if ($previous) {
+    if ($oldAlmatter) {
+        $oldAlmatter.Refresh()
+        Write-Report "Older Almatter closed by Setup: $($oldAlmatter.HasExited)"
+    }
+    Write-Report "Almatter.exe version after the update: '$((Get-Item "$app\Almatter.exe" -ErrorAction SilentlyContinue).VersionInfo.ProductVersion)'"
+    Write-AppFolder 'After the update'
+    Get-ChildItem $app -File -ErrorAction SilentlyContinue | Sort-Object Name | ForEach-Object {
+        Write-Report ("  {0} ({1:N0} KB)" -f $_.Name, ($_.Length / 1KB))
+    }
+    # What a Native AOT install should hold: the exe, the four native
+    # libraries and the licence. Anything else came from the older version.
+    $expected = 'Almatter.exe', 'almatter_ffi.dll', 'av_libglesv2.dll', 'libHarfBuzzSharp.dll', 'libSkiaSharp.dll', 'LICENSE.txt', 'unins000.dat', 'unins000.exe'
+    $leftovers = Get-ChildItem $app -File -ErrorAction SilentlyContinue | Where-Object { $_.Name -notin $expected }
+    if ($leftovers) {
+        Write-Report "LEFTOVERS from the older version: $(($leftovers | ForEach-Object Name) -join ', ')"
+    }
+    else {
+        Write-Report 'No leftovers from the older version.'
+    }
+}
 
 # The app only loads the Rust core after sign-in, so a missing native
 # dependency would not show at startup: load the DLL directly instead.
