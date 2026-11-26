@@ -84,6 +84,14 @@ public sealed record ThemeDefinition
     /// </summary>
     public string? AccentDeepHex { get; init; }
 
+    /// <summary>
+    /// The sidebar's own colours, for a theme whose sidebar is on the other
+    /// side of light and dark from the conversation (Graphite). Null for the
+    /// usual case where the sidebar shares the conversation's text colours
+    /// and only its ground (BgPanel) differs.
+    /// </summary>
+    public SidebarColors? Sidebar { get; init; }
+
     public static readonly ThemeDefinition Light = new()
     {
         Name = "Clair",
@@ -222,6 +230,62 @@ public sealed record ThemeDefinition
     };
 
     /// <summary>
+    /// Graphite: a very light grey conversation beside a near-black graphite
+    /// sidebar, with a muted brick red for the accent. The sidebar has its
+    /// own text colours (<see cref="Sidebar"/>). Light by nature, so it
+    /// ignores the mode; it follows the contrast setting, which takes the
+    /// conversation down to about #EDEDEE.
+    ///
+    /// Measured (normal / reduced contrast). Conversation: text 15,4 / 8,9:1,
+    /// secondary 7,3 / 6,9:1, tertiary 5,3 / 5,0:1 (4,8 / 4,6:1 in the
+    /// composer), red text 5,9 / 5,6:1. Sidebar: text 14,0 / 9,5:1,
+    /// secondary 7,2 / 6,8:1, tertiary 5,6 / 5,2:1, selected row 6,9 / 6,6:1.
+    /// The danger red is a step deeper than the accent so the two stay apart.
+    /// </summary>
+    public static readonly ThemeDefinition Graphite = new()
+    {
+        Name = "Graphite",
+        IsDark = false,
+        BgApp = "#F3F3F4",
+        BgPanel = "#EBEBED",
+        BgRail = "#E8E8EA",
+        BgHover = "#E6E6E9",
+        Divider = "#DEDFE2",
+        DividerStrong = "#CBCDD1",
+        TextPrimary = "#1B1C1F",
+        TextSecondary = "#4D5056",
+        TextTertiary = "#62656B",
+        CardBg = "#FFFFFF",
+        AccentHex = "#BC3F3A",
+        OnAccentHex = "#FFFFFF",
+        AccentDeepHex = "#A53733",
+        DangerHex = "#9E2B26",
+        DangerSoftHex = "#ECE3E4",
+        DangerBorderHex = "#DFC3C3",
+        ScrimHex = "#B3F3F3F4",
+        PopoverShadow = Light.PopoverShadow,
+        CardShadow = Light.CardShadow,
+        PresenceOnlineHex = "#2DA44E",
+        PresenceAwayHex = "#D9A521",
+        PresenceDndHex = "#9E2B26",
+        PresenceOfflineHex = "#8A8D94",
+        RowRadius = 6,
+        SurfaceRadius = 10,
+        Sidebar = new SidebarColors
+        {
+            Bg = "#1E1F22",
+            Rail = "#2A2C30",
+            Hover = "#28292D",
+            Divider = "#2E3034",
+            TextPrimary = "#ECECEE",
+            TextSecondary = "#A9ACB2",
+            TextTertiary = "#93969C",
+            AccentSoft = "#4A2829",
+            AccentInk = "#E4B2AF",
+        },
+    };
+
+    /// <summary>
     /// Resolves the user's preferences to an actual palette. System defers
     /// to whatever Windows currently reports. The accent is laid over the
     /// palette last: only its hue is the user's choice, the shade comes from
@@ -240,6 +304,12 @@ public sealed record ThemeDefinition
         if (NamedThemes.Find(named) is { } palette)
         {
             return FromPalette(palette);
+        }
+
+        // Graphite is light whatever the mode, and follows the softening.
+        if (named == AppNamedTheme.Graphite)
+        {
+            return reducedContrast ? Graphite.Softened() : Graphite;
         }
 
         var dark = mode switch
@@ -375,6 +445,15 @@ public sealed record ThemeDefinition
         GroundTopHex = GroundTopHex is null ? null : TowardMidGrey(GroundTopHex),
         GroundBottomHex = GroundBottomHex is null ? null : TowardMidGrey(GroundBottomHex),
         AccentDeepHex = AccentDeepHex,
+        Sidebar = Sidebar is { } s ? s with
+        {
+            Bg = TowardMidGrey(s.Bg),
+            Rail = TowardMidGrey(s.Rail),
+            Hover = TowardMidGrey(s.Hover),
+            Divider = TowardMidGrey(s.Divider),
+            TextPrimary = Mix(s.TextPrimary, s.Bg, TextSoftening),
+            AccentSoft = TowardMidGrey(s.AccentSoft),
+        } : null,
     };
 
     private static string TowardMidGrey(string hex) => Mix(hex, "#808080", SurfaceSoftening);
@@ -421,4 +500,30 @@ public sealed record ThemeDefinition
         var b = (int)Math.Round(Channel(from, 2) + (Channel(to, 2) - Channel(from, 2)) * amount);
         return $"#{r:X2}{g:X2}{b:X2}";
     }
+}
+
+/// <summary>
+/// A sidebar's own colours, for a theme whose sidebar is dark beside a light
+/// conversation (or the reverse). Each one stands in, inside the sidebar
+/// only, for the token of the same name in <see cref="ThemeDefinition"/>.
+/// </summary>
+public sealed record SidebarColors
+{
+    public required string Bg { get; init; }
+
+    /// <summary>The search field's fill.</summary>
+    public required string Rail { get; init; }
+
+    public required string Hover { get; init; }
+    public required string Divider { get; init; }
+    public required string TextPrimary { get; init; }
+    public required string TextSecondary { get; init; }
+    public required string TextTertiary { get; init; }
+
+    /// <summary>The selected row's tint and its text.</summary>
+    public required string AccentSoft { get; init; }
+    public required string AccentInk { get; init; }
+
+    /// <summary>Whether the sidebar is the dark side: drives the Fluent chrome inside it (caret, placeholder, scroll bar).</summary>
+    public bool IsDark { get; init; } = true;
 }

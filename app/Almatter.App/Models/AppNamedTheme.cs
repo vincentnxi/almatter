@@ -32,4 +32,11 @@ public enum AppNamedTheme
     /// <see cref="NamedThemes.All"/>; its accent is its own and not a choice.
     /// </summary>
     Salon = 14,
+
+    /// <summary>
+    /// A graphite sidebar beside a very light grey conversation, with a brick
+    /// red accent. Light whatever the mode; follows the contrast setting.
+    /// Not in <see cref="NamedThemes.All"/> either: see ThemeDefinition.Graphite.
+    /// </summary>
+    Graphite = 15,
 }

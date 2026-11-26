@@ -60,7 +60,7 @@ public sealed partial class ChannelItem : ObservableObject, IChannelListItem
     public bool HasMentions => MentionCount > 0;
     public bool IsPrivate => Kind == ChannelKind.Private;
 
-    public IBrush RowBackground => IsSelected ? ColorTokens.AccentSoft : Brushes.Transparent;
+    public IBrush RowBackground => IsSelected ? ColorTokens.SidebarAccentSoft : Brushes.Transparent;
 
     /// <summary>
     /// Three levels, not two. A channel with something waiting is at full
@@ -71,8 +71,8 @@ public sealed partial class ChannelItem : ObservableObject, IChannelListItem
     /// from shouting about what isn't.
     /// </summary>
     public IBrush NameBrush => IsSelected
-        ? ColorTokens.AccentInk
-        : HasUnread ? ColorTokens.TextPrimary : ColorTokens.TextSecondary;
+        ? ColorTokens.SidebarAccentInk
+        : HasUnread ? ColorTokens.SidebarTextPrimary : ColorTokens.SidebarTextSecondary;
 
     /// <summary>
     /// The icon rises with an unread rather than the read one dropping away.
@@ -81,8 +81,8 @@ public sealed partial class ChannelItem : ObservableObject, IChannelListItem
     /// weight it always had, and only the unread ones gain.
     /// </summary>
     public IBrush IconBrush => IsSelected
-        ? ColorTokens.AccentInk
-        : HasUnread ? ColorTokens.TextPrimary : ColorTokens.TextSecondary;
+        ? ColorTokens.SidebarAccentInk
+        : HasUnread ? ColorTokens.SidebarTextPrimary : ColorTokens.SidebarTextSecondary;
 
     public FontWeight NameWeight => IsSelected || HasUnread ? FontWeight.Bold : FontWeight.Normal;
 

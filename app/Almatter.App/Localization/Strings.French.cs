@@ -181,6 +181,7 @@ public sealed partial class Strings
         ThemeAlmatterTag = "Vos réglages",
         ThemeFollowsModeTag = "Clair ou sombre",
         ThemeHintSalon = "Salon suit le mode choisi ci-dessous, avec sa propre couleur d'accent.",
+        ThemeHintGraphite = "Graphite reste clair, avec sa colonne sombre et son rouge. Le contraste réduit ci-dessous s'applique.",
         ThemeHintNone = "La plupart des thèmes fixent aussi le mode, l'accent et le contraste.",
         ThemeHintActive = name => $"« {name} » fixe le mode, l'accent et le contraste. Choisissez « Almatter » pour retrouver vos réglages.",
         SettingsFont = "Police",

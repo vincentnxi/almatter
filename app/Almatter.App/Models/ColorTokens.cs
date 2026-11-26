@@ -36,6 +36,13 @@ public static class ColorTokens
     public static IBrush CardBg { get; private set; } = Solid(ThemeDefinition.Light.CardBg);
     public static IBrush Divider { get; private set; } = Solid(ThemeDefinition.Light.Divider);
 
+    // The sidebar rows' colours: the ones above, except on a theme whose
+    // sidebar has its own (ThemeDefinition.Sidebar, Graphite).
+    public static IBrush SidebarAccentSoft { get; private set; } = AccentSoft;
+    public static IBrush SidebarAccentInk { get; private set; } = AccentInk;
+    public static IBrush SidebarTextPrimary { get; private set; } = TextPrimary;
+    public static IBrush SidebarTextSecondary { get; private set; } = TextSecondary;
+
     /// <summary>
     /// Full palette swap. AccentSoft/AccentInk are lerped toward the
     /// palette's OWN panel/text colors rather than universal white/black:
@@ -81,6 +88,21 @@ public static class ColorTokens
         {
             AccentSoft = new SolidColorBrush(Color.FromArgb(GradientAccentSoftAlpha, accentColor.R, accentColor.G, accentColor.B));
             Divider = Solid(GradientDividerHex);
+        }
+
+        if (theme.Sidebar is { } sidebar)
+        {
+            SidebarAccentSoft = Solid(sidebar.AccentSoft);
+            SidebarAccentInk = Solid(sidebar.AccentInk);
+            SidebarTextPrimary = Solid(sidebar.TextPrimary);
+            SidebarTextSecondary = Solid(sidebar.TextSecondary);
+        }
+        else
+        {
+            SidebarAccentSoft = AccentSoft;
+            SidebarAccentInk = AccentInk;
+            SidebarTextPrimary = TextPrimary;
+            SidebarTextSecondary = TextSecondary;
         }
     }
 

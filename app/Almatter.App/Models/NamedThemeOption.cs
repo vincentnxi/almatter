@@ -14,15 +14,22 @@ public sealed partial class NamedThemeOption : ObservableObject
 {
     public required AppNamedTheme Theme { get; init; }
 
-    /// <summary>Null for the "Almatter" and "Salon" rows, which follow the mode rather than being one fixed palette.</summary>
+    /// <summary>Null for the "Almatter", "Salon" and "Graphite" rows, which follow the user's settings rather than being one fixed palette.</summary>
     public NamedPalette? Palette { get; init; }
 
-    public string Name => Palette?.Name ?? (Theme == AppNamedTheme.Salon ? "Salon" : "Almatter");
+    public string Name => Palette?.Name ?? Theme switch
+    {
+        AppNamedTheme.Salon => "Salon",
+        AppNamedTheme.Graphite => "Graphite",
+        _ => "Almatter",
+    };
 
     // "Light or dark": Salon follows the mode.
     public string Tag => Palette is not null
         ? Palette.IsDark ? Loc.S.ThemeDark : Loc.S.ThemeLight
-        : Theme == AppNamedTheme.Salon ? Loc.S.ThemeFollowsModeTag : Loc.S.ThemeAlmatterTag;
+        : Theme == AppNamedTheme.Salon ? Loc.S.ThemeFollowsModeTag
+        : Theme == AppNamedTheme.Graphite ? Loc.S.ThemeLight
+        : Loc.S.ThemeAlmatterTag;
 
     [ObservableProperty]
     public partial bool IsSelected { get; set; }
@@ -58,7 +65,8 @@ public sealed partial class NamedThemeOption : ObservableObject
         else
         {
             GroundDot = ColorTokens.Solid(almatterPalette.BgApp);
-            TextDot = ColorTokens.Solid(almatterPalette.TextPrimary);
+            // Graphite's middle dot is its dark sidebar, the half that sets it apart.
+            TextDot = ColorTokens.Solid(almatterPalette.Sidebar?.Bg ?? almatterPalette.TextPrimary);
             AccentDot = ColorTokens.Solid(almatterPalette.AccentHex);
         }
         OnPropertyChanged(nameof(RowBackground));

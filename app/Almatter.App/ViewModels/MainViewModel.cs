@@ -866,6 +866,7 @@ public partial class MainViewModel : ViewModelBase
         AppNamedTheme.Aube,
         AppNamedTheme.Crepuscule,
         AppNamedTheme.Salon,
+        AppNamedTheme.Graphite,
         AppNamedTheme.Nord,
         AppNamedTheme.Cardamome,
         AppNamedTheme.Creme,
@@ -893,8 +894,14 @@ public partial class MainViewModel : ViewModelBase
     /// </summary>
     public bool ShowModeAndContrast => !IsNamedThemeActive;
 
+    /// <summary>Graphite is the theme: light whatever the mode, it follows the contrast only, with its one accent.</summary>
+    public bool IsGraphiteThemeActive => Settings.NamedTheme == AppNamedTheme.Graphite;
+
+    /// <summary>The light/dark choice, inside the block above: Graphite keeps the contrast setting but not this.</summary>
+    public bool ShowMode => ShowModeAndContrast && !IsGraphiteThemeActive;
+
     /// <summary>The usual accent swatches: only under Almatter's own palette.</summary>
-    public bool ShowAccentOptions => !IsNamedThemeActive && !IsSalonThemeActive;
+    public bool ShowAccentOptions => !IsNamedThemeActive && !IsSalonThemeActive && !IsGraphiteThemeActive;
 
     /// <summary>
     /// The composers' rows of files waiting to be sent, dropped while empty:
@@ -911,6 +918,7 @@ public partial class MainViewModel : ViewModelBase
     public string NamedThemeHint =>
         IsNamedThemeActive ? Loc.S.ThemeHintActive(CurrentNamedThemeOption.Name)
         : IsSalonThemeActive ? Loc.S.ThemeHintSalon
+        : IsGraphiteThemeActive ? Loc.S.ThemeHintGraphite
         : Loc.S.ThemeHintNone;
 
     /// <summary>
@@ -5363,20 +5371,29 @@ public partial class MainViewModel : ViewModelBase
         }
         Settings.RefreshColors();
 
-        // The "Almatter" and "Salon" rows preview their palette as the user's
-        // settings make it, whichever theme is in force right now.
+        // The "Almatter", "Salon" and "Graphite" rows preview their palette as
+        // the user's settings make it, whichever theme is in force right now.
         var almatterPalette = ThemeDefinition.Resolve(Settings.ThemeMode, SystemTheme.PrefersDark, Settings.ReducedContrast, Settings.Accent);
         var salonPalette = ThemeDefinition.Resolve(Settings.ThemeMode, SystemTheme.PrefersDark, Settings.ReducedContrast,
             named: AppNamedTheme.Salon);
-        var selectedTheme = IsNamedThemeActive || IsSalonThemeActive ? Settings.NamedTheme : AppNamedTheme.None;
+        var graphitePalette = ThemeDefinition.Resolve(Settings.ThemeMode, SystemTheme.PrefersDark, Settings.ReducedContrast,
+            named: AppNamedTheme.Graphite);
+        var selectedTheme = IsNamedThemeActive || IsSalonThemeActive || IsGraphiteThemeActive ? Settings.NamedTheme : AppNamedTheme.None;
         foreach (var option in NamedThemeOptions)
         {
             option.IsSelected = option.Theme == selectedTheme;
-            option.RefreshColors(option.Theme == AppNamedTheme.Salon ? salonPalette : almatterPalette);
+            option.RefreshColors(option.Theme switch
+            {
+                AppNamedTheme.Salon => salonPalette,
+                AppNamedTheme.Graphite => graphitePalette,
+                _ => almatterPalette,
+            });
         }
         OnPropertyChanged(nameof(IsNamedThemeActive));
         OnPropertyChanged(nameof(IsSalonThemeActive));
+        OnPropertyChanged(nameof(IsGraphiteThemeActive));
         OnPropertyChanged(nameof(ShowModeAndContrast));
+        OnPropertyChanged(nameof(ShowMode));
         OnPropertyChanged(nameof(ShowAccentOptions));
         OnPropertyChanged(nameof(CurrentNamedThemeOption));
         OnPropertyChanged(nameof(NamedThemeHint));

@@ -65,12 +65,12 @@ public sealed partial class DirectMessageItem : ObservableObject, IChannelListIt
 
     public IBrush AvatarBrush => ColorTokens.Solid(AvatarHex);
     public IBrush PresenceBrush => ColorTokens.Presence(Presence);
-    public IBrush RowBackground => IsSelected ? ColorTokens.AccentSoft : Brushes.Transparent;
+    public IBrush RowBackground => IsSelected ? ColorTokens.SidebarAccentSoft : Brushes.Transparent;
 
     /// <summary>Same three levels as a channel row — see ChannelItem.NameBrush for why read rows step back rather than unread ones shouting louder.</summary>
     public IBrush NameBrush => IsSelected
-        ? ColorTokens.AccentInk
-        : HasUnread ? ColorTokens.TextPrimary : ColorTokens.TextSecondary;
+        ? ColorTokens.SidebarAccentInk
+        : HasUnread ? ColorTokens.SidebarTextPrimary : ColorTokens.SidebarTextSecondary;
 
     public FontWeight NameWeight => IsSelected || HasUnread ? FontWeight.Bold : FontWeight.Normal;
 

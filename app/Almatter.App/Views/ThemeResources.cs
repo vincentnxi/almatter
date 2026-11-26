@@ -57,6 +57,7 @@ internal static class ThemeResources
             // their two looks: they stay system-styled on purpose (App.axaml).
             app.RequestedThemeVariant = NamedThemes.Find(settings.NamedTheme) is { } named
                 ? (named.IsDark ? ThemeVariant.Dark : ThemeVariant.Light)
+                : settings.NamedTheme == AppNamedTheme.Graphite ? ThemeVariant.Light
                 : settings.ThemeMode switch
                 {
                     AppThemeMode.Light => ThemeVariant.Light,
@@ -82,7 +83,9 @@ internal static class ThemeResources
         // it and the thread panel lets it through, so it runs across the
         // whole window.
         resources["GroundTheme"] = theme;
-        resources["SidebarGroundBrush"] = gradient ? ColorTokens.Solid(ColorTokens.GradientSidebarVeilHex) : ColorTokens.Solid(theme.BgPanel);
+        resources["SidebarGroundBrush"] = gradient ? ColorTokens.Solid(ColorTokens.GradientSidebarVeilHex)
+            : ColorTokens.Solid(theme.Sidebar?.Bg ?? theme.BgPanel);
+        ApplySidebarColors(window, theme);
         resources["ThreadGroundBrush"] = gradient ? Brushes.Transparent : ColorTokens.Solid(theme.BgApp);
         resources["DividerStrongBrush"] = ColorTokens.Solid(theme.DividerStrong);
         resources["TextPrimaryBrush"] = ColorTokens.TextPrimary;
@@ -155,6 +158,50 @@ internal static class ThemeResources
         // the solid colour is what shows for every other theme.
         window.Background = ColorTokens.Solid(theme.BgApp);
         window.Foreground = ColorTokens.TextPrimary;
+    }
+
+    /// <summary>The resources a theme with its own sidebar colours overrides inside the sidebar.</summary>
+    private static readonly string[] SidebarResourceKeys =
+    [
+        "TextPrimaryBrush", "TextSecondaryBrush", "TextTertiaryBrush", "CardBgBrush",
+        "DividerBrush", "BgHoverBrush", "BgPanelBrush", "TextSelectionBrush",
+    ];
+
+    /// <summary>
+    /// Inside the main window's sidebar (the "SidebarScope" element), a theme
+    /// such as Graphite swaps the text, divider, hover and search-field
+    /// colours for its sidebar's own, and the Fluent chrome (caret,
+    /// placeholder, scroll bar) for the matching light or dark look. Every
+    /// other theme leaves the scope empty, so the sidebar resolves the
+    /// window's resources exactly as before. Windows without a sidebar skip this.
+    /// </summary>
+    private static void ApplySidebarColors(Window window, ThemeDefinition theme)
+    {
+        if (window.FindControl<ThemeVariantScope>("SidebarScope") is not { } scope)
+        {
+            return;
+        }
+
+        if (theme.Sidebar is not { } sidebar)
+        {
+            foreach (var key in SidebarResourceKeys)
+            {
+                scope.Resources.Remove(key);
+            }
+            scope.RequestedThemeVariant = ThemeVariant.Default;
+            return;
+        }
+
+        scope.RequestedThemeVariant = sidebar.IsDark ? ThemeVariant.Dark : ThemeVariant.Light;
+        scope.Resources["TextPrimaryBrush"] = ColorTokens.Solid(sidebar.TextPrimary);
+        scope.Resources["TextSecondaryBrush"] = ColorTokens.Solid(sidebar.TextSecondary);
+        scope.Resources["TextTertiaryBrush"] = ColorTokens.Solid(sidebar.TextTertiary);
+        scope.Resources["CardBgBrush"] = ColorTokens.Solid(sidebar.Rail);
+        scope.Resources["DividerBrush"] = ColorTokens.Solid(sidebar.Divider);
+        scope.Resources["BgHoverBrush"] = ColorTokens.Solid(sidebar.Hover);
+        // The ring around a presence dot is cut from the sidebar's ground.
+        scope.Resources["BgPanelBrush"] = ColorTokens.Solid(sidebar.Bg);
+        scope.Resources["TextSelectionBrush"] = ColorTokens.Solid(ThemeDefinition.Mix(theme.AccentHex, sidebar.Bg, 0.55));
     }
 
     /// <summary>WCAG contrast of white text on a "#RRGGBB" colour.</summary>

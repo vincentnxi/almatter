@@ -179,6 +179,7 @@ public sealed partial class Strings
         ThemeAlmatterTag = "Your settings",
         ThemeFollowsModeTag = "Light or dark",
         ThemeHintSalon = "Salon follows the mode you pick below, with an accent color of its own.",
+        ThemeHintGraphite = "Graphite stays light, with its dark sidebar and its red. Reduced contrast below still applies.",
         ThemeHintNone = "Most themes also set the mode, the accent and the contrast.",
         ThemeHintActive = name => $"“{name}” sets the mode, accent and contrast. Choose “Almatter” to get your own settings back.",
         SettingsFont = "Font",

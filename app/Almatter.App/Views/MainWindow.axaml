@@ -584,8 +584,13 @@
              nothing for the other themes. -->
         <views:GroundBackdrop Grid.Column="0" Grid.ColumnSpan="3" Palette="{DynamicResource GroundTheme}" />
 
-        <!-- SIDEBAR -->
-        <Border Grid.Column="0" Background="{DynamicResource SidebarGroundBrush}" BorderBrush="{DynamicResource DividerBrush}"
+        <!-- SIDEBAR. The scope is how a theme gives the sidebar colours of its
+             own (Graphite's dark sidebar beside a light conversation):
+             ThemeResources sets its theme variant and overrides the text,
+             divider and hover resources inside it. For every other theme it
+             inherits everything and changes nothing. -->
+        <ThemeVariantScope Grid.Column="0" x:Name="SidebarScope">
+        <Border Background="{DynamicResource SidebarGroundBrush}" BorderBrush="{DynamicResource DividerBrush}"
                 BorderThickness="0,0,1,0" Margin="0"
                 CornerRadius="0" ClipToBounds="True">
             <Grid RowDefinitions="Auto,Auto,*,Auto">
@@ -765,6 +770,7 @@
                 </Border>
             </Grid>
         </Border>
+        </ThemeVariantScope>
 
         <!-- Sidebar resize handle. Sits in the conversation column, aligned
              left and pulled back over the sidebar's own 1px border, so the

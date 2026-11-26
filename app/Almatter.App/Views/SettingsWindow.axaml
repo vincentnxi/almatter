@@ -309,13 +309,14 @@
 
                     <!-- Only the settings the chosen theme actually uses are
                          shown: all of them for Almatter's own palette, mode
-                         and contrast for Salon, none for a
+                         and contrast for Salon, contrast alone for Graphite, none for a
                          fixed-palette theme, which decides them itself. The
                          hidden ones keep their saved values. -->
                     <Border Classes="separator" IsVisible="{Binding ShowModeAndContrast}" />
 
                     <StackPanel Spacing="20" IsVisible="{Binding ShowModeAndContrast}">
-                        <StackPanel Spacing="8">
+                        <!-- Graphite is light whatever the mode: it keeps the contrast setting only. -->
+                        <StackPanel Spacing="8" IsVisible="{Binding ShowMode}">
                             <StackPanel Spacing="2">
                                 <TextBlock Classes="setting-label" Text="{Binding T.SettingsMode, Source={x:Static loc:Loc.Instance}}" />
                                 <TextBlock Classes="setting-hint" Text="{Binding T.ThemeSystemHint, Source={x:Static loc:Loc.Instance}}" />

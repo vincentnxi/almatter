@@ -216,6 +216,7 @@ public sealed partial class Strings
     public required string ThemeHintNone { get; init; }
     public required Func<string, string> ThemeHintActive { get; init; }
     public required string ThemeHintSalon { get; init; }
+    public required string ThemeHintGraphite { get; init; }
     public required string SettingsFont { get; init; }
     public required string FontSystem { get; init; }
     public required string FontMattermostHint { get; init; }
