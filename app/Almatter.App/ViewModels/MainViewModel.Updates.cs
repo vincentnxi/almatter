@@ -31,7 +31,8 @@ public partial class MainViewModel
 
     /// <summary>What the banner offers. Null: no banner.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ShowUpdateBanner), nameof(UpdateBannerTitle))]
+    [NotifyPropertyChangedFor(nameof(ShowUpdateBanner), nameof(UpdateBannerTitle),
+        nameof(UpdateCheckStatusText), nameof(HasUpdateCheckStatus), nameof(ShowUpdateCheckLink))]
     public partial NewerReleaseDto? AvailableUpdate { get; set; }
 
     public bool ShowUpdateBanner => AvailableUpdate is not null;
@@ -57,6 +58,13 @@ public partial class MainViewModel
     };
 
     public bool HasUpdateCheckStatus => UpdateCheckStatusText.Length > 0;
+
+    /// <summary>
+    /// The "View on GitHub" link next to that line, once a check the user
+    /// asked for has found a newer version. Goes with the banner: skipping or
+    /// closing it there takes the link away here too.
+    /// </summary>
+    public bool ShowUpdateCheckLink => _updateCheckOutcome == UpdateCheckOutcome.Found && AvailableUpdate is not null;
 
     /// <summary>The version whose banner was closed with the cross: hidden until the next launch, or until a later version.</summary>
     private string? _updateDismissedVersion;
@@ -145,6 +153,7 @@ public partial class MainViewModel
         _updateCheckOutcome = outcome;
         OnPropertyChanged(nameof(UpdateCheckStatusText));
         OnPropertyChanged(nameof(HasUpdateCheckStatus));
+        OnPropertyChanged(nameof(ShowUpdateCheckLink));
     }
 
     /// <summary>Switched on: check straight away rather than tomorrow. Switched off: the banner goes too.</summary>
