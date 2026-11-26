@@ -64,7 +64,10 @@ $asAutoUpdate = Test-Path 'C:\Almatter\previous\as-auto-update'
 $setupArguments = if ($asAutoUpdate) { '/SILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/AUTOUPDATE=1' } else { '/VERYSILENT', '/SUPPRESSMSGBOXES' }
 Write-Report "Running $($setup.Name) $($setupArguments -join ' ')"
 $started = Get-Date
-$process = Start-Process $setup.FullName -ArgumentList ($setupArguments + "/LOG=$results\setup.log") -Wait -PassThru
+# WaitForExit rather than -Wait: -Wait also waits for whatever Setup starts,
+# and with /AUTOUPDATE=1 that is Almatter itself, which keeps running.
+$process = Start-Process $setup.FullName -ArgumentList ($setupArguments + "/LOG=$results\setup.log") -PassThru
+$process.WaitForExit()
 Write-Report "Setup exit code: $($process.ExitCode) after $([int]((Get-Date) - $started).TotalSeconds) s"
 Write-Report ".NET 10 after install: '$(Get-DotNet10)'"
 Write-Report "Almatter.exe installed: $(Test-Path "$app\Almatter.exe")"
