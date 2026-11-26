@@ -29,6 +29,8 @@ public sealed class ChannelDto
     [JsonPropertyName("mention_count")] public long MentionCount { get; set; }
     /// <summary>Server-side mute (notify_props.mark_unread == "mention") — same merge as MsgCount.</summary>
     [JsonPropertyName("is_muted")] public bool IsMuted { get; set; }
+    /// <summary>The channel header (Markdown, often holding the channel's useful links); empty for none.</summary>
+    [JsonPropertyName("header")] public string Header { get; set; } = "";
 
     public bool IsPublicOrPrivate => Type is "O" or "P";
     public bool IsPrivate => Type == "P";
@@ -201,6 +203,9 @@ internal sealed class RevisionData
     /// <summary>How many posts are pinned. Its own term because pinning moves neither create_at nor edit_at — without it, a colleague pinning something would go unnoticed until the channel was reopened.</summary>
     [JsonPropertyName("pinned")] public long Pinned { get; set; }
 
+    /// <summary>The channel's bookmark list stamp. Kept out of <see cref="AsKey"/>: a new bookmark changes the bar, not the messages, and must not cost the conversation a re-read.</summary>
+    [JsonPropertyName("bookmarks")] public long Bookmarks { get; set; }
+
     public (long, long, long, long, long, long) AsKey() =>
         (Count, LastCreateAt, LastEditAt, Reactions, LastReactionSeq, Pinned);
 }
@@ -213,6 +218,43 @@ internal sealed class PublicChannelsData
 internal sealed class PostsData
 {
     [JsonPropertyName("posts")] public List<PostDto> Posts { get; set; } = [];
+}
+
+/// <summary>One of a channel's bookmarks, as the core caches it (see almatter-core's ChannelBookmark).</summary>
+public sealed class ChannelBookmarkDto
+{
+    [JsonPropertyName("id")] public string Id { get; set; } = "";
+    [JsonPropertyName("channel_id")] public string ChannelId { get; set; } = "";
+    [JsonPropertyName("display_name")] public string DisplayName { get; set; } = "";
+    [JsonPropertyName("sort_order")] public long SortOrder { get; set; }
+    /// <summary>"link" or "file".</summary>
+    [JsonPropertyName("type")] public string Type { get; set; } = "";
+    [JsonPropertyName("link_url")] public string LinkUrl { get; set; } = "";
+    [JsonPropertyName("emoji")] public string Emoji { get; set; } = "";
+    [JsonPropertyName("file")] public FileDto? File { get; set; }
+}
+
+/// <summary>One file posted in a channel (see almatter-core's ChannelFile).</summary>
+public sealed class ChannelFileDto
+{
+    [JsonPropertyName("id")] public string Id { get; set; } = "";
+    [JsonPropertyName("post_id")] public string PostId { get; set; } = "";
+    [JsonPropertyName("user_id")] public string UserId { get; set; } = "";
+    [JsonPropertyName("create_at")] public long CreateAt { get; set; }
+    [JsonPropertyName("name")] public string Name { get; set; } = "";
+    [JsonPropertyName("extension")] public string Extension { get; set; } = "";
+    [JsonPropertyName("size")] public long Size { get; set; }
+}
+
+internal sealed class ChannelFilesData
+{
+    [JsonPropertyName("files")] public List<ChannelFileDto> Files { get; set; } = [];
+    [JsonPropertyName("has_more")] public bool HasMore { get; set; }
+}
+
+internal sealed class BookmarksData
+{
+    [JsonPropertyName("bookmarks")] public List<ChannelBookmarkDto> Bookmarks { get; set; } = [];
 }
 
 internal sealed class UsersData

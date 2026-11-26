@@ -612,6 +612,24 @@ async fn handle_event(text: &str, user_id: &str, client: &MattermostClient, db: 
             }
             return;
         }
+        // Someone added, edited, removed or reordered a channel bookmark.
+        // The channel's list is fetched again in the background — rare
+        // events, one small request — and the fingerprint's bookmark stamp
+        // then tells the app to repaint the bar.
+        Some("channel_bookmark_created")
+        | Some("channel_bookmark_updated")
+        | Some("channel_bookmark_deleted")
+        | Some("channel_bookmark_sorted") => {
+            if let Some(channel_id) = envelope.broadcast.as_ref().and_then(|b| b.channel_id.clone()) {
+                let client = client.clone();
+                tokio::spawn(async move {
+                    if let Err(e) = crate::dispatch::refresh_channel_bookmarks(&client, db, &channel_id).await {
+                        crate::db::log("ws", &format!("bookmark refresh failed: {e}"));
+                    }
+                });
+            }
+            return;
+        }
         Some("posted") => {}
         _ => return,
     }
@@ -1373,6 +1391,7 @@ mod tests {
                     msg_count: 7,
                     mention_count: 2,
                     is_muted: false,
+                    header: String::new(),
                 })
                 .unwrap();
         }

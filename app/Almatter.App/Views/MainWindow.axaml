@@ -11,6 +11,7 @@
         x:Class="Almatter.App.Views.MainWindow"
         x:DataType="vm:MainViewModel"
         x:Name="RootWindow"
+        views:MessageTextSize.Value="{Binding Settings.MessageFontSize}"
         Icon="/Assets/almatter-logo.ico"
         Title="Almatter"
         Width="1280" Height="800" MinWidth="980" MinHeight="620"
@@ -270,20 +271,20 @@
     <Window.DataTemplates>
         <DataTemplate DataType="models:ParagraphBlock">
             <views:MessageInlineText Segments="{Binding Segments}"
-                                     BaseFontSize="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.MessageFontSize}"
+                                     BaseFontSize="{Binding (views:MessageTextSize.Value), RelativeSource={RelativeSource Self}}"
                                      LinkCommand="{Binding #RootWindow.((vm:MainViewModel)DataContext).OpenLinkCommand}" />
         </DataTemplate>
 
         <DataTemplate DataType="models:HeadingBlock">
             <views:MessageInlineText Segments="{Binding Segments}" FontScale="{Binding FontScale}" FontWeight="Bold" Margin="0,4,0,2"
-                                     BaseFontSize="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.MessageFontSize}"
+                                     BaseFontSize="{Binding (views:MessageTextSize.Value), RelativeSource={RelativeSource Self}}"
                                      LinkCommand="{Binding #RootWindow.((vm:MainViewModel)DataContext).OpenLinkCommand}" />
         </DataTemplate>
 
         <DataTemplate DataType="models:QuoteBlock">
             <Border BorderBrush="{DynamicResource DividerStrongBrush}" BorderThickness="3,0,0,0" Padding="10,1,0,1">
                 <views:MessageInlineText Segments="{Binding Segments}" Foreground="{DynamicResource TextSecondaryBrush}"
-                                         BaseFontSize="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.MessageFontSize}"
+                                         BaseFontSize="{Binding (views:MessageTextSize.Value), RelativeSource={RelativeSource Self}}"
                                          LinkCommand="{Binding #RootWindow.((vm:MainViewModel)DataContext).OpenLinkCommand}" />
             </Border>
         </DataTemplate>
@@ -292,10 +293,10 @@
             <Grid ColumnDefinitions="Auto,*" Margin="{Binding IndentMargin}">
                 <TextBlock Text="{Binding Marker}" MinWidth="16" Margin="2,0,6,0" TextAlignment="Right"
                            Foreground="{DynamicResource TextSecondaryBrush}"
-                           FontSize="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.MessageFontSize}"
-                           LineHeight="{Binding #RootWindow.((vm:MainViewModel)DataContext).MessageLineHeight}" />
+                           FontSize="{Binding (views:MessageTextSize.Value), RelativeSource={RelativeSource Self}}"
+                           LineHeight="{Binding (views:MessageTextSize.Value), RelativeSource={RelativeSource Self}, Converter={x:Static views:MessageTextSize.ToLineHeight}}" />
                 <views:MessageInlineText Grid.Column="1" Segments="{Binding Segments}"
-                                         BaseFontSize="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.MessageFontSize}"
+                                         BaseFontSize="{Binding (views:MessageTextSize.Value), RelativeSource={RelativeSource Self}}"
                                          LinkCommand="{Binding #RootWindow.((vm:MainViewModel)DataContext).OpenLinkCommand}" />
             </Grid>
         </DataTemplate>
@@ -307,7 +308,7 @@
             <Border Background="{DynamicResource BgPanelBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1"
                     CornerRadius="6" Padding="10,7" Margin="0,4">
                 <SelectableTextBlock Text="{Binding Code}" TextWrapping="Wrap" FontFamily="{x:Static views:MessageInlineText.MonospaceFont}"
-                                     FontSize="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.MessageFontSize}" />
+                                     FontSize="{Binding (views:MessageTextSize.Value), RelativeSource={RelativeSource Self}}" />
             </Border>
         </DataTemplate>
 
@@ -317,7 +318,7 @@
 
         <DataTemplate DataType="models:TableBlock">
             <views:MessageTable Table="{Binding}" Margin="0,4"
-                                BaseFontSize="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.MessageFontSize}"
+                                BaseFontSize="{Binding (views:MessageTextSize.Value), RelativeSource={RelativeSource Self}}"
                                 LinkCommand="{Binding #RootWindow.((vm:MainViewModel)DataContext).OpenLinkCommand}" />
         </DataTemplate>
     </Window.DataTemplates>
@@ -778,7 +779,7 @@
 
         <!-- MAIN CONVERSATION -->
         <Border Grid.Column="1" Background="Transparent" ClipToBounds="True">
-        <Grid RowDefinitions="Auto,52,*,Auto">
+        <Grid RowDefinitions="Auto,52,Auto,*,Auto">
 
             <!-- A newer version on GitHub (MainViewModel.Updates.cs). In the
                  accent's soft tint and deep ink, like the selected channel, so
@@ -828,10 +829,47 @@
                         <TextBlock Text="{Binding ActiveChannelOriginalName}" IsVisible="{Binding HasActiveChannelOriginalName}"
                                    FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}" />
                     </StackPanel>
-                    <Border Grid.Column="2" Width="1" Height="16" Background="{DynamicResource DividerStrongBrush}" Margin="12,0" />
-                    <TextBlock Grid.Column="3" Text="{Binding ActiveChannelTopic}" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
-                               HorizontalAlignment="Left" Margin="0,0,96,0" />
-                    <!-- The 96 above: however long the topic, a stretch of bare header is left to drag the window by. -->
+                    <!-- Column 3 is the stretch of bare header the window is dragged by;
+                         its two icons sit at its right end. -->
+                    <StackPanel Grid.Column="3" Orientation="Horizontal" HorizontalAlignment="Right">
+                    <!-- The channel's files: opens the files panel. -->
+                    <Button Classes="row-button" Margin="4,0" WindowDecorationProperties.ElementRole="User"
+                            ToolTip.Tip="{Binding T.ChannelFiles, Source={x:Static loc:Loc.Instance}}"
+                            Command="{Binding OpenChannelFilesPanelCommand}">
+                        <Border Width="28" Height="28" CornerRadius="{DynamicResource RowRadiusValue}" Background="Transparent">
+                            <Path Data="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z M14 2v6h6 M8 13h8 M8 17h5"
+                                  Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.6" StrokeLineCap="Round" StrokeJoin="Round"
+                                  Width="16" Height="16" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                    </Button>
+                    <!-- The channel header, behind an icon that is there only when
+                         the channel has one. Hovering it (OnChannelHeaderPointerEntered)
+                         or clicking it opens the whole header in a bubble, drawn
+                         like a message, links clickable; the bubble closes once
+                         the pointer moves away from it. -->
+                    <Button x:Name="ChannelHeaderButton" Classes="row-button" Margin="4,0"
+                            IsVisible="{Binding HasActiveChannelTopic}" WindowDecorationProperties.ElementRole="User"
+                            ToolTip.Tip="{Binding T.ChannelHeader, Source={x:Static loc:Loc.Instance}}"
+                            PointerEntered="OnChannelHeaderPointerEntered" PointerExited="OnChannelHeaderPointerExited">
+                        <Border Width="28" Height="28" CornerRadius="{DynamicResource RowRadiusValue}" Background="Transparent">
+                            <Path Data="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z M12 16v-4 M12 8h.01"
+                                  Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.6" StrokeLineCap="Round" StrokeJoin="Round"
+                                  Width="16" Height="16" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <Button.Flyout>
+                            <Flyout Placement="BottomEdgeAlignedRight" ShowMode="TransientWithDismissOnPointerMoveAway">
+                                <!-- 400: the theme caps a flyout at 456 px, padding included; any wider and it grows a sideways scrollbar. -->
+                                <ScrollViewer MaxHeight="420" Width="400" HorizontalScrollBarVisibility="Disabled">
+                                    <!-- Their templates are in Window.DataTemplates, shared with
+                                         messages; they read their text size from here (see
+                                         MessageTextSize), a touch smaller than a message and following its setting. -->
+                                    <ItemsControl ItemsSource="{Binding ActiveChannelHeaderBlocks}" Margin="2,0,8,0"
+                                                  views:MessageTextSize.Value="{Binding Settings.MessageFontSize, Converter={x:Static views:MessageTextSize.Smaller}}" />
+                                </ScrollViewer>
+                            </Flyout>
+                        </Button.Flyout>
+                    </Button>
+                    </StackPanel>
                     <!-- The header's icon buttons, bare icons.
                          "User": clicks reach them instead of dragging the window. -->
                     <Button Grid.Column="4" Classes="row-button" ToolTip.Tip="{Binding T.ChannelMembers, Source={x:Static loc:Loc.Instance}}" Margin="4,0" WindowDecorationProperties.ElementRole="User"
@@ -878,7 +916,49 @@
                 </Grid>
             </Border>
 
-            <ScrollViewer Grid.Row="2" x:Name="MessagesScroller">
+            <!-- CHANNEL BOOKMARKS: the links and files pinned under the header,
+                 read-only. Absent when the channel has none, so it costs the
+                 conversation no height. Scrolls sideways when they don't fit.
+                 The tooltip shows where each one really leads. -->
+            <Border Grid.Row="2" IsVisible="{Binding HasBookmarks}" Padding="12,5"
+                    BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1">
+                <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                    <ItemsControl ItemsSource="{Binding Bookmarks}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel Orientation="Horizontal" Spacing="2" />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="models:BookmarkItem">
+                                <Button Classes="row-button" ToolTip.Tip="{Binding Tip}"
+                                        Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).OpenBookmarkCommand}"
+                                        CommandParameter="{Binding}">
+                                    <Border CornerRadius="{DynamicResource RowRadiusValue}" Padding="8,4" Background="Transparent">
+                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                            <TextBlock Text="{Binding Glyph}" IsVisible="{Binding HasGlyph}" FontSize="13" VerticalAlignment="Center" />
+                                            <!-- Link: two chain links. -->
+                                            <Path IsVisible="{Binding ShowLinkIcon}"
+                                                  Data="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71 M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"
+                                                  Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.7" StrokeLineCap="Round" StrokeJoin="Round"
+                                                  Width="13" Height="13" Stretch="Uniform" VerticalAlignment="Center" />
+                                            <!-- File: a page with a folded corner. -->
+                                            <Path IsVisible="{Binding ShowFileIcon}"
+                                                  Data="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z M14 2v6h6"
+                                                  Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.7" StrokeLineCap="Round" StrokeJoin="Round"
+                                                  Width="13" Height="13" Stretch="Uniform" VerticalAlignment="Center" />
+                                            <TextBlock Text="{Binding Label}" FontSize="12.5" MaxWidth="220" TextTrimming="CharacterEllipsis"
+                                                       Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </Border>
+                                </Button>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </Border>
+
+            <ScrollViewer Grid.Row="3" x:Name="MessagesScroller">
                 <ItemsControl x:Name="MessagesItemsControl" ItemsSource="{Binding Messages}" Margin="20,14,20,26">
                     <!-- Virtualized: without this, every message in the channel's whole
                          history is fully realized/measured/laid out on every repaint —
@@ -1333,7 +1413,7 @@
                  away from it. Clicking it returns to the newest message AND
                  resumes live updates, which is the one gesture that reliably
                  leaves the "looking at an older message" state. -->
-            <Button Grid.Row="2" Classes="row-button shadowed" IsVisible="{Binding ShowReturnToLiveButton}"
+            <Button Grid.Row="3" Classes="row-button shadowed" IsVisible="{Binding ShowReturnToLiveButton}"
                     HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,28,14"
                     Width="34" Height="34" ToolTip.Tip="{Binding T.JumpToLatest, Source={x:Static loc:Loc.Instance}}"
                     Command="{Binding ReturnToLiveTailCommand}">
@@ -1354,7 +1434,7 @@
                  The negative bottom margin tucks it into the gap above the
                  composer; the message list's larger bottom margin keeps the
                  last line of text clear of it. -->
-            <Border Grid.Row="2" IsVisible="{Binding TypingIndicatorText, Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}"
+            <Border Grid.Row="3" IsVisible="{Binding TypingIndicatorText, Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}"
                     IsHitTestVisible="False"
                     HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="28,0,80,-8"
                     Padding="10,4" CornerRadius="12"
@@ -1372,7 +1452,7 @@
             </Border>
 
             <!-- The room around the composer. -->
-            <Border Grid.Row="3" Margin="20,10,20,16">
+            <Border Grid.Row="4" Margin="20,10,20,16">
             <Border x:Name="ComposerFrame" Classes="composer-frame" CornerRadius="{DynamicResource SurfaceRadiusValue}" Background="{DynamicResource CardBgBrush}">
                 <StackPanel>
                     <Border IsVisible="{Binding IsEditingMessage}" Background="{DynamicResource BgPanelBrush}" CornerRadius="{DynamicResource RowRadiusValue}" Margin="10,8,10,0" Padding="10,5">
@@ -2227,6 +2307,118 @@
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
+                    </StackPanel>
+                </ScrollViewer>
+            </Grid>
+        </Border>
+
+        <!-- CHANNEL FILES PANEL: every file posted in the channel, newest first.
+             A row opens its file (like an attachment); its buttons save it or
+             go to its message. -->
+        <Button Classes="row-button" Grid.Column="0" Grid.ColumnSpan="3" IsVisible="{Binding IsChannelFilesPanelOpen}"
+                HorizontalAlignment="Stretch" VerticalAlignment="Stretch" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"
+                Command="{Binding CloseChannelFilesPanelCommand}" Background="Transparent" Content="" />
+
+        <Border Grid.Column="0" Grid.ColumnSpan="2" IsVisible="{Binding IsChannelFilesPanelOpen}"
+                HorizontalAlignment="Center" VerticalAlignment="Top" Width="480" Margin="0,16,0,0"
+                Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource DividerStrongBrush}" BorderThickness="1"
+                CornerRadius="{DynamicResource SurfaceRadiusValue}" Padding="14" BoxShadow="{DynamicResource PopoverShadow}">
+            <Grid RowDefinitions="Auto,Auto,*">
+                <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,10">
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding T.ChannelFiles, Source={x:Static loc:Loc.Instance}}" FontWeight="Bold" FontSize="14" VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding ActiveChannelName, StringFormat='#{0}'}" FontSize="12"
+                                   Foreground="{DynamicResource TextTertiaryBrush}" VerticalAlignment="Center" />
+                    </StackPanel>
+                    <Button Grid.Column="1" Classes="row-button" Width="20" Height="20" Command="{Binding CloseChannelFilesPanelCommand}">
+                        <Canvas Width="14" Height="14" HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <Line StartPoint="1,1" EndPoint="13,13" Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.6" StrokeLineCap="Round" />
+                            <Line StartPoint="13,1" EndPoint="1,13" Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.6" StrokeLineCap="Round" />
+                        </Canvas>
+                    </Button>
+                </Grid>
+
+                <TextBlock Grid.Row="1" IsVisible="{Binding IsChannelFilesOffline}" TextWrapping="Wrap" Margin="2,0,2,8"
+                           FontSize="12" Foreground="{DynamicResource TextTertiaryBrush}"
+                           Text="{Binding T.ChannelFilesOffline, Source={x:Static loc:Loc.Instance}}" />
+
+                <ScrollViewer Grid.Row="2" MaxHeight="460">
+                    <StackPanel Spacing="2">
+                        <TextBlock IsVisible="{Binding ShowNoChannelFiles}" TextWrapping="Wrap" Margin="0,16,0,20"
+                                   Foreground="{DynamicResource TextTertiaryBrush}" HorizontalAlignment="Center" TextAlignment="Center"
+                                   Text="{Binding T.NoChannelFiles, Source={x:Static loc:Loc.Instance}}" />
+                        <TextBlock IsVisible="{Binding IsLoadingChannelFiles}" Margin="0,8" HorizontalAlignment="Center"
+                                   Foreground="{DynamicResource TextTertiaryBrush}" FontSize="12"
+                                   Text="{Binding T.Searching, Source={x:Static loc:Loc.Instance}}" />
+
+                        <ItemsControl ItemsSource="{Binding ChannelFiles}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Spacing="2" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="models:ChannelFileItem">
+                                    <Grid ColumnDefinitions="*,Auto,Auto">
+                                        <Button Grid.Column="0" Classes="row-button" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                                                ToolTip.Tip="{Binding FileName}"
+                                                Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).OpenChannelFileCommand}"
+                                                CommandParameter="{Binding}">
+                                            <Border CornerRadius="{DynamicResource RowRadiusValue}" Padding="8,7">
+                                                <Grid ColumnDefinitions="Auto,*">
+                                                    <!-- The file's type as a small badge, a page icon without one. -->
+                                                    <Border Grid.Column="0" Width="36" Height="36" CornerRadius="6" Margin="0,0,10,0" VerticalAlignment="Center"
+                                                            Background="{DynamicResource BgPanelBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1">
+                                                        <Panel>
+                                                            <TextBlock Text="{Binding TypeLabel}" IsVisible="{Binding HasTypeLabel}" FontSize="10" FontWeight="Bold"
+                                                                       Foreground="{DynamicResource TextSecondaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                            <Path IsVisible="{Binding !HasTypeLabel}" Data="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z M14 2v6h6"
+                                                                  Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.6" StrokeLineCap="Round" StrokeJoin="Round"
+                                                                  Width="16" Height="16" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                        </Panel>
+                                                    </Border>
+                                                    <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding FileName}" FontWeight="SemiBold" FontSize="13" TextTrimming="CharacterEllipsis" />
+                                                        <TextBlock Text="{Binding Details}" FontSize="11.5" Foreground="{DynamicResource TextTertiaryBrush}" TextTrimming="CharacterEllipsis" />
+                                                    </StackPanel>
+                                                </Grid>
+                                            </Border>
+                                        </Button>
+                                        <!-- Save as… -->
+                                        <Button Grid.Column="1" Classes="row-button" Width="28" Height="28" VerticalAlignment="Center" Margin="4,0,0,0"
+                                                ToolTip.Tip="{Binding DownloadTip}"
+                                                Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).SaveChannelFileCommand}"
+                                                CommandParameter="{Binding}">
+                                            <Panel>
+                                                <Path IsVisible="{Binding !IsJustSaved}" Data="M12 3v12 M7 10l5 5 5-5 M5 21h14"
+                                                      Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.6" StrokeLineCap="Round" StrokeJoin="Round"
+                                                      Width="14" Height="14" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                <Path IsVisible="{Binding IsJustSaved}" Data="M4 12l5 5L20 6"
+                                                      Stroke="{DynamicResource AccentTextBrush}" StrokeThickness="1.8" StrokeLineCap="Round" StrokeJoin="Round"
+                                                      Width="14" Height="14" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                            </Panel>
+                                        </Button>
+                                        <!-- Go to the message it came with. -->
+                                        <Button Grid.Column="2" Classes="row-button" Width="28" Height="28" VerticalAlignment="Center" Margin="2,0,0,0"
+                                                ToolTip.Tip="{Binding T.GoToMessage, Source={x:Static loc:Loc.Instance}}"
+                                                Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).JumpToChannelFileMessageCommand}"
+                                                CommandParameter="{Binding}">
+                                            <Path Data="M21 12a9 9 0 0 1-9 9H3l3-3a9 9 0 1 1 15-6z"
+                                                  Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.6" StrokeLineCap="Round" StrokeJoin="Round"
+                                                  Width="14" Height="14" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                        </Button>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <Button Classes="row-button" HorizontalAlignment="Center" Margin="0,6,0,2"
+                                IsVisible="{Binding CanLoadMoreChannelFiles}" IsEnabled="{Binding !IsLoadingChannelFiles}"
+                                Command="{Binding LoadMoreChannelFilesCommand}">
+                            <Border CornerRadius="{DynamicResource RowRadiusValue}" Padding="12,5" Background="{DynamicResource BgPanelBrush}">
+                                <TextBlock Text="{Binding T.ShowMoreFiles, Source={x:Static loc:Loc.Instance}}" FontSize="12.5" />
+                            </Border>
+                        </Button>
                     </StackPanel>
                 </ScrollViewer>
             </Grid>

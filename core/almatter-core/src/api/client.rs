@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use thiserror::Error;
 
-use crate::models::{AuthenticatedUser, Channel, ChannelMember, ChannelParticipant, CustomEmoji, FileInfo, PostList, Post, Preference, PublicChannel, Team, UserStatus};
+use crate::models::{AuthenticatedUser, Channel, ChannelBookmark, ChannelFile, ChannelMember, ChannelParticipant, CustomEmoji, FileInfo, PostList, Post, Preference, PublicChannel, Team, UserStatus};
 
 /// A `MattermostClient` is built fresh for every dispatched request (see
 /// dispatch.rs), but `reqwest::Client` is cheap to clone (it's an `Arc`
@@ -439,6 +439,101 @@ impl MattermostClient {
     pub async fn get_pinned_posts(&self, channel_id: &str) -> Result<Vec<Post>, ApiError> {
         let list: PostList = self.get_json(&format!("/channels/{channel_id}/pinned")).await?;
         Ok(list.into_ordered_posts())
+    }
+
+    /// One page of the files posted in a channel, newest first — what the
+    /// official client's "Channel files" panel shows. There is no channel
+    /// route for this: like that client, it searches the team's files with
+    /// the `channel:<id>` filter. Returns the page and whether another one
+    /// may follow.
+    ///
+    /// The channel id goes into a search term rather than a route, so it is
+    /// checked here: anything but an id's characters could add search
+    /// operators to the query.
+    pub async fn search_channel_files(
+        &self,
+        team_id: &str,
+        channel_id: &str,
+        page: u32,
+        per_page: u32,
+    ) -> Result<(Vec<ChannelFile>, bool), ApiError> {
+        if channel_id.is_empty() || !channel_id.chars().all(|c| c.is_ascii_alphanumeric()) {
+            return Err(ApiError::UnsafeRoute(format!("channel:{channel_id}")));
+        }
+        let body = serde_json::json!({
+            "terms": format!("channel:{channel_id}"),
+            "is_or_search": false,
+            "include_deleted_channels": false,
+            "time_zone_offset": 0,
+            "page": page,
+            "per_page": per_page,
+        });
+        let list: serde_json::Value = self.post_json(&format!("/teams/{team_id}/files/search"), &body).await?;
+
+        // A FileInfoList: ids in `order`, the files themselves in `file_infos`.
+        // Read one by one, so one odd entry is dropped rather than the page.
+        let infos = list.get("file_infos").and_then(|v| v.as_object());
+        let order: Vec<&str> = list
+            .get("order")
+            .and_then(|v| v.as_array())
+            .map(|ids| ids.iter().filter_map(|id| id.as_str()).collect())
+            .unwrap_or_default();
+        let received = order.len();
+        let mut files: Vec<ChannelFile> = order
+            .into_iter()
+            .filter_map(|id| infos.and_then(|m| m.get(id)).cloned())
+            .filter_map(|value| match serde_json::from_value::<ChannelFile>(value) {
+                Ok(file) => Some(file),
+                Err(e) => {
+                    crate::db::log("api", &format!("dropped an unreadable channel file: {e}"));
+                    None
+                }
+            })
+            // The search can match a file by its channel only; a stray from
+            // elsewhere (or a deleted one) has no place in this channel's list.
+            .filter(|f| f.delete_at == 0 && (f.channel_id.is_empty() || f.channel_id == channel_id))
+            .collect();
+        files.sort_by(|a, b| b.create_at.cmp(&a.create_at));
+        Ok((files, received >= per_page as usize))
+    }
+
+    /// The channel's bookmarks, in the order the bar shows them, deleted
+    /// ones left out.
+    ///
+    /// A server without bookmarks — older than 9.4, or with the feature
+    /// switched off — answers 404 or 501. That is "no bookmarks", not a
+    /// failure: every channel switch would otherwise log an error.
+    ///
+    /// Entries are read one by one, so a single entry this app can't read is
+    /// dropped (and logged) rather than taking the whole bar with it.
+    pub async fn get_channel_bookmarks(&self, channel_id: &str) -> Result<Vec<ChannelBookmark>, ApiError> {
+        let raw: Vec<serde_json::Value> = match self.get_json(&format!("/channels/{channel_id}/bookmarks")).await {
+            Ok(raw) => raw,
+            Err(ApiError::Server { status: status @ (404 | 501), message }) => {
+                // Once per run: on such a server every channel switch answers
+                // the same ("Your license does not support channel bookmarks."
+                // on an unlicensed one), and one line says it all.
+                static LOGGED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+                if !LOGGED.swap(true, std::sync::atomic::Ordering::Relaxed) {
+                    crate::db::log("api", &format!("bookmarks: server answered {status} ({message}), taken as none"));
+                }
+                return Ok(Vec::new());
+            }
+            Err(e) => return Err(e),
+        };
+        let mut bookmarks: Vec<ChannelBookmark> = raw
+            .into_iter()
+            .filter_map(|value| match serde_json::from_value::<ChannelBookmark>(value) {
+                Ok(bookmark) => Some(bookmark),
+                Err(e) => {
+                    crate::db::log("api", &format!("dropped an unreadable channel bookmark: {e}"));
+                    None
+                }
+            })
+            .filter(|b| b.delete_at == 0)
+            .collect();
+        bookmarks.sort_by_key(|b| b.sort_order);
+        Ok(bookmarks)
     }
 
     /// Pins a post to its channel. Mattermost answers {"status":"OK"} rather
@@ -1237,6 +1332,87 @@ mod tests {
             .expect_err("login with wrong credentials should fail");
 
         assert!(matches!(err, ApiError::Server { status: 401, .. }));
+    }
+
+    #[tokio::test]
+    async fn channel_bookmarks_come_back_sorted_without_deleted_or_unreadable_ones() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/api/v4/channels/c1/bookmarks"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
+                { "id": "b2", "channel_id": "c1", "display_name": "Docs", "sort_order": 1, "type": "link",
+                  "link_url": "https://example.com/docs", "emoji": "", "delete_at": 0, "image_url": null },
+                { "id": "b1", "channel_id": "c1", "display_name": "Plan.pdf", "sort_order": 0, "type": "file",
+                  "link_url": null, "emoji": "rocket", "delete_at": 0,
+                  "file": { "id": "f1", "name": "Plan.pdf", "size": 2048, "extension": "pdf" } },
+                { "id": "b3", "channel_id": "c1", "display_name": "Old", "sort_order": 2, "type": "link",
+                  "link_url": "https://example.com/old", "delete_at": 1700000000000_i64 },
+                { "display_name": "no ids at all" }
+            ])))
+            .mount(&server)
+            .await;
+
+        let client = MattermostClient::new(server.uri()).with_token("abc123");
+        let bookmarks = client.get_channel_bookmarks("c1").await.expect("bookmarks should parse");
+
+        let ids: Vec<&str> = bookmarks.iter().map(|b| b.id.as_str()).collect();
+        assert_eq!(ids, ["b1", "b2"], "sorted, deleted and unreadable ones left out");
+        assert_eq!(bookmarks[0].kind, "file");
+        assert_eq!(bookmarks[0].file.as_ref().map(|f| f.name.as_str()), Some("Plan.pdf"));
+        assert_eq!(bookmarks[1].link_url, "https://example.com/docs");
+    }
+
+    #[tokio::test]
+    async fn channel_files_are_searched_by_channel_and_come_back_newest_first() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/api/v4/teams/t1/files/search"))
+            .and(wiremock::matchers::body_partial_json(serde_json::json!({ "terms": "channel:c1", "page": 0, "per_page": 2 })))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "order": ["f1", "f2", "f3"],
+                "file_infos": {
+                    "f1": { "id": "f1", "user_id": "u1", "post_id": "p1", "channel_id": "c1", "create_at": 100,
+                            "delete_at": 0, "name": "old.pdf", "extension": "pdf", "size": 10, "mime_type": "application/pdf" },
+                    "f2": { "id": "f2", "user_id": "u2", "post_id": "p2", "channel_id": "c1", "create_at": 300,
+                            "delete_at": 0, "name": "new.png", "extension": "png", "size": 20, "has_preview_image": true },
+                    "f3": { "id": "f3", "user_id": "u2", "post_id": "p3", "channel_id": "other", "create_at": 200,
+                            "delete_at": 0, "name": "elsewhere.txt" }
+                },
+                "next_file_info_id": "", "prev_file_info_id": ""
+            })))
+            .mount(&server)
+            .await;
+
+        let client = MattermostClient::new(server.uri()).with_token("abc123");
+        let (files, has_more) = client.search_channel_files("t1", "c1", 0, 2).await.expect("files should parse");
+
+        let names: Vec<&str> = files.iter().map(|f| f.name.as_str()).collect();
+        assert_eq!(names, ["new.png", "old.pdf"], "newest first, another channel's file left out");
+        assert!(files[0].has_preview_image);
+        assert!(has_more, "a full page may have a next one");
+    }
+
+    #[tokio::test]
+    async fn a_channel_id_that_would_add_search_operators_is_refused() {
+        let client = MattermostClient::new("http://127.0.0.1:9").with_token("abc123");
+        let err = client.search_channel_files("t1", "c1 from:someone", 0, 20).await.expect_err("must refuse");
+        assert!(matches!(err, ApiError::UnsafeRoute(_)), "got {err:?}");
+    }
+
+    #[tokio::test]
+    async fn a_server_without_bookmarks_means_no_bookmarks() {
+        for status in [404, 501] {
+            let server = MockServer::start().await;
+            Mock::given(method("GET"))
+                .and(path("/api/v4/channels/c1/bookmarks"))
+                .respond_with(ResponseTemplate::new(status).set_body_json(serde_json::json!({ "message": "nope" })))
+                .mount(&server)
+                .await;
+
+            let client = MattermostClient::new(server.uri()).with_token("abc123");
+            let bookmarks = client.get_channel_bookmarks("c1").await.expect("not an error");
+            assert!(bookmarks.is_empty(), "status {status}");
+        }
     }
 
     #[tokio::test]

@@ -56,6 +56,11 @@ public sealed partial class Strings
     // ── Conversation ─────────────────────────────────────────────────
     public required string PinnedMessages { get; init; }
     public required string ChannelMembers { get; init; }
+    public required string ChannelHeader { get; init; }
+    public required string ChannelFiles { get; init; }
+    public required string NoChannelFiles { get; init; }
+    public required string ChannelFilesOffline { get; init; }
+    public required string ShowMoreFiles { get; init; }
     public required string SendMessage { get; init; }
     public required Func<string, string> WriteInChannel { get; init; }
     public required string Sending { get; init; }

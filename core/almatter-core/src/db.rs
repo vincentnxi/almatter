@@ -6,7 +6,7 @@ use std::sync::{Mutex, MutexGuard, OnceLock, PoisonError};
 use rusqlite::{params, Connection, OptionalExtension};
 
 use crate::models::{
-    AuthenticatedUser, Channel, ChannelType, CustomEmoji, FileInfo, MentionEvent, Post, PostMetadata, Reaction,
+    AuthenticatedUser, Channel, ChannelBookmark, ChannelFile, ChannelType, CustomEmoji, FileInfo, MentionEvent, Post, PostMetadata, Reaction,
     ReactionNotice, Team,
 };
 
@@ -196,7 +196,8 @@ impl Database {
                 total_msg_count INTEGER NOT NULL DEFAULT 0,
                 last_post_at    INTEGER NOT NULL DEFAULT 0,
                 msg_count       INTEGER NOT NULL DEFAULT 0,
-                is_muted        INTEGER NOT NULL DEFAULT 0
+                is_muted        INTEGER NOT NULL DEFAULT 0,
+                header          TEXT NOT NULL DEFAULT ''
             );
 
             CREATE TABLE IF NOT EXISTS users (
@@ -350,6 +351,17 @@ impl Database {
                 user_id    TEXT NOT NULL,
                 PRIMARY KEY (channel_id, user_id)
             );
+
+            -- A channel's bookmarks (the bar under its header), the whole
+            -- list as JSON in one row, replaced whole on every fetch. `rev`
+            -- moves only when the list really changed: it is what the
+            -- channel fingerprint carries, so the bar repaints when a
+            -- colleague adds a bookmark and not on every refetch.
+            CREATE TABLE IF NOT EXISTS channel_bookmarks (
+                channel_id TEXT PRIMARY KEY,
+                json       TEXT NOT NULL,
+                rev        INTEGER NOT NULL
+            );
             "#,
         )?;
 
@@ -381,6 +393,9 @@ impl Database {
         let _ = self
             .conn
             .execute("ALTER TABLE channels ADD COLUMN is_muted INTEGER NOT NULL DEFAULT 0", []);
+        let _ = self
+            .conn
+            .execute("ALTER TABLE channels ADD COLUMN header TEXT NOT NULL DEFAULT ''", []);
         let _ = self
             .conn
             .execute("ALTER TABLE posts ADD COLUMN embeds_json TEXT NOT NULL DEFAULT '[]'", []);
@@ -417,8 +432,8 @@ impl Database {
 
     pub fn upsert_channel(&self, channel: &Channel) -> rusqlite::Result<()> {
         self.conn.execute(
-            "INSERT INTO channels (id, team_id, name, display_name, channel_type, total_msg_count, last_post_at, msg_count, mention_count, is_muted)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+            "INSERT INTO channels (id, team_id, name, display_name, channel_type, total_msg_count, last_post_at, msg_count, mention_count, is_muted, header)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
              ON CONFLICT(id) DO UPDATE SET
                 team_id = excluded.team_id,
                 name = excluded.name,
@@ -428,7 +443,8 @@ impl Database {
                 last_post_at = excluded.last_post_at,
                 msg_count = excluded.msg_count,
                 mention_count = excluded.mention_count,
-                is_muted = excluded.is_muted",
+                is_muted = excluded.is_muted,
+                header = excluded.header",
             params![
                 channel.id,
                 channel.team_id,
@@ -440,6 +456,7 @@ impl Database {
                 channel.msg_count,
                 channel.mention_count,
                 channel.is_muted,
+                channel.header,
             ],
         )?;
         Ok(())
@@ -981,7 +998,7 @@ impl Database {
     /// own team_id).
     pub fn cached_channels_for_team(&self, team_id: &str) -> rusqlite::Result<Vec<Channel>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, team_id, name, display_name, channel_type, total_msg_count, last_post_at, msg_count, mention_count, is_muted FROM channels
+            "SELECT id, team_id, name, display_name, channel_type, total_msg_count, last_post_at, msg_count, mention_count, is_muted, header FROM channels
              WHERE team_id = ?1 OR team_id = '' ORDER BY display_name",
         )?;
         let rows = stmt.query_map(params![team_id], |row| {
@@ -997,6 +1014,7 @@ impl Database {
                 msg_count: row.get(7)?,
                 mention_count: row.get(8)?,
                 is_muted: row.get(9)?,
+                header: row.get(10)?,
             })
         })?;
         rows.collect()
@@ -1047,6 +1065,7 @@ impl Database {
             )?;
             self.conn.execute("DELETE FROM posts WHERE channel_id = ?1", params![id])?;
             self.conn.execute("DELETE FROM channel_participants WHERE channel_id = ?1", params![id])?;
+            self.conn.execute("DELETE FROM channel_bookmarks WHERE channel_id = ?1", params![id])?;
             self.conn.execute("DELETE FROM channels WHERE id = ?1", params![id])?;
         }
         Ok(gone.len())
@@ -1158,7 +1177,80 @@ impl Database {
             |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
         )?;
         let (reactions, last_reaction_seq) = self.reaction_fingerprint_for_channel(channel_id)?;
-        Ok(ChannelRevision { posts, last_create_at, last_edit_at, reactions, last_reaction_seq, pinned })
+        let bookmarks = self.channel_bookmarks_rev(channel_id)?;
+        Ok(ChannelRevision { posts, last_create_at, last_edit_at, reactions, last_reaction_seq, pinned, bookmarks })
+    }
+
+    fn channel_bookmarks_rev(&self, channel_id: &str) -> rusqlite::Result<i64> {
+        self.conn
+            .query_row("SELECT rev FROM channel_bookmarks WHERE channel_id = ?1", params![channel_id], |row| row.get(0))
+            .optional()
+            .map(Option::unwrap_or_default)
+    }
+
+    /// Lays the server's bookmark list for a channel down in place of the
+    /// cached one. Returns whether anything changed: an identical list
+    /// leaves `rev` alone, so the bar doesn't repaint for nothing.
+    ///
+    /// The new `rev` is one past the highest of any channel, which is always
+    /// past this channel's own, whatever was deleted in between.
+    pub fn replace_channel_bookmarks(&self, channel_id: &str, bookmarks: &[ChannelBookmark]) -> rusqlite::Result<bool> {
+        let json = serde_json::to_string(bookmarks).map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
+        let current: Option<String> = self
+            .conn
+            .query_row("SELECT json FROM channel_bookmarks WHERE channel_id = ?1", params![channel_id], |row| row.get(0))
+            .optional()?;
+        if current.as_deref() == Some(json.as_str()) {
+            return Ok(false);
+        }
+        self.conn.execute(
+            "INSERT INTO channel_bookmarks (channel_id, json, rev)
+             VALUES (?1, ?2, (SELECT COALESCE(MAX(rev), 0) + 1 FROM channel_bookmarks))
+             ON CONFLICT(channel_id) DO UPDATE SET json = excluded.json, rev = excluded.rev",
+            params![channel_id, json],
+        )?;
+        Ok(true)
+    }
+
+    /// The channel's bookmarks as last fetched, or none. A row this version
+    /// can't read (written by a later one, say) reads as none rather than
+    /// as an error: the next fetch replaces it.
+    pub fn cached_channel_bookmarks(&self, channel_id: &str) -> rusqlite::Result<Vec<ChannelBookmark>> {
+        let json: Option<String> = self
+            .conn
+            .query_row("SELECT json FROM channel_bookmarks WHERE channel_id = ?1", params![channel_id], |row| row.get(0))
+            .optional()?;
+        Ok(json.and_then(|json| serde_json::from_str(&json).ok()).unwrap_or_default())
+    }
+
+    /// The files attached to the channel's cached messages, newest first —
+    /// what the channel files panel shows before the server answers, and
+    /// all it shows offline. Only as complete as the cached history: the
+    /// server's list, fetched next, also has the older ones.
+    pub fn cached_channel_files(&self, channel_id: &str) -> rusqlite::Result<Vec<ChannelFile>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT f.id, f.post_id, p.user_id, p.channel_id, p.create_at, f.name, f.size, f.has_preview_image
+             FROM files f JOIN posts p ON p.id = f.post_id
+             WHERE p.channel_id = ?1
+             ORDER BY p.create_at DESC",
+        )?;
+        let rows = stmt.query_map(params![channel_id], |row| {
+            let name: String = row.get(5)?;
+            let extension = name.rsplit_once('.').map(|(_, ext)| ext.to_ascii_lowercase()).unwrap_or_default();
+            Ok(ChannelFile {
+                id: row.get(0)?,
+                post_id: row.get(1)?,
+                user_id: row.get(2)?,
+                channel_id: row.get(3)?,
+                create_at: row.get(4)?,
+                delete_at: 0,
+                name,
+                extension,
+                size: row.get(6)?,
+                has_preview_image: row.get(7)?,
+            })
+        })?;
+        rows.collect()
     }
 
     /// Count plus highest rowid, so all three reaction moves are visible:
@@ -1190,7 +1282,8 @@ impl Database {
             params![root_id],
             |row| Ok((row.get(0)?, row.get(1)?)),
         )?;
-        Ok(ChannelRevision { posts, last_create_at, last_edit_at, reactions, last_reaction_seq, pinned })
+        // Bookmarks belong to the channel, not to a thread.
+        Ok(ChannelRevision { posts, last_create_at, last_edit_at, reactions, last_reaction_seq, pinned, bookmarks: 0 })
     }
 
     pub fn cached_posts_for_channel(&self, channel_id: &str) -> rusqlite::Result<Vec<Post>> {
@@ -1364,6 +1457,10 @@ pub struct ChannelRevision {
     /// because pinning changes neither create_at nor edit_at, so nothing
     /// else here would move when a colleague pins something.
     pub pinned: i64,
+    /// The channel's bookmark list stamp (`channel_bookmarks.rev`), 0 with
+    /// none cached. The one field kept by hand rather than derived — but by
+    /// the single write path there is, `replace_channel_bookmarks`.
+    pub bookmarks: i64,
 }
 
 /// Every table holding something of the signed-in account's — all of them,
@@ -1386,6 +1483,7 @@ const ACCOUNT_TABLES: &[&str] = &[
     "reaction_events",
     "typing_events",
     "channel_participants",
+    "channel_bookmarks",
 ];
 
 /// The folders of files fetched for an account: attachments and their
@@ -1952,6 +2050,7 @@ mod tests {
             msg_count: 30,
             mention_count: 2,
             is_muted: false,
+            header: String::new(),
         })
         .unwrap();
 
@@ -1985,6 +2084,7 @@ mod tests {
             msg_count: 1,
             mention_count: 0,
             is_muted: false,
+            header: String::new(),
         })
         .unwrap();
         db.upsert_channel(&Channel {
@@ -1998,6 +2098,7 @@ mod tests {
             msg_count: 2,
             mention_count: 1,
             is_muted: false,
+            header: String::new(),
         })
         .unwrap();
 
@@ -2169,6 +2270,7 @@ mod tests {
             msg_count: 0,
             mention_count: 0,
             is_muted: false,
+            header: String::new(),
         })
         .unwrap();
         db.upsert_user(&AuthenticatedUser {
@@ -2751,6 +2853,7 @@ mod tests {
             msg_count: 10,
             mention_count: 3,
             is_muted: false,
+            header: String::new(),
         })
         .unwrap();
 
@@ -2776,6 +2879,7 @@ mod tests {
             msg_count: 0,
             mention_count: 0,
             is_muted: false,
+            header: String::new(),
         })
         .unwrap();
 
@@ -2801,6 +2905,7 @@ mod tests {
             msg_count: 10,
             mention_count: 0,
             is_muted: false,
+            header: String::new(),
         })
         .unwrap();
 
@@ -3062,6 +3167,7 @@ mod tests {
             msg_count: 1,
             mention_count: 0,
             is_muted: false,
+            header: String::new(),
         }
     }
 
@@ -3104,5 +3210,114 @@ mod tests {
         assert_eq!(db.cached_posts_for_channel("kept").unwrap().len(), 1, "a kept channel keeps its messages");
         let other_team: Vec<String> = db.cached_channels_for_team("t2").unwrap().into_iter().map(|c| c.id).collect();
         assert!(other_team.contains(&"elsewhere".to_string()), "another team's channel is untouched");
+    }
+}
+
+#[cfg(test)]
+mod bookmark_tests {
+    use super::*;
+
+    fn bookmark(id: &str, name: &str) -> ChannelBookmark {
+        ChannelBookmark {
+            id: id.to_owned(),
+            channel_id: "c1".to_owned(),
+            display_name: name.to_owned(),
+            sort_order: 0,
+            kind: "link".to_owned(),
+            link_url: "https://example.com".to_owned(),
+            emoji: String::new(),
+            delete_at: 0,
+            file: None,
+        }
+    }
+
+    #[test]
+    fn the_fingerprint_moves_only_when_the_bookmark_list_changes() {
+        let db = Database::open_in_memory().unwrap();
+        assert_eq!(db.channel_revision("c1").unwrap().bookmarks, 0, "none cached yet");
+
+        assert!(db.replace_channel_bookmarks("c1", &[bookmark("b1", "Docs")]).unwrap());
+        let first = db.channel_revision("c1").unwrap().bookmarks;
+        assert_ne!(first, 0);
+
+        assert!(!db.replace_channel_bookmarks("c1", &[bookmark("b1", "Docs")]).unwrap(), "same list");
+        assert_eq!(db.channel_revision("c1").unwrap().bookmarks, first, "a refetch alone repaints nothing");
+
+        assert!(db.replace_channel_bookmarks("c1", &[bookmark("b1", "Documentation")]).unwrap());
+        let renamed = db.channel_revision("c1").unwrap().bookmarks;
+        assert_ne!(renamed, first, "a rename is seen");
+
+        // Another channel writing in between must not hand c1 a stamp it
+        // already had once its own list changes again.
+        db.replace_channel_bookmarks("c2", &[bookmark("b9", "Other")]).unwrap();
+        assert!(db.replace_channel_bookmarks("c1", &[]).unwrap());
+        let emptied = db.channel_revision("c1").unwrap().bookmarks;
+        assert!(emptied != renamed && emptied != first, "a removal is seen");
+        assert!(db.cached_channel_bookmarks("c1").unwrap().is_empty());
+        assert_eq!(db.cached_channel_bookmarks("c2").unwrap()[0].display_name, "Other");
+    }
+
+    #[test]
+    fn the_channel_header_survives_the_cache() {
+        let db = Database::open_in_memory().unwrap();
+        let channel: Channel = serde_json::from_value(serde_json::json!({
+            "id": "c1", "team_id": "t1", "name": "redac", "display_name": "Discussion",
+            "type": "O", "header": "Planning : [ici](https://example.com)"
+        }))
+        .unwrap();
+        db.upsert_channel(&channel).unwrap();
+        let cached = db.cached_channels_for_team("t1").unwrap();
+        assert_eq!(cached[0].header, "Planning : [ici](https://example.com)");
+
+        let no_header: Channel = serde_json::from_value(serde_json::json!({
+            "id": "c2", "team_id": "t1", "name": "x", "display_name": "X", "type": "O", "header": null
+        }))
+        .unwrap();
+        assert_eq!(no_header.header, "");
+    }
+
+    #[test]
+    fn bookmarks_go_with_the_account() {
+        let db = Database::open_in_memory().unwrap();
+        db.claim_for_account("a|u1").unwrap();
+        db.replace_channel_bookmarks("c1", &[bookmark("b1", "Docs")]).unwrap();
+        db.claim_for_account("a|u2").unwrap();
+        assert!(db.cached_channel_bookmarks("c1").unwrap().is_empty());
+    }
+}
+
+#[cfg(test)]
+mod channel_file_tests {
+    use super::*;
+    use crate::models::{FileInfo, PostMetadata};
+
+    #[test]
+    fn cached_channel_files_come_from_the_channels_messages_newest_first() {
+        let db = Database::open_in_memory().unwrap();
+        let post = |id: &str, channel_id: &str, create_at: i64, files: Vec<FileInfo>| Post {
+            id: id.into(),
+            channel_id: channel_id.into(),
+            root_id: "".into(),
+            user_id: "u1".into(),
+            message: "".into(),
+            create_at,
+            reply_count: 0,
+            edit_at: 0,
+            is_pinned: false,
+            metadata: PostMetadata { files, ..Default::default() },
+        };
+        let file = |id: &str, name: &str| FileInfo { id: id.into(), name: name.into(), size: 5, ..Default::default() };
+
+        db.upsert_post(&post("p1", "c1", 1000, vec![file("f1", "Plan.PDF")])).unwrap();
+        db.upsert_post(&post("p2", "c1", 2000, vec![file("f2", "photo.jpg"), file("f3", "noextension")])).unwrap();
+        db.upsert_post(&post("p3", "c2", 3000, vec![file("f4", "elsewhere.txt")])).unwrap();
+
+        let files = db.cached_channel_files("c1").unwrap();
+        let ids: Vec<&str> = files.iter().map(|f| f.id.as_str()).collect();
+        assert_eq!(ids.len(), 3, "another channel's file left out: {ids:?}");
+        assert_eq!(files.last().unwrap().id, "f1", "oldest last");
+        assert_eq!(files.last().unwrap().extension, "pdf");
+        assert_eq!(files.last().unwrap().post_id, "p1");
+        assert!(files.iter().any(|f| f.id == "f3" && f.extension.is_empty()));
     }
 }

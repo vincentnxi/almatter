@@ -42,6 +42,11 @@ public sealed partial class Strings
         // ── Conversation ─────────────────────────────────────────────
         PinnedMessages = "Messages épinglés",
         ChannelMembers = "Membres",
+        ChannelHeader = "En-tête du canal",
+        ChannelFiles = "Fichiers du canal",
+        NoChannelFiles = "Aucun fichier partagé dans ce canal pour l'instant.",
+        ChannelFilesOffline = "Hors ligne : seuls les fichiers des messages déjà chargés sont listés.",
+        ShowMoreFiles = "Afficher plus",
         SendMessage = "Envoyer un message",
         WriteInChannel = channel => $"Écrire dans #{channel}…",
         Sending = "Envoi en cours…",

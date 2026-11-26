@@ -15,6 +15,8 @@ namespace Almatter.App.Interop;
 /// </summary>
 [JsonSerializable(typeof(Envelope<JsonObject>))]
 [JsonSerializable(typeof(Envelope<AvatarImageData>))]
+[JsonSerializable(typeof(Envelope<BookmarksData>))]
+[JsonSerializable(typeof(Envelope<ChannelFilesData>))]
 [JsonSerializable(typeof(Envelope<ChannelAliasesData>))]
 [JsonSerializable(typeof(Envelope<ChannelData>))]
 [JsonSerializable(typeof(Envelope<ChannelsData>))]

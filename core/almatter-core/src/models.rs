@@ -105,6 +105,10 @@ pub struct Channel {
     /// story as msg_count/mention_count, real state comes from `ChannelMember`.
     #[serde(default)]
     pub is_muted: bool,
+    /// The channel header: the line of Markdown shown next to the channel's
+    /// name, often holding its useful links. Empty for none.
+    #[serde(default, deserialize_with = "null_as_default")]
+    pub header: String,
 }
 
 /// One row of `GET /teams/{id}/channels` — a public channel on the team,
@@ -379,6 +383,63 @@ pub struct PostImage {
 pub struct Reaction {
     pub user_id: String,
     pub emoji_name: String,
+}
+
+/// One of a channel's bookmarks: the links and files Mattermost (9.4 and
+/// later) shows in a bar under the channel header. Almatter only reads them.
+///
+/// Every field but the ids tolerates being null or missing: bookmarks are
+/// recent, servers have shipped them behind a feature flag for a while, and
+/// one odd entry must not cost the channel its whole bar (see
+/// `MattermostClient::get_channel_bookmarks`, which also reads them one by one).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChannelBookmark {
+    pub id: String,
+    pub channel_id: String,
+    #[serde(default, deserialize_with = "null_as_default")]
+    pub display_name: String,
+    #[serde(default, deserialize_with = "null_as_default")]
+    pub sort_order: i64,
+    /// "link" or "file".
+    #[serde(rename = "type", default, deserialize_with = "null_as_default")]
+    pub kind: String,
+    #[serde(default, deserialize_with = "null_as_default")]
+    pub link_url: String,
+    /// An emoji shortcode ("rocket", without colons) chosen as the icon, or empty.
+    #[serde(default, deserialize_with = "null_as_default")]
+    pub emoji: String,
+    #[serde(default, deserialize_with = "null_as_default")]
+    pub delete_at: i64,
+    /// The attached file, for a "file" bookmark.
+    #[serde(default)]
+    pub file: Option<FileInfo>,
+}
+
+/// One file posted in a channel, as the channel files panel lists it: the
+/// file itself plus who posted it, when, and in which message. Mattermost's
+/// FileInfo carries all of it (its `user_id` is the uploader); everything but
+/// the ids tolerates null or absence, like the other models here.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChannelFile {
+    pub id: String,
+    #[serde(default, deserialize_with = "null_as_default")]
+    pub post_id: String,
+    #[serde(default, deserialize_with = "null_as_default")]
+    pub user_id: String,
+    #[serde(default, deserialize_with = "null_as_default")]
+    pub channel_id: String,
+    #[serde(default, deserialize_with = "null_as_default")]
+    pub create_at: i64,
+    #[serde(default, deserialize_with = "null_as_default")]
+    pub delete_at: i64,
+    #[serde(default, deserialize_with = "null_as_default")]
+    pub name: String,
+    #[serde(default, deserialize_with = "null_as_default")]
+    pub extension: String,
+    #[serde(default, deserialize_with = "null_as_default")]
+    pub size: i64,
+    #[serde(default, deserialize_with = "null_as_default")]
+    pub has_preview_image: bool,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]

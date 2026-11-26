@@ -130,10 +130,29 @@ public partial class MainViewModel : ViewModelBase
         ActiveChannelName = ChannelDisplayName(channel);
         var original = ChannelOriginalName(channel);
         ActiveChannelOriginalName = ActiveChannelName == original ? "" : original;
+        ShowActiveChannelHeader(channel.Header);
+    }
+
+    /// <summary>
+    /// The channel header, behind the icon in the channel header bar: the
+    /// whole Markdown, line breaks, lists and all, drawn by the same
+    /// templates as a message in the bubble the icon opens. Refreshed
+    /// whenever the channel list is, so an edited header shows up with the
+    /// next refresh rather than live.
+    /// </summary>
+    private void ShowActiveChannelHeader(string header)
+    {
+        var blank = string.IsNullOrWhiteSpace(header);
+        ActiveChannelHeaderBlocks = blank ? [] : MessageTextParser.ParseBlocks(header);
+        HasActiveChannelTopic = !blank;
     }
 
     [ObservableProperty]
-    public partial string ActiveChannelTopic { get; set; } = "";
+    public partial IReadOnlyList<MessageBlock> ActiveChannelHeaderBlocks { get; set; } = [];
+
+    /// <summary>Whether the channel has a header — what shows its icon.</summary>
+    [ObservableProperty]
+    public partial bool HasActiveChannelTopic { get; set; }
 
     /// <summary>"X est en train d'écrire…" above the composer — empty when nobody currently is. Refreshed by the poll loop, cleared immediately on channel switch so it doesn't briefly show the previous channel's typers.</summary>
     [ObservableProperty]
@@ -409,6 +428,15 @@ public partial class MainViewModel : ViewModelBase
     public bool HasPinnedMessages => PinnedCount > 0;
 
     public ObservableCollection<PinnedMessageItem> PinnedMessages { get; } = [];
+
+    /// <summary>The bar under the channel header: the channel's bookmarks, in the server's order. Hidden when there are none.</summary>
+    public ObservableCollection<BookmarkItem> Bookmarks { get; } = [];
+
+    [ObservableProperty]
+    public partial bool HasBookmarks { get; set; }
+
+    /// <summary>The bookmark stamp last painted, per channel — the poll repaints the bar when the core's stamp moves (a colleague added one, say).</summary>
+    private (string ChannelId, long Stamp)? _lastBookmarksStamp;
 
     /// <summary>The channel's member list panel, opened from the header.</summary>
     [ObservableProperty]
@@ -1415,7 +1443,22 @@ public partial class MainViewModel : ViewModelBase
             // 455-message channel the probe is ~0.06 ms against
             // ~2.3 ms and 150 KB for the full read, and on a quiet
             // channel it is the only thing this tick does.
-            var revision = await _service.GetChannelRevisionAsync(channelId);
+            var (revision, bookmarksStamp) = await _service.GetChannelRevisionAsync(channelId);
+
+            // The bookmark bar has its own stamp, checked before the
+            // messages' early return: a bookmark added by a colleague
+            // changes nothing in the conversation. Read from the cache only —
+            // the core already fetched the list when the event came in.
+            var bookmarksMoved = _lastBookmarksStamp is { } seenBookmarks
+                ? seenBookmarks.ChannelId != channelId || seenBookmarks.Stamp != bookmarksStamp
+                : bookmarksStamp != 0;
+            if (channelId == _activeChannelId && bookmarksMoved)
+            {
+                _lastBookmarksStamp = (channelId, bookmarksStamp);
+                var bookmarks = await _service.GetCachedChannelBookmarksAsync(channelId);
+                await Dispatcher.UIThread.InvokeAsync(() => PopulateBookmarks(channelId, bookmarks));
+            }
+
             if (channelId == _activeChannelId
                 && _lastChannelRevision is { } seen
                 && seen.ChannelId == channelId
@@ -1721,7 +1764,6 @@ public partial class MainViewModel : ViewModelBase
             item.IsSelected = item.Id == channelId;
         }
         ShowActiveChannelName(channel);
-        ActiveChannelTopic = "";
         TypingIndicatorText = "";
         ErrorMessage = null;
         // Something was waiting here: find out from the server where the
@@ -1735,13 +1777,16 @@ public partial class MainViewModel : ViewModelBase
         IsPinnedPanelOpen = false;
         PinnedMessages.Clear();
         PinnedCount = 0;
+        ClearBookmarks();
+        ResetChannelFilesPanel();
 
         var paintedFromCache = await TryPaintMessagesFromCacheAsync(channelId);
 
         // Not awaited: the header's pin count is peripheral, and making the
         // channel switch itself wait on it would trade a visible delay for
-        // information nobody is looking at yet.
+        // information nobody is looking at yet. The bookmark bar likewise.
         _ = RefreshPinnedMessagesAsync(channelId);
+        _ = RefreshBookmarksAsync(channelId);
 
         try
         {
@@ -3143,7 +3188,6 @@ public partial class MainViewModel : ViewModelBase
             item.IsSelected = item.Id == channelId;
         }
         ShowActiveChannelName(channel);
-        ActiveChannelTopic = "";
         TypingIndicatorText = "";
         ErrorMessage = null;
         MarkChannelViewed(channelId);
@@ -3160,6 +3204,9 @@ public partial class MainViewModel : ViewModelBase
             PinnedMessages.Clear();
             PinnedCount = 0;
             _ = RefreshPinnedMessagesAsync(channelId);
+            ClearBookmarks();
+            ResetChannelFilesPanel();
+            _ = RefreshBookmarksAsync(channelId);
         }
 
         try
@@ -3367,6 +3414,7 @@ public partial class MainViewModel : ViewModelBase
         }
         IsSearchOpen = false;
         IsPinnedPanelOpen = false;
+        IsChannelFilesPanelOpen = false;
         await JumpToMessageAsync(channelId, postId);
         return true;
     }
@@ -3464,17 +3512,25 @@ public partial class MainViewModel : ViewModelBase
 
     /// <summary>Bound to a click on a message attachment: downloads it (once — cached to disk after that), then opens it with the OS's own default handler for that file type.</summary>
     [RelayCommand]
-    private async Task OpenAttachmentAsync(AttachmentItem attachment)
+    private Task OpenAttachmentAsync(AttachmentItem attachment) => OpenServerFileAsync(attachment);
+
+    /// <summary>
+    /// Opens a file from the server — an attachment, a bookmarked file, a row
+    /// of the channel files panel: downloaded once (cached to disk after
+    /// that), marked as coming from the Web, then opened by the OS's handler
+    /// for its type, a program excepted (see OpenDownloadedFile).
+    /// </summary>
+    private async Task OpenServerFileAsync(IServerFile file)
     {
-        if (attachment.IsDownloading)
+        if (file.IsDownloading)
         {
             return;
         }
 
-        attachment.IsDownloading = true;
+        file.IsDownloading = true;
         try
         {
-            var path = await _service.GetFilePathAsync(_session.BaseUrl, _session.Token, attachment.Id, attachment.FileName);
+            var path = await _service.GetFilePathAsync(_session.BaseUrl, _session.Token, file.FileId, file.FileName);
             MarkOfTheWeb.Apply(path);
             OpenDownloadedFile(path);
         }
@@ -3488,21 +3544,24 @@ public partial class MainViewModel : ViewModelBase
         }
         finally
         {
-            attachment.IsDownloading = false;
+            file.IsDownloading = false;
         }
     }
 
     private bool _isPickingSavePath;
 
-    /// <summary>
-    /// Bound to an attachment's download button: asks where to put the file,
-    /// then downloads it (once — cached to disk after that) and copies it
-    /// there. Asked first, so the dialog opens at once however big the file
-    /// is. Concurrent on purpose — one large file on its way mustn't grey out
-    /// every other attachment's button — so the guards are its own.
-    /// </summary>
+    /// <summary>Bound to an attachment's download button — see SaveServerFileAsync.</summary>
     [RelayCommand(AllowConcurrentExecutions = true)]
-    private async Task SaveAttachmentAsync(AttachmentItem attachment)
+    private Task SaveAttachmentAsync(AttachmentItem attachment) => SaveServerFileAsync(attachment);
+
+    /// <summary>
+    /// Asks where to put a server file, then downloads it (once — cached to
+    /// disk after that) and copies it there. Asked first, so the dialog opens
+    /// at once however big the file is. Concurrent on purpose — one large
+    /// file on its way mustn't grey out every other file's button — so the
+    /// guards are its own.
+    /// </summary>
+    private async Task SaveServerFileAsync(IServerFile attachment)
     {
         if (attachment.IsDownloading || _isPickingSavePath || PickSavePathAsync is null)
         {
@@ -3527,7 +3586,7 @@ public partial class MainViewModel : ViewModelBase
         attachment.IsDownloading = true;
         try
         {
-            var cached = await _service.GetFilePathAsync(_session.BaseUrl, _session.Token, attachment.Id, attachment.FileName);
+            var cached = await _service.GetFilePathAsync(_session.BaseUrl, _session.Token, attachment.FileId, attachment.FileName);
             await Task.Run(() =>
             {
                 // The contents alone, then a mark of its own: a saved copy is
@@ -3725,6 +3784,7 @@ public partial class MainViewModel : ViewModelBase
     private async Task OpenPinnedPanelAsync()
     {
         IsPinnedPanelOpen = true;
+        IsChannelFilesPanelOpen = false;
         await RefreshPinnedMessagesAsync(_activeChannelId);
     }
 
@@ -3758,6 +3818,7 @@ public partial class MainViewModel : ViewModelBase
 
         IsMembersPanelOpen = true;
         IsPinnedPanelOpen = false;
+        IsChannelFilesPanelOpen = false;
         MembersError = null;
         MembersQuery = "";
         if (_membersChannelId != channelId)
@@ -4021,6 +4082,329 @@ public partial class MainViewModel : ViewModelBase
             });
         }
         PinnedCount = PinnedMessages.Count;
+    }
+
+    /// <summary>The channel files panel, opened from the header's file icon.</summary>
+    [ObservableProperty]
+    public partial bool IsChannelFilesPanelOpen { get; set; }
+
+    public ObservableCollection<ChannelFileItem> ChannelFiles { get; } = [];
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowNoChannelFiles))]
+    public partial bool HasChannelFiles { get; set; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowNoChannelFiles))]
+    public partial bool IsLoadingChannelFiles { get; set; }
+
+    [ObservableProperty]
+    public partial bool CanLoadMoreChannelFiles { get; set; }
+
+    /// <summary>The server couldn't be reached: the list is only what the cached messages carry.</summary>
+    [ObservableProperty]
+    public partial bool IsChannelFilesOffline { get; set; }
+
+    public bool ShowNoChannelFiles => !HasChannelFiles && !IsLoadingChannelFiles;
+
+    private string? _channelFilesChannelId;
+    private int _channelFilesNextPage;
+
+    private void ResetChannelFilesPanel()
+    {
+        IsChannelFilesPanelOpen = false;
+        _channelFilesChannelId = null;
+        ChannelFiles.Clear();
+        HasChannelFiles = false;
+        CanLoadMoreChannelFiles = false;
+        IsChannelFilesOffline = false;
+        IsLoadingChannelFiles = false;
+    }
+
+    /// <summary>
+    /// Opens the files panel: the files of the cached messages paint at once,
+    /// then the server's list — which also has the files of messages never
+    /// loaded here — replaces them. Fetched afresh at each opening: a list
+    /// of files is cheap, and a stale one would hide what was just posted.
+    /// </summary>
+    [RelayCommand]
+    private async Task OpenChannelFilesPanelAsync()
+    {
+        if (_activeChannelId is not { } channelId || _teamId is not { } teamId)
+        {
+            return;
+        }
+
+        IsChannelFilesPanelOpen = true;
+        IsPinnedPanelOpen = false;
+        IsMembersPanelOpen = false;
+        _channelFilesChannelId = channelId;
+        IsChannelFilesOffline = false;
+        CanLoadMoreChannelFiles = false;
+        IsLoadingChannelFiles = true;
+        try
+        {
+            try
+            {
+                await PopulateChannelFilesAsync(channelId, await _service.GetCachedChannelFilesAsync(channelId), append: false);
+            }
+            catch (MattermostServiceException ex)
+            {
+                CrashLogger.Write("channel files: cached read failed", ex);
+            }
+
+            try
+            {
+                var (files, hasMore) = await _service.SearchChannelFilesAsync(_session.BaseUrl, _session.Token, teamId, channelId, 0);
+                if (await PopulateChannelFilesAsync(channelId, files, append: false))
+                {
+                    _channelFilesNextPage = 1;
+                    CanLoadMoreChannelFiles = hasMore;
+                }
+            }
+            catch (MattermostServiceException ex)
+            {
+                // Offline, or the server refused: the cached list stays, and says what it is.
+                CrashLogger.Write("channel files: network read failed", ex);
+                if (_channelFilesChannelId == channelId)
+                {
+                    IsChannelFilesOffline = true;
+                }
+            }
+        }
+        finally
+        {
+            if (_channelFilesChannelId == channelId)
+            {
+                IsLoadingChannelFiles = false;
+            }
+        }
+    }
+
+    [RelayCommand]
+    private async Task LoadMoreChannelFilesAsync()
+    {
+        if (_channelFilesChannelId is not { } channelId || _teamId is not { } teamId || IsLoadingChannelFiles)
+        {
+            return;
+        }
+
+        IsLoadingChannelFiles = true;
+        try
+        {
+            var (files, hasMore) = await _service.SearchChannelFilesAsync(
+                _session.BaseUrl, _session.Token, teamId, channelId, _channelFilesNextPage);
+            if (await PopulateChannelFilesAsync(channelId, files, append: true))
+            {
+                _channelFilesNextPage++;
+                CanLoadMoreChannelFiles = hasMore;
+            }
+        }
+        catch (MattermostServiceException ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+        finally
+        {
+            if (_channelFilesChannelId == channelId)
+            {
+                IsLoadingChannelFiles = false;
+            }
+        }
+    }
+
+    [RelayCommand]
+    private void CloseChannelFilesPanel() => IsChannelFilesPanelOpen = false;
+
+    /// <summary>Returns false when the panel moved to another channel (or closed) meanwhile, and nothing was painted.</summary>
+    private async Task<bool> PopulateChannelFilesAsync(string channelId, List<ChannelFileDto> files, bool append)
+    {
+        if (_channelFilesChannelId != channelId)
+        {
+            return false;
+        }
+
+        // Uploaders this cache hasn't met (a file from long before this app
+        // was installed, say) are asked for once; a name is worth a request.
+        var authorIds = files.Select(f => f.UserId).Where(id => id.Length > 0).Distinct().ToList();
+        var authors = (await _service.GetCachedUsersAsync(authorIds)).ToDictionary(u => u.Id);
+        var missing = authorIds.Where(id => !authors.ContainsKey(id)).ToList();
+        if (missing.Count > 0)
+        {
+            try
+            {
+                foreach (var user in await _service.GetUsersAsync(_session.BaseUrl, _session.Token, missing))
+                {
+                    authors[user.Id] = user;
+                }
+            }
+            catch (MattermostServiceException)
+            {
+                // Offline: those rows say "unknown" rather than wait.
+            }
+        }
+        if (_channelFilesChannelId != channelId)
+        {
+            return false;
+        }
+
+        if (!append)
+        {
+            ChannelFiles.Clear();
+        }
+        var shown = ChannelFiles.Select(f => f.FileId).ToHashSet();
+        foreach (var file in files)
+        {
+            if (!shown.Add(file.Id))
+            {
+                continue;
+            }
+            authors.TryGetValue(file.UserId, out var author);
+            var when = $"{FormatDateSeparator(LocalDayOf(file.CreateAt))} {FormatTime(file.CreateAt)}";
+            var extension = file.Extension.Trim().TrimStart('.');
+            ChannelFiles.Add(new ChannelFileItem
+            {
+                FileId = file.Id,
+                PostId = file.PostId,
+                FileName = AttachmentItem.WithoutDirectionControls(file.Name),
+                // A badge, not a sentence: long or odd "extensions" are left out.
+                TypeLabel = extension.Length is > 0 and <= 4 && extension.All(char.IsAsciiLetterOrDigit)
+                    ? extension.ToUpperInvariant()
+                    : "",
+                Details = $"{author?.DisplayName ?? Loc.S.UnknownUser} · {when} · {AttachmentItem.FormatSize(file.Size)}",
+            });
+        }
+        HasChannelFiles = ChannelFiles.Count > 0;
+        return true;
+    }
+
+    /// <summary>Bound to a row of the files panel: opens the file like an attachment.</summary>
+    [RelayCommand]
+    private Task OpenChannelFileAsync(ChannelFileItem? item) => item is null ? Task.CompletedTask : OpenServerFileAsync(item);
+
+    [RelayCommand(AllowConcurrentExecutions = true)]
+    private Task SaveChannelFileAsync(ChannelFileItem? item) => item is null ? Task.CompletedTask : SaveServerFileAsync(item);
+
+    /// <summary>Bound to a row's "go to message" button — closes the panel and jumps to the message the file came with.</summary>
+    [RelayCommand]
+    private async Task JumpToChannelFileMessageAsync(ChannelFileItem? item)
+    {
+        if (item is null || item.PostId.Length == 0 || _activeChannelId is not { } channelId)
+        {
+            return;
+        }
+        IsChannelFilesPanelOpen = false;
+        await JumpToMessageAsync(channelId, item.PostId);
+    }
+
+    private void ClearBookmarks()
+    {
+        Bookmarks.Clear();
+        HasBookmarks = false;
+        _lastBookmarksStamp = null;
+    }
+
+    /// <summary>
+    /// The bookmark bar, cache first then the server — the same shape as the
+    /// pinned messages. The network pass replaces the cached list in the
+    /// core; a change made later by someone else arrives through the
+    /// WebSocket and the poll's bookmark stamp (see PollOpenChannelAsync).
+    /// </summary>
+    private async Task RefreshBookmarksAsync(string? channelId)
+    {
+        if (string.IsNullOrEmpty(channelId))
+        {
+            return;
+        }
+
+        try
+        {
+            PopulateBookmarks(channelId, await _service.GetCachedChannelBookmarksAsync(channelId));
+        }
+        catch (Exception ex)
+        {
+            CrashLogger.Write("bookmarks: cached read failed", ex);
+        }
+
+        try
+        {
+            PopulateBookmarks(
+                channelId,
+                await _service.GetChannelBookmarksAsync(_session.BaseUrl, _session.Token, channelId));
+        }
+        catch (Exception ex)
+        {
+            // Offline, or the server refused — whatever the cache had stays up.
+            CrashLogger.Write("bookmarks: network read failed", ex);
+        }
+    }
+
+    private void PopulateBookmarks(string channelId, List<ChannelBookmarkDto> bookmarks)
+    {
+        // Clicked away meanwhile: another channel's bar would be wrong.
+        if (channelId != _activeChannelId)
+        {
+            return;
+        }
+
+        Bookmarks.Clear();
+        foreach (var bookmark in bookmarks)
+        {
+            var isFile = bookmark.Type == "file";
+            if (isFile && bookmark.File is null)
+            {
+                // A file bookmark whose file the server didn't send: nothing to open.
+                continue;
+            }
+
+            var fileName = isFile ? AttachmentItem.WithoutDirectionControls(bookmark.File!.Name) : "";
+            var label = AttachmentItem.WithoutDirectionControls(bookmark.DisplayName);
+            if (label.Length == 0)
+            {
+                label = isFile ? fileName : bookmark.LinkUrl;
+            }
+
+            Bookmarks.Add(new BookmarkItem
+            {
+                Id = bookmark.Id,
+                Label = label,
+                IsFile = isFile,
+                Url = isFile ? "" : bookmark.LinkUrl,
+                FileId = isFile ? bookmark.File!.Id : "",
+                FileName = fileName,
+                // Standard emoji only; a server custom one would need its
+                // picture fetched, and the plain icon says enough.
+                Glyph = bookmark.Emoji.Length > 0 && EmojiShortcodes.IsKnown(bookmark.Emoji)
+                    ? EmojiShortcodes.ToGlyph(bookmark.Emoji)
+                    : "",
+                Tip = isFile
+                    ? $"{fileName} · {AttachmentItem.FormatSize(bookmark.File!.Size)}"
+                    : bookmark.LinkUrl,
+            });
+        }
+        HasBookmarks = Bookmarks.Count > 0;
+    }
+
+    /// <summary>
+    /// Bound to a bookmark in the bar. A link goes where a link in a message
+    /// would (a message on this server opens in the app, anything else in the
+    /// browser, web and mail addresses only); a file is downloaded and opened
+    /// exactly like an attachment, programs included in what is only shown
+    /// in the file manager rather than run.
+    /// </summary>
+    [RelayCommand(AllowConcurrentExecutions = true)]
+    private async Task OpenBookmarkAsync(BookmarkItem? bookmark)
+    {
+        if (bookmark is null)
+        {
+            return;
+        }
+        if (!bookmark.IsFile)
+        {
+            await OpenLinkAsync(bookmark.Url);
+            return;
+        }
+        await OpenServerFileAsync(bookmark);
     }
 
     /// <summary>Bound to a message's "+" button — opens the emoji picker targeting that specific message.</summary>
@@ -5281,7 +5665,6 @@ public partial class MainViewModel : ViewModelBase
             PopulateChannels(visibleChannels, target.Id);
             await PopulateDirectMessagesAsync(allChannels, allowNetwork: false);
             ShowActiveChannelName(target);
-            ActiveChannelTopic = "";
             TypingIndicatorText = "";
             _activeChannelId = target.Id;
             // Also recorded here, not just on an explicit click: otherwise a
@@ -5380,7 +5763,6 @@ public partial class MainViewModel : ViewModelBase
         PopulateChannels(visibleChannels, targetChannelId);
         await PopulateDirectMessagesAsync(allChannels, allowNetwork: true);
         ShowActiveChannelName(targetChannel);
-        ActiveChannelTopic = "";
         TypingIndicatorText = "";
         _activeChannelId = targetChannelId;
         Settings.LastChannelId = targetChannelId;

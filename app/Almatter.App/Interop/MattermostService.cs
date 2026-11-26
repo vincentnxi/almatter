@@ -510,14 +510,66 @@ public sealed class MattermostService
     /// 455-message channel: ~0.06 ms and a handful of bytes here, against
     /// ~2.3 ms and 150 KB for the full read.
     /// </summary>
-    public async Task<(long, long, long, long, long, long)> GetChannelRevisionAsync(string channelId)
+    public async Task<((long, long, long, long, long, long) Messages, long Bookmarks)> GetChannelRevisionAsync(string channelId)
     {
         var request = new JsonObject
         {
             ["command"] = "get_channel_revision",
             ["channel_id"] = channelId,
         };
-        return (await CallAsync<RevisionData>(request)).AsKey();
+        var revision = await CallAsync<RevisionData>(request);
+        return (revision.AsKey(), revision.Bookmarks);
+    }
+
+    /// <summary>The channel's bookmarks from the server, which also replaces the cached list.</summary>
+    public async Task<List<ChannelBookmarkDto>> GetChannelBookmarksAsync(string baseUrl, string token, string channelId)
+    {
+        var request = new JsonObject
+        {
+            ["command"] = "get_channel_bookmarks",
+            ["base_url"] = baseUrl,
+            ["token"] = token,
+            ["channel_id"] = channelId,
+        };
+        return (await CallAsync<BookmarksData>(request)).Bookmarks;
+    }
+
+    /// <summary>One page of the files posted in a channel, newest first, and whether another page may follow.</summary>
+    public async Task<(List<ChannelFileDto> Files, bool HasMore)> SearchChannelFilesAsync(
+        string baseUrl, string token, string teamId, string channelId, int page)
+    {
+        var request = new JsonObject
+        {
+            ["command"] = "search_channel_files",
+            ["base_url"] = baseUrl,
+            ["token"] = token,
+            ["team_id"] = teamId,
+            ["channel_id"] = channelId,
+            ["page"] = page,
+        };
+        var data = await CallAsync<ChannelFilesData>(request);
+        return (data.Files, data.HasMore);
+    }
+
+    /// <summary>The files attached to the channel's cached messages — the panel's first paint, and all of it offline.</summary>
+    public async Task<List<ChannelFileDto>> GetCachedChannelFilesAsync(string channelId)
+    {
+        var request = new JsonObject
+        {
+            ["command"] = "get_cached_channel_files",
+            ["channel_id"] = channelId,
+        };
+        return (await CallAsync<ChannelFilesData>(request)).Files;
+    }
+
+    public async Task<List<ChannelBookmarkDto>> GetCachedChannelBookmarksAsync(string channelId)
+    {
+        var request = new JsonObject
+        {
+            ["command"] = "get_cached_channel_bookmarks",
+            ["channel_id"] = channelId,
+        };
+        return (await CallAsync<BookmarksData>(request)).Bookmarks;
     }
 
     /// <summary>Same probe for the open thread panel.</summary>

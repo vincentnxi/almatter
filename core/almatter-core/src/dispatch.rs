@@ -124,6 +124,29 @@ enum Request {
     GetCachedPinnedPosts {
         channel_id: String,
     },
+    /// The channel's bookmarks, straight from the server — and into the
+    /// cache, in place of whatever list it held.
+    GetChannelBookmarks {
+        base_url: String,
+        token: String,
+        channel_id: String,
+    },
+    GetCachedChannelBookmarks {
+        channel_id: String,
+    },
+    /// One page of the files posted in a channel, from the server — not
+    /// cached as a list; the cached view comes from the messages' own
+    /// attachments (GetCachedChannelFiles).
+    SearchChannelFiles {
+        base_url: String,
+        token: String,
+        team_id: String,
+        channel_id: String,
+        page: u32,
+    },
+    GetCachedChannelFiles {
+        channel_id: String,
+    },
     /// One message by id — what following a link to a message needs, to
     /// learn which channel it lives in. Answered from the cache when it's
     /// there, fetched (and cached) otherwise.
@@ -600,6 +623,26 @@ async fn handle(request_json: &str, db: &'static Mutex<Database>) -> Value {
             .cached_pinned_posts(&channel_id)
             .map(|posts| json!({ "posts": posts }))
             .map_err(|e| e.to_string()),
+        Request::GetChannelBookmarks { base_url, token, channel_id } => {
+            refresh_channel_bookmarks(&MattermostClient::new(base_url).with_token(token), db, &channel_id)
+                .await
+                .map(|bookmarks| json!({ "bookmarks": bookmarks }))
+                .map_err(|e| e.to_string())
+        }
+        Request::GetCachedChannelBookmarks { channel_id } => crate::db::lock(db)
+            .cached_channel_bookmarks(&channel_id)
+            .map(|bookmarks| json!({ "bookmarks": bookmarks }))
+            .map_err(|e| e.to_string()),
+        Request::SearchChannelFiles { base_url, token, team_id, channel_id, page } => MattermostClient::new(base_url)
+            .with_token(token)
+            .search_channel_files(&team_id, &channel_id, page, CHANNEL_FILES_PAGE)
+            .await
+            .map(|(files, has_more)| json!({ "files": files, "has_more": has_more }))
+            .map_err(|e| e.to_string()),
+        Request::GetCachedChannelFiles { channel_id } => crate::db::lock(db)
+            .cached_channel_files(&channel_id)
+            .map(|files| json!({ "files": files, "has_more": false }))
+            .map_err(|e| e.to_string()),
         Request::GetPost { base_url, token, post_id } => {
             let cached = crate::db::lock(db).cached_post(&post_id).ok().flatten();
             match cached {
@@ -1062,7 +1105,26 @@ fn revision_json(r: &crate::db::ChannelRevision) -> Value {
         "reactions": r.reactions,
         "last_reaction_seq": r.last_reaction_seq,
         "pinned": r.pinned,
+        "bookmarks": r.bookmarks,
     })
+}
+
+/// Files per page in the channel files panel. The official client asks for
+/// 20; a few more fill the panel's height in one go.
+const CHANNEL_FILES_PAGE: u32 = 30;
+
+/// Fetches a channel's bookmarks and lays them down in the cache — what both
+/// opening a channel and a live "bookmark changed" event do. The event's own
+/// payload is not applied: its shape differs between server versions and
+/// kinds of change, and one small GET is simpler to trust.
+pub(crate) async fn refresh_channel_bookmarks(
+    client: &MattermostClient,
+    db: &Mutex<Database>,
+    channel_id: &str,
+) -> Result<Vec<crate::models::ChannelBookmark>, ApiError> {
+    let bookmarks = client.get_channel_bookmarks(channel_id).await?;
+    cache_write(db, |cache| cache.replace_channel_bookmarks(channel_id, &bookmarks).map(|_| ()));
+    Ok(bookmarks)
 }
 
 /// Hands the cache to the account that just signed in — emptying it, and the
@@ -2504,6 +2566,7 @@ mod tests {
                 msg_count: 0,
                 mention_count: 0,
                 is_muted: false,
+                header: String::new(),
             })
             .unwrap();
 

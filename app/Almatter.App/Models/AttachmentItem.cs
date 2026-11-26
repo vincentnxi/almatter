@@ -5,9 +5,11 @@ using CommunityToolkit.Mvvm.ComponentModel;
 namespace Almatter.App.Models;
 
 /// <summary>A file attached to a message: a thumbnail when it's a picture (see PictureItem), a file card otherwise.</summary>
-public sealed partial class AttachmentItem : PictureItem
+public sealed partial class AttachmentItem : PictureItem, IServerFile
 {
     public required string Id { get; init; }
+
+    string IServerFile.FileId => Id;
 
     /// <summary>
     /// The name as sent, minus the invisible characters that reverse the

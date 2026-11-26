@@ -148,11 +148,12 @@
             <Setter Property="MinHeight" Value="30" />
         </Style>
 
-        <!-- The size picker's − and + : hover tint, greyed out at a bound. -->
+        <!-- The size picker's − and + : hover tint, greyed out at a bound. Drawn at their size, not stretched:
+             the − has no height, and Uniform stretch over a flat shape drew nothing. -->
         <Style Selector="Button.stepper Path">
             <Setter Property="Width" Value="12" />
             <Setter Property="Height" Value="12" />
-            <Setter Property="Stretch" Value="Uniform" />
+            <Setter Property="Stretch" Value="None" />
             <Setter Property="StrokeThickness" Value="1.8" />
             <Setter Property="StrokeLineCap" Value="Round" />
             <Setter Property="Stroke" Value="{DynamicResource TextPrimaryBrush}" />
@@ -435,7 +436,7 @@
                                             IsEnabled="{Binding CanDecreaseMessageFontSize}"
                                             ToolTip.Tip="{Binding T.FontSizeDecrease, Source={x:Static loc:Loc.Instance}}">
                                         <Border Classes="segment">
-                                            <Path Data="M3 8h10" />
+                                            <Path Data="M1 6h10" />
                                         </Border>
                                     </Button>
                                     <TextBlock Text="{Binding MessageFontSizeLabel}" MinWidth="44" TextAlignment="Center"
@@ -444,7 +445,7 @@
                                             IsEnabled="{Binding CanIncreaseMessageFontSize}"
                                             ToolTip.Tip="{Binding T.FontSizeIncrease, Source={x:Static loc:Loc.Instance}}">
                                         <Border Classes="segment">
-                                            <Path Data="M3 8h10M8 3v10" />
+                                            <Path Data="M1 6h10M6 1v10" />
                                         </Border>
                                     </Button>
                                 </StackPanel>

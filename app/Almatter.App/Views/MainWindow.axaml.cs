@@ -51,6 +51,34 @@ public partial class MainWindow : Window
     private SettingsWindow? _settingsWindow;
     private (string ChannelId, string PostId)? _pendingNotificationTarget;
 
+    /// <summary>
+    /// Opens the channel header's bubble a moment after the pointer settles
+    /// on its icon — a pointer merely crossing the header on its way
+    /// elsewhere opens nothing. A click opens it too (the button's own
+    /// Flyout). The bubble then stays while the pointer is on it (links in it
+    /// are clickable) and closes once it moves away (the Flyout's ShowMode).
+    /// </summary>
+    private DispatcherTimer? _channelHeaderHoverTimer;
+
+    private void OnChannelHeaderPointerEntered(object? sender, PointerEventArgs e)
+    {
+        if (_channelHeaderHoverTimer is null)
+        {
+            _channelHeaderHoverTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(450) };
+            _channelHeaderHoverTimer.Tick += (_, _) =>
+            {
+                _channelHeaderHoverTimer.Stop();
+                if (ChannelHeaderButton.IsPointerOver && ChannelHeaderButton.Flyout is { IsOpen: false } bubble)
+                {
+                    bubble.ShowAt(ChannelHeaderButton);
+                }
+            };
+        }
+        _channelHeaderHoverTimer.Stop();
+        _channelHeaderHoverTimer.Start();
+    }
+
+    private void OnChannelHeaderPointerExited(object? sender, PointerEventArgs e) => _channelHeaderHoverTimer?.Stop();
     public MainWindow()
     {
         InitializeComponent();
