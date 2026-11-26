@@ -778,12 +778,14 @@
 
         <!-- MAIN CONVERSATION -->
         <Border Grid.Column="1" Background="Transparent" ClipToBounds="True">
-        <Grid RowDefinitions="Auto,52,*,Auto">
+        <Grid RowDefinitions="52,Auto,*,Auto">
 
             <!-- A newer version on GitHub (MainViewModel.Updates.cs). In the
                  accent's soft tint and deep ink, like the selected channel, so
-                 it follows the chosen accent and theme. -->
-            <Border Grid.Row="0" IsVisible="{Binding ShowUpdateBanner}"
+                 it follows the chosen accent and theme. Under the header, not
+                 above it: with no title bar the window's caption buttons sit
+                 over the top right corner, and would cover its buttons. -->
+            <Border Grid.Row="1" IsVisible="{Binding ShowUpdateBanner}"
                     Background="{DynamicResource AccentSoftBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1" Padding="16,8,10,8">
                 <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto">
                     <Path Grid.Column="0" Data="M12 2.5a9.5 9.5 0 1 0 0 19 9.5 9.5 0 0 0 0-19z M12 7v8.5 M8.5 12l3.5 3.5 3.5-3.5"
@@ -817,7 +819,7 @@
                  a shadow over the messages in place of its bottom line;
                  ZIndex keeps that shadow above the messages, declared later.
                  Transparent, not unset, so its empty stretches are hit too. -->
-            <Border Grid.Row="1" ZIndex="1" Background="Transparent" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="{DynamicResource HeaderBorderThickness}"
+            <Border Grid.Row="0" ZIndex="1" Background="Transparent" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="{DynamicResource HeaderBorderThickness}"
                     BoxShadow="{DynamicResource HeaderShadow}" Padding="16,0" WindowDecorationProperties.ElementRole="TitleBar">
                 <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto,Auto,Auto,Auto">
                     <Path Grid.Column="0" Data="M9 4l-1 16M16 4l-1 16M4 9h16M3 15h16" Stroke="{DynamicResource TextPrimaryBrush}" StrokeThickness="1.8"
