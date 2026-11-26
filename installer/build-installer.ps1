@@ -5,6 +5,15 @@
 #   3. the Inno Setup script, with the version taken from Almatter.App.csproj.
 #
 # Usage (from any folder):  powershell -ExecutionPolicy Bypass -File installer\build-installer.ps1
+#
+# -Version 0.17.0 labels the build with another version than the csproj's,
+# to test updates by hand (an "older" copy that a real release then
+# replaces). Never for a release: CI checks the tag against the csproj.
+
+param(
+    [ValidatePattern('^\d+\.\d+\.\d+$')]
+    [string]$Version
+)
 
 $ErrorActionPreference = 'Stop'
 
@@ -28,8 +37,16 @@ $iscc = Find-Tool 'ISCC' @(
     "$env:ProgramFiles\Inno Setup 6\ISCC.exe",
     "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")
 
-$version = ([xml](Get-Content $appProject -Raw)).Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1
-if (-not $version) { throw "No <Version> in $appProject" }
+# PowerShell names are case-insensitive: $Version (the parameter) and
+# $version are one variable, so the parameter is read before it is reused.
+$versionArgs = @()
+if ($Version) {
+    $versionArgs = @("-p:Version=$Version")
+}
+else {
+    $version = ([xml](Get-Content $appProject -Raw)).Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1
+    if (-not $version) { throw "No <Version> in $appProject" }
+}
 Write-Host "== Almatter $version"
 
 Write-Host '== Rust core (release)'
@@ -58,7 +75,7 @@ if (Test-Path $publishDir) { Remove-Item $publishDir -Recurse -Force }
 # MSBuild prints warnings and errors on standard output, so Tee-Object sees
 # them all; no 2>&1, which Windows PowerShell 5.1 turns into a terminating
 # error under $ErrorActionPreference = 'Stop'.
-& dotnet publish $appProject -c Release -r win-x64 -o $publishDir | Tee-Object -Variable publishLog
+& dotnet publish $appProject -c Release -r win-x64 -o $publishDir @versionArgs | Tee-Object -Variable publishLog
 $publishExit = $LASTEXITCODE
 if ($publishExit -ne 0) { throw "dotnet publish failed ($publishExit)" }
 $aotWarnings = $publishLog | Select-String -Pattern 'warning (IL\d{4}|CS\d{4}|MSB\d{4})|warning :' | Select-Object -ExpandProperty Line -Unique
