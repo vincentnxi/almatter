@@ -361,6 +361,19 @@ public sealed class MattermostService
         return data.Newer;
     }
 
+    /// <summary>
+    /// Downloads the installer of <paramref name="version"/> and checks its
+    /// signature against the key the core holds (almatter-core's updates.rs);
+    /// a copy downloaded earlier is checked again rather than trusted. Returns
+    /// the path of an installer that passed just now. Throws otherwise.
+    /// </summary>
+    public async Task<string> DownloadUpdateAsync(string version)
+    {
+        var request = new JsonObject { ["command"] = "download_update", ["version"] = version };
+        var data = await CallAsync<DownloadedUpdateData>(request);
+        return data.Path;
+    }
+
     /// <summary>Downloads (once — cached to disk after that) one message attachment and returns its local file path.</summary>
     public async Task<string> GetFilePathAsync(string baseUrl, string token, string fileId, string fileName)
     {

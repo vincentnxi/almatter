@@ -1756,6 +1756,13 @@ pub fn file_preview_image_dir() -> PathBuf {
     app_data_dir().join("file-previews")
 }
 
+/// Where a newer Almatter installer waits, once downloaded and checked, for
+/// the user to say "restart to update" — see `crate::updates`. Not one of
+/// `account_file_dirs`: it belongs to the app, not to whoever is signed in.
+pub fn update_download_dir() -> PathBuf {
+    app_data_dir().join("updates")
+}
+
 /// Same folder as the cache database — a plain-text diagnostic log for
 /// things that would otherwise fail silently in the background (the
 /// WebSocket connection, most notably), since this core has no console to

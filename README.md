@@ -76,7 +76,13 @@ and brings what it needs with it.
 > The installer is not code-signed yet, so Windows SmartScreen may warn about an
 > unknown publisher. Choose *More info → Run anyway* to continue.
 
-Updating is the same: run the newer installer over the existing install.
+**Updates install themselves.** When a new version is out, Almatter downloads it in the
+background, checks that it is signed by its author, and the banner above the
+conversation offers *Restart to update*: one click, and Almatter closes, updates and
+comes back on its own, without the SmartScreen warning. Versions released before this
+feature only point to the release page: install the newer one by hand once, as below.
+
+Running a newer installer over the existing install also works, as before.
 
 **Uninstalling** from Windows Settings removes the program and asks whether to also
 delete your data (saved sign-in, settings, cached messages). That data lives in
@@ -92,6 +98,12 @@ delete your data (saved sign-in, settings, cached messages). That data lives in
   off in the settings stops that. And once a day Almatter reads the list of its own
   versions on GitHub, to tell you when a new one is out; nothing about you is sent, and
   the check can be turned off in the settings (General).
+- An update is installed only if it carries an Ed25519 signature from the author's key,
+  which never leaves the author's PC (it is not on GitHub). The key's public half is built
+  into Almatter, which checks the downloaded installer against it, and checks it again
+  right before running it. A signature also names its version, so an older installer
+  cannot be passed off as a newer one. Nothing is installed until you click *Restart to
+  update*.
 - Your password is never stored. The session token is saved encrypted with Windows' data
   protection API (DPAPI), readable only by your Windows account.
 - Messages are cached on your disk so they open instantly and remain readable offline.
@@ -290,8 +302,14 @@ lui tout ce dont il a besoin.
 > L'installeur n'est pas encore signé : Windows SmartScreen peut signaler un éditeur
 > inconnu. Cliquez sur *Informations complémentaires → Exécuter quand même*.
 
-Pour mettre à jour, il suffit de lancer le nouvel installeur par-dessus l'installation
-existante.
+**Les mises à jour s'installent d'elles-mêmes.** Quand une nouvelle version sort, Almatter
+la télécharge en arrière-plan, vérifie qu'elle est bien signée par son auteur, et le
+bandeau au-dessus de la conversation propose *Redémarrer pour mettre à jour* : un clic,
+et Almatter se ferme, se met à jour et revient tout seul, sans l'avertissement de
+SmartScreen. Les versions sorties avant cette fonction renvoient seulement vers la page
+des versions : installez une fois la nouvelle à la main, comme ci-dessus.
+
+Lancer un nouvel installeur par-dessus l'installation existante fonctionne toujours.
 
 **Désinstaller** depuis les Paramètres de Windows supprime le programme et propose de
 supprimer aussi vos données (connexion enregistrée, réglages, messages en cache). Ces
@@ -308,6 +326,12 @@ données se trouvent dans `%LOCALAPPDATA%\Almatter`.
   réglages supprime ces téléchargements. Et une fois par jour, Almatter consulte la liste
   de ses propres versions sur GitHub pour vous prévenir quand une nouvelle sort ; rien
   sur vous n'est envoyé, et la vérification se désactive dans les réglages (Général).
+- Une mise à jour n'est installée que si elle porte une signature Ed25519 faite avec la
+  clé de l'auteur, qui ne quitte jamais son PC (elle n'est pas sur GitHub). La partie
+  publique de cette clé est intégrée à Almatter, qui vérifie l'installeur téléchargé
+  puis le vérifie de nouveau juste avant de le lancer. La signature nomme aussi la
+  version, si bien qu'un installeur plus ancien ne peut pas se faire passer pour un plus
+  récent. Rien ne s'installe avant votre clic sur *Redémarrer pour mettre à jour*.
 - Votre mot de passe n'est jamais enregistré. Le jeton de session est chiffré avec la
   protection de données de Windows (DPAPI) et lisible uniquement par votre compte
   Windows.

@@ -195,6 +195,12 @@ enum Request {
     CheckForUpdate {
         current_version: String,
     },
+    /// Downloads the installer of a newer version and checks its signature
+    /// (see `crate::updates::download_update`). Answers
+    /// `{"version": "0.18.0", "path": "C:\\…\\Almatter-Setup-0.18.0.exe"}`.
+    DownloadUpdate {
+        version: String,
+    },
     /// Downloads (once — cached to disk after that) one message attachment
     /// and returns the local file path, so the UI can open it with the OS's
     /// own default handler for that file type.
@@ -941,7 +947,15 @@ async fn handle(request_json: &str, db: &'static Mutex<Database>) -> Value {
             .map(|path| json!({ "path": path })),
         Request::CheckForUpdate { current_version } => crate::updates::check_for_update(&current_version)
             .await
-            .map(|newer| json!({ "newer": newer })),
+            .map(|newer| {
+                if newer.is_none() {
+                    crate::updates::forget_downloaded_updates();
+                }
+                json!({ "newer": newer })
+            }),
+        Request::DownloadUpdate { version } => crate::updates::download_update(&version)
+            .await
+            .map(|downloaded| json!(downloaded)),
         Request::GetFile { base_url, token, file_id, file_name } => {
             let client = MattermostClient::new(base_url).with_token(token);
             ensure_file_cached(&client, &file_id, &file_name)

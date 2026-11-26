@@ -11,6 +11,11 @@
 #                                          starts the older version first, then
 #                                          runs the new installer over it and
 #                                          lists what is left in the app folder
+#   ... -UpgradeFrom <older setup> -AsAutoUpdate
+#                                          the same, but runs the new installer
+#                                          as the app's "Restart to update"
+#                                          does (/SILENT /AUTOUPDATE=1) and
+#                                          checks Almatter came back by itself
 #
 # For -UpgradeFrom, take the older setup from its GitHub release, e.g.
 #   gh release download v0.15.0 --repo vincentnxi/almatter -p 'Almatter-Setup-*.exe' -D <folder>
@@ -22,7 +27,8 @@
 
 param(
     [switch]$Manual,
-    [string]$UpgradeFrom
+    [string]$UpgradeFrom,
+    [switch]$AsAutoUpdate
 )
 
 $ErrorActionPreference = 'Stop'
@@ -44,6 +50,7 @@ if ($UpgradeFrom) {
         throw "-UpgradeFrom must point to an Almatter-Setup-*.exe file: '$UpgradeFrom'"
     }
 }
+if ($AsAutoUpdate -and -not $UpgradeFrom) { throw '-AsAutoUpdate needs -UpgradeFrom: an update needs something to update.' }
 
 if (Test-Path $resultsDir) { Remove-Item $resultsDir -Recurse -Force }
 New-Item -ItemType Directory $resultsDir | Out-Null
@@ -55,6 +62,10 @@ $previousDir = Join-Path $resultsDir 'previous'
 New-Item -ItemType Directory $previousDir | Out-Null
 if ($UpgradeFrom) {
     Copy-Item $UpgradeFrom $previousDir
+}
+if ($AsAutoUpdate) {
+    # Read by run-in-sandbox.ps1, which cannot take parameters.
+    New-Item -ItemType File (Join-Path $previousDir 'as-auto-update') | Out-Null
 }
 
 if ($Manual) {

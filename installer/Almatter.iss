@@ -90,8 +90,18 @@ Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExeName}"; Tasks: deskto
 
 [Run]
 Filename: "{app}\{#AppExeName}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
+; "Restart to update" in the app runs this installer with
+; /SILENT /AUTOUPDATE=1 and quits: Almatter comes back by itself once the
+; files are in place. A silent install started any other way (an admin
+; deploying it) still leaves the app closed.
+Filename: "{app}\{#AppExeName}"; Flags: nowait; Check: IsAutoUpdate
 
 [Code]
+function IsAutoUpdate: Boolean;
+begin
+  Result := ExpandConstant('{param:AUTOUPDATE|0}') = '1';
+end;
+
 // With the ready page disabled, the tasks page is the last one before the
 // install starts, so its button should say so.
 procedure CurPageChanged(CurPageID: Integer);

@@ -251,6 +251,13 @@ public sealed partial class Strings
     public required string UpdateOpenPage { get; init; }
     public required string UpdateSkip { get; init; }
     public required string UpdateLater { get; init; }
+    /// <summary>Once the installer is downloaded and its signature checked: "Almatter 0.18.0 est prête."</summary>
+    public required Func<string, string> UpdateReady { get; init; }
+    public required string UpdateRestart { get; init; }
+    public required string UpdateRestarting { get; init; }
+    public required string UpdateWhatsNew { get; init; }
+    /// <summary>When the installer could not be started after all: the banner falls back to the GitHub page.</summary>
+    public required string UpdateInstallFailed { get; init; }
 
     // ── Notifications and taskbar ────────────────────────────────────
     public required string Someone { get; init; }

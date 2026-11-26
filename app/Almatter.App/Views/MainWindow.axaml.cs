@@ -226,6 +226,14 @@ public partial class MainWindow : Window
 
             vm.LoggedOut += (_, _) => PerformLogout();
             vm.SessionExpired += (_, _) => PerformLogout(sessionExpired: true);
+            // The installer is running: closing every window quits the app
+            // (settings saved on the way, as on any close), and the
+            // installer starts it again once the files are replaced.
+            vm.QuitForUpdateRequested += (_, _) =>
+            {
+                _settingsWindow?.Close();
+                Close();
+            };
 
             // Posted rather than called inline: the message list has just
             // been rebuilt when this fires, and the ScrollViewer's content

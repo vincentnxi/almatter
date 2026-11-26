@@ -779,12 +779,14 @@
 
         <!-- MAIN CONVERSATION -->
         <Border Grid.Column="1" Background="Transparent" ClipToBounds="True">
-        <Grid RowDefinitions="Auto,52,Auto,*,Auto">
+        <Grid RowDefinitions="52,Auto,Auto,*,Auto">
 
             <!-- A newer version on GitHub (MainViewModel.Updates.cs). In the
                  accent's soft tint and deep ink, like the selected channel, so
-                 it follows the chosen accent and theme. -->
-            <Border Grid.Row="0" IsVisible="{Binding ShowUpdateBanner}"
+                 it follows the chosen accent and theme. Under the header, not
+                 above it: with no title bar the window's caption buttons sit
+                 over the top right corner, and would cover its buttons. -->
+            <Border Grid.Row="1" IsVisible="{Binding ShowUpdateBanner}"
                     Background="{DynamicResource AccentSoftBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1" Padding="16,8,10,8">
                 <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto">
                     <Path Grid.Column="0" Data="M12 2.5a9.5 9.5 0 1 0 0 19 9.5 9.5 0 0 0 0-19z M12 7v8.5 M8.5 12l3.5 3.5 3.5-3.5"
@@ -793,7 +795,22 @@
                     <TextBlock Grid.Column="1" Margin="10,0" VerticalAlignment="Center" TextWrapping="Wrap" Foreground="{DynamicResource AccentInkBrush}">
                         <Run Text="{Binding UpdateBannerTitle}" FontWeight="SemiBold" /><Run Text=" " /><Run Text="{Binding UpdateBannerDetail}" />
                     </TextBlock>
-                    <Button Grid.Column="2" Classes="row-button" VerticalAlignment="Center" Command="{Binding OpenUpdatePageCommand}">
+                    <!-- Installer downloaded and its signature checked: one
+                         click installs it and brings Almatter back, and the
+                         release notes move to a plain link beside it. -->
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" IsVisible="{Binding IsUpdateReady}">
+                        <Button Classes="row-button" VerticalAlignment="Center" Command="{Binding RestartToUpdateCommand}" IsEnabled="{Binding CanRestartToUpdate}">
+                            <Border Background="{DynamicResource AccentBrush}" CornerRadius="{DynamicResource RowRadiusValue}" Padding="12,5">
+                                <TextBlock Text="{Binding UpdateRestartText}" Foreground="{DynamicResource OnAccentBrush}" FontSize="12.5" />
+                            </Border>
+                        </Button>
+                        <Button Classes="row-button" VerticalAlignment="Center" Margin="4,0,0,0" Command="{Binding OpenUpdatePageCommand}">
+                            <Border Background="Transparent" CornerRadius="{DynamicResource RowRadiusValue}" Padding="10,5">
+                                <TextBlock Text="{Binding T.UpdateWhatsNew, Source={x:Static loc:Loc.Instance}}" Foreground="{DynamicResource AccentInkBrush}" FontSize="12.5" />
+                            </Border>
+                        </Button>
+                    </StackPanel>
+                    <Button Grid.Column="2" Classes="row-button" VerticalAlignment="Center" Command="{Binding OpenUpdatePageCommand}" IsVisible="{Binding IsUpdateNotReady}">
                         <Border Background="{DynamicResource AccentBrush}" CornerRadius="{DynamicResource RowRadiusValue}" Padding="12,5">
                             <TextBlock Text="{Binding T.UpdateOpenPage, Source={x:Static loc:Loc.Instance}}" Foreground="{DynamicResource OnAccentBrush}" FontSize="12.5" />
                         </Border>
@@ -818,7 +835,7 @@
                  a shadow over the messages in place of its bottom line;
                  ZIndex keeps that shadow above the messages, declared later.
                  Transparent, not unset, so its empty stretches are hit too. -->
-            <Border Grid.Row="1" ZIndex="1" Background="Transparent" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="{DynamicResource HeaderBorderThickness}"
+            <Border Grid.Row="0" ZIndex="1" Background="Transparent" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="{DynamicResource HeaderBorderThickness}"
                     BoxShadow="{DynamicResource HeaderShadow}" Padding="16,0" WindowDecorationProperties.ElementRole="TitleBar">
                 <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto,Auto,Auto,Auto">
                     <Path Grid.Column="0" Data="M9 4l-1 16M16 4l-1 16M4 9h16M3 15h16" Stroke="{DynamicResource TextPrimaryBrush}" StrokeThickness="1.8"

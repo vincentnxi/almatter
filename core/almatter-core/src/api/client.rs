@@ -1247,6 +1247,53 @@ async fn fetch_external_limited(
     Ok(bytes)
 }
 
+/// A large file from another website, written to `dest` as it arrives rather
+/// than held in memory — so far, an Almatter installer from GitHub. Same
+/// client and guards as `fetch_external_document`, but `total_timeout` for
+/// the whole download, since a few megabytes take longer than a picture on a
+/// slow line (the read timeout still cuts off a server that goes silent).
+/// `dest` is overwritten; on failure it may be left half written, and it is
+/// the caller's to remove. Returns the number of bytes written.
+pub async fn download_external_file(
+    url: &str,
+    dest: &std::path::Path,
+    max_bytes: u64,
+    total_timeout: Duration,
+) -> Result<u64, String> {
+    use std::io::Write;
+
+    let fail = |e: ApiError| e.to_string();
+    if reqwest::Url::parse(url).is_ok_and(|parsed| !url_address_allowed(&parsed, is_public_address)) {
+        return Err(fail(ApiError::PrivateAddress));
+    }
+    let mut resp = external_http_client()
+        .map_err(fail)?
+        .get(url)
+        .header(reqwest::header::ACCEPT, "application/octet-stream")
+        .timeout(total_timeout)
+        .send()
+        .await
+        .map_err(|e| fail(if caused_by_private_address(&e) { ApiError::PrivateAddress } else { ApiError::Request(e) }))?;
+    if !resp.status().is_success() {
+        return Err(fail(ApiError::from_response(resp.status().as_u16(), String::new())));
+    }
+    let limit_mb = (max_bytes / (1024 * 1024)).max(1) as usize;
+    if resp.content_length().is_some_and(|len| len > max_bytes) {
+        return Err(fail(ApiError::TooLarge { limit_mb }));
+    }
+    let mut file = std::fs::File::create(dest).map_err(|e| format!("cannot write {}: {e}", dest.display()))?;
+    let mut written: u64 = 0;
+    while let Some(chunk) = resp.chunk().await.map_err(|e| fail(ApiError::Interrupted(e)))? {
+        written += chunk.len() as u64;
+        if written > max_bytes {
+            return Err(fail(ApiError::TooLarge { limit_mb }));
+        }
+        file.write_all(&chunk).map_err(|e| format!("cannot write {}: {e}", dest.display()))?;
+    }
+    file.sync_all().map_err(|e| format!("cannot write {}: {e}", dest.display()))?;
+    Ok(written)
+}
+
 /// Reads a whole response body. A failure at this point can only be the
 /// connection giving out mid-download — the status line already arrived.
 async fn body_bytes(resp: reqwest::Response) -> Result<Vec<u8>, ApiError> {

@@ -592,7 +592,15 @@
                                 </Border>
                             </Button>
                         </StackPanel>
-                        <TextBlock Classes="setting-hint" Text="{Binding UpdateCheckStatusText}" IsVisible="{Binding HasUpdateCheckStatus}" />
+                        <StackPanel Orientation="Horizontal" Spacing="10" IsVisible="{Binding HasUpdateCheckStatus}">
+                            <TextBlock Classes="setting-hint" Text="{Binding UpdateCheckStatusText}" VerticalAlignment="Center" />
+                            <!-- Same page as the banner's button: the release on GitHub. -->
+                            <Button Classes="row-button" Cursor="Hand" VerticalAlignment="Center"
+                                    IsVisible="{Binding ShowUpdateCheckLink}" Command="{Binding OpenUpdatePageCommand}">
+                                <TextBlock Text="{Binding T.UpdateOpenPage, Source={x:Static loc:Loc.Instance}}"
+                                           Foreground="{DynamicResource AccentInkBrush}" TextDecorations="Underline" FontSize="12.5" />
+                            </Button>
+                        </StackPanel>
                     </StackPanel>
 
                     <Border Classes="separator" />
