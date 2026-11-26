@@ -124,10 +124,68 @@ fn backoff_after_drop(current: Duration, lived: Duration) -> Duration {
 /// idle. Without it the socket dies quietly after a few minutes of silence —
 /// which is exactly how a "Connection reset without closing handshake"
 /// shows up in the log.
-const HEARTBEAT: Duration = Duration::from_secs(30);
+const HEARTBEAT: Duration = if cfg!(test) { Duration::from_millis(100) } else { Duration::from_secs(30) };
 
 /// How long opening the connection may take, handshake included.
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
+
+/// How long the server may stay silent before the connection is taken for
+/// dead. It answers every heartbeat ping with a pong, and pings on its own
+/// as well, so a live link never goes quiet for more than about half a
+/// minute. A heartbeat that merely *sends* fine proves nothing: after a
+/// laptop wakes up or the network changes underneath it, the old socket can
+/// keep accepting writes into the void for minutes while nothing ever comes
+/// back — live messages and notifications silently stop, and the read below
+/// would wait forever.
+const SILENCE_LIMIT: Duration = if cfg!(test) { Duration::from_millis(500) } else { Duration::from_secs(75) };
+
+/// How long one write to the socket may take. A link that has gone away can
+/// leave a send pending until the operating system gives up on it, and the
+/// whole read loop is waiting on that send meanwhile.
+const SEND_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// How many times a reconnection has finished catching up on what it missed.
+/// The UI compares it from one poll to the next: when it moves, the messages
+/// posted in the open channel while the socket was down are fetched — the
+/// catch-up itself only refreshes the channel list and its read state, and
+/// the UI otherwise reads the open channel from the cache alone.
+static RESYNCS: AtomicU64 = AtomicU64::new(0);
+
+pub fn resync_count() -> u64 {
+    RESYNCS.load(Ordering::SeqCst)
+}
+
+/// The two slots below are only ever swapped or emptied, never left half
+/// written, so one poisoned by a panic elsewhere is still fine to use —
+/// refusing it would have turned typing indicators and logout into panics.
+fn slot<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+    m.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+/// Empties `slot_m` only if it still holds this connection's sender: by the
+/// time an old connection winds down, a newer one may have put its own there,
+/// and wiping that left logout unable to reach the live connection.
+fn clear_if_ours<T>(slot_m: &Mutex<Option<mpsc::UnboundedSender<T>>>, ours: &mpsc::UnboundedSender<T>) {
+    let mut current = slot(slot_m);
+    if current.as_ref().is_some_and(|sender| sender.same_channel(ours)) {
+        *current = None;
+    }
+}
+
+/// Sends one frame, giving up after SEND_TIMEOUT. False means the connection
+/// is gone (or as good as).
+async fn send_within<S>(write: &mut S, message: Message) -> bool
+where
+    S: futures_util::Sink<Message> + Unpin,
+{
+    matches!(tokio::time::timeout(SEND_TIMEOUT, write.send(message)).await, Ok(Ok(())))
+}
+
+/// Whether the connection belonging to `generation` should wind down: the
+/// user logged out, or logged in again and a newer connection took over.
+fn is_retired(generation: u64) -> bool {
+    SHUTDOWN.load(Ordering::SeqCst) || GENERATION.load(Ordering::SeqCst) != generation
+}
 
 /// The live connection's outbound half — `None` until `run` has connected
 /// (or after it's dropped), so `send_typing` before login/while offline is
@@ -146,7 +204,7 @@ static WS_STOP: Mutex<Option<mpsc::UnboundedSender<()>>> = Mutex::new(None);
 /// under its now-stale token, with no new one for whoever logs in next.
 pub fn stop() {
     SHUTDOWN.store(true, Ordering::SeqCst);
-    if let Some(tx) = WS_STOP.lock().expect("ws stop mutex poisoned").take() {
+    if let Some(tx) = slot(&WS_STOP).take() {
         let _ = tx.send(());
     }
     STARTED.store(false, Ordering::SeqCst);
@@ -168,7 +226,7 @@ fn typing_action_message(channel_id: &str, parent_id: &str) -> String {
 /// same spirit as every other "nice to have, not load-bearing" live feature
 /// in this app.
 pub fn send_typing(channel_id: &str, parent_id: &str) {
-    if let Some(tx) = WS_SENDER.lock().expect("ws sender mutex poisoned").as_ref() {
+    if let Some(tx) = slot(&WS_SENDER).as_ref() {
         let _ = tx.send(typing_action_message(channel_id, parent_id));
     }
 }
@@ -190,7 +248,7 @@ fn active_status_message(is_active: bool) -> String {
 /// is false, so a status the user picked by hand (away, do not disturb)
 /// always wins over it. Best-effort, like `send_typing`.
 pub fn send_active_status(is_active: bool) {
-    if let Some(tx) = WS_SENDER.lock().expect("ws sender mutex poisoned").as_ref() {
+    if let Some(tx) = slot(&WS_SENDER).as_ref() {
         let _ = tx.send(active_status_message(is_active));
     }
 }
@@ -220,7 +278,7 @@ pub fn start(base_url: String, token: String, user_id: String, db: &'static Mute
         let mut is_reconnect = false;
         loop {
             let attempt_started = std::time::Instant::now();
-            let outcome = run(base_url.clone(), token.clone(), user_id.clone(), db, is_reconnect).await;
+            let outcome = run(base_url.clone(), token.clone(), user_id.clone(), db, is_reconnect, generation).await;
             is_reconnect = true;
             match outcome {
                 Ok(Ended::ByRequest) => break,
@@ -233,12 +291,12 @@ pub fn start(base_url: String, token: String, user_id: String, db: &'static Mute
                 Err(e) => crate::db::log("ws", &format!("connection ended: {e}")),
             }
 
-            if SHUTDOWN.load(Ordering::SeqCst) || GENERATION.load(Ordering::SeqCst) != generation {
+            if is_retired(generation) {
                 break;
             }
             crate::db::log("ws", &format!("reconnecting in {}s", backoff.as_secs()));
             tokio::time::sleep(backoff).await;
-            if SHUTDOWN.load(Ordering::SeqCst) || GENERATION.load(Ordering::SeqCst) != generation {
+            if is_retired(generation) {
                 break;
             }
             backoff = (backoff * 2).min(RECONNECT_MAX);
@@ -254,6 +312,7 @@ pub fn start(base_url: String, token: String, user_id: String, db: &'static Mute
 
 /// Why a connection attempt came back — the reconnect loop has to tell a
 /// deliberate logout from a socket that simply died.
+#[derive(Debug)]
 enum Ended {
     ByRequest,
     Dropped,
@@ -265,6 +324,7 @@ async fn run(
     user_id: String,
     db: &'static Mutex<Database>,
     is_reconnect: bool,
+    generation: u64,
 ) -> Result<Ended, WsError> {
     let url = websocket_url(&base_url);
     crate::db::log("ws", &format!("connecting to {url}"));
@@ -299,12 +359,30 @@ async fn run(
         "action": "authentication_challenge",
         "data": { "token": token }
     });
-    let _ = write.send(Message::Text(auth.to_string().into())).await;
+    if !send_within(&mut write, Message::Text(auth.to_string().into())).await {
+        crate::db::log("ws", "could not send the auth challenge");
+        return Ok(Ended::Dropped);
+    }
 
+    // This connection keeps its own copy of both senders, to recognise them
+    // in the slots when it winds down (see `clear_if_ours`).
     let (tx, mut rx) = mpsc::unbounded_channel::<String>();
-    *WS_SENDER.lock().expect("ws sender mutex poisoned") = Some(tx);
+    *slot(&WS_SENDER) = Some(tx.clone());
     let (stop_tx, mut stop_rx) = mpsc::unbounded_channel::<()>();
-    *WS_STOP.lock().expect("ws stop mutex poisoned") = Some(stop_tx);
+    *slot(&WS_STOP) = Some(stop_tx.clone());
+
+    // A logout while the connection was still opening found no stop slot to
+    // signal, and the connection would then have run on under the old token —
+    // alongside the next login's, every live message handled twice. `stop`
+    // sets SHUTDOWN before it looks at the slot, and the slot is filled above
+    // before SHUTDOWN is read here, so one of the two always sees the other.
+    if is_retired(generation) {
+        crate::db::log("ws", "connected after a stop, closing again");
+        let _ = send_within(&mut write, Message::Close(None)).await;
+        clear_if_ours(&WS_SENDER, &tx);
+        clear_if_ours(&WS_STOP, &stop_tx);
+        return Ok(Ended::ByRequest);
+    }
 
     let client = MattermostClient::new(base_url).with_token(token);
 
@@ -321,6 +399,7 @@ async fn run(
                     crate::db::log("ws", &format!("read-state resync failed for team {}: {e}", team.id));
                 }
             }
+            RESYNCS.fetch_add(1, Ordering::SeqCst);
         });
     }
 
@@ -330,9 +409,13 @@ async fn run(
     // the real cadence start a full interval from here.
     let mut heartbeat = tokio::time::interval(HEARTBEAT);
     heartbeat.tick().await;
+    let mut last_heard = std::time::Instant::now();
     loop {
         tokio::select! {
             item = read.next() => {
+                if let Some(Ok(_)) = &item {
+                    last_heard = std::time::Instant::now();
+                }
                 match item {
                     Some(Ok(Message::Text(text))) => {
                         event_count += 1;
@@ -347,7 +430,7 @@ async fn run(
                     // Unanswered pings are read as a dead peer and the
                     // server hangs up.
                     Some(Ok(Message::Ping(payload))) => {
-                        if write.send(Message::Pong(payload)).await.is_err() {
+                        if !send_within(&mut write, Message::Pong(payload)).await {
                             break;
                         }
                     }
@@ -364,19 +447,35 @@ async fn run(
                 }
             }
             _ = heartbeat.tick() => {
+                // A newer login took over while this one was busy: it is no
+                // longer anyone's connection.
+                if is_retired(generation) {
+                    crate::db::log("ws", "superseded, closing");
+                    ended = Ended::ByRequest;
+                    break;
+                }
+                // See SILENCE_LIMIT: the half-open connection a wake from
+                // sleep leaves behind only shows as silence.
+                if last_heard.elapsed() > SILENCE_LIMIT {
+                    crate::db::log("ws", &format!("nothing from the server for {}s, reconnecting", last_heard.elapsed().as_secs()));
+                    break;
+                }
                 // Keeps the socket visibly alive to the server and to
-                // whatever proxy sits in between, and fails fast when the
-                // link is already gone — a send error here is how a
-                // half-open connection gets noticed at all.
-                if write.send(Message::Ping(Default::default())).await.is_err() {
+                // whatever proxy sits in between; its pong is what keeps
+                // `last_heard` moving.
+                if !send_within(&mut write, Message::Ping(Default::default())).await {
                     crate::db::log("ws", "heartbeat failed, connection is gone");
                     break;
                 }
             }
             outgoing = rx.recv() => {
-                match outgoing {
-                    Some(text) => { let _ = write.send(Message::Text(text.into())).await; }
-                    None => {} // sender side never drops while this task is alive
+                // This task holds a sender itself, so the channel never
+                // closes under it and `None` cannot come.
+                if let Some(text) = outgoing {
+                    if !send_within(&mut write, Message::Text(text.into())).await {
+                        crate::db::log("ws", "send failed, connection is gone");
+                        break;
+                    }
                 }
             }
             _ = stop_rx.recv() => {
@@ -387,8 +486,8 @@ async fn run(
         }
     }
     crate::db::log("ws", &format!("stream ended after {event_count} events"));
-    *WS_SENDER.lock().expect("ws sender mutex poisoned") = None;
-    *WS_STOP.lock().expect("ws stop mutex poisoned") = None;
+    clear_if_ours(&WS_SENDER, &tx);
+    clear_if_ours(&WS_STOP, &stop_tx);
     // STARTED deliberately stays set: the reconnect loop in `start` owns it
     // for the whole lifetime of the retry sequence, and clears it only once
     // it gives up or is told to stop. Clearing it here would let a
@@ -847,6 +946,12 @@ fn handle_typing_event(envelope: &EventEnvelope, user_id: &str, db: &'static Mut
         crate::db::log("ws", &format!("failed to record typing: {e}"));
     }
 }
+
+/// Taken by every test that touches the connection globals (SHUTDOWN, the
+/// slots), so that one calling `stop` cannot cut short another one's live
+/// connection running in parallel.
+#[cfg(test)]
+pub(crate) static TEST_GLOBALS: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
 #[cfg(test)]
 mod tests {
@@ -1345,6 +1450,7 @@ mod tests {
 
     #[test]
     fn stop_is_a_harmless_no_op_without_an_active_connection() {
+        let _globals = TEST_GLOBALS.blocking_lock();
         // No live WebSocket in this test process, so WS_STOP stays None —
         // this just confirms that doesn't panic (e.g. logging out before
         // ever logging in, or logging out twice).
@@ -1436,6 +1542,101 @@ mod tests {
         )
         .await;
         assert!(db.lock().unwrap().cached_pinned_posts("c1").unwrap().is_empty(), "and so must the unpin");
+    }
+
+    /// A local WebSocket server that completes the handshake and reads the
+    /// authentication challenge, then hands the socket to `then`.
+    async fn local_ws_server<F, Fut>(then: F) -> (String, tokio::task::JoinHandle<()>)
+    where
+        F: FnOnce(tokio_tungstenite::WebSocketStream<tokio::net::TcpStream>) -> Fut + Send + 'static,
+        Fut: std::future::Future<Output = ()> + Send,
+    {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}", listener.local_addr().unwrap());
+        let server = tokio::spawn(async move {
+            let (tcp, _) = listener.accept().await.unwrap();
+            let mut ws = tokio_tungstenite::accept_async(tcp).await.unwrap();
+            let auth = ws.next().await;
+            assert!(matches!(auth, Some(Ok(Message::Text(_)))), "the client starts with its auth challenge");
+            then(ws).await;
+        });
+        (url, server)
+    }
+
+    /// What a laptop waking up leaves behind: a socket that still takes
+    /// writes, from a server that will never answer again. Waiting on the
+    /// read forever silently ended live messages and notifications; the
+    /// silence has to be noticed and the connection given up, so that the
+    /// reconnect loop opens a new one.
+    #[tokio::test]
+    async fn a_connection_the_server_stopped_answering_is_given_up() {
+        let _globals = TEST_GLOBALS.lock().await;
+        SHUTDOWN.store(false, Ordering::SeqCst);
+        let (url, server) = local_ws_server(|ws| async move {
+            // Holds the socket open without ever reading from it again, so
+            // the client's pings go unanswered.
+            tokio::time::sleep(Duration::from_secs(30)).await;
+            drop(ws);
+        })
+        .await;
+        let db: &'static Mutex<Database> = Box::leak(Box::new(Mutex::new(Database::open_in_memory().unwrap())));
+
+        let started = std::time::Instant::now();
+        let generation = GENERATION.load(Ordering::SeqCst);
+        let outcome = tokio::time::timeout(
+            Duration::from_secs(10),
+            run(url, "tok".into(), "me".into(), db, false, generation),
+        )
+        .await
+        .expect("a silent server must not hold the connection forever");
+
+        assert!(matches!(outcome, Ok(Ended::Dropped)), "a dead link is a drop, to be reconnected: {outcome:?}");
+        assert!(started.elapsed() >= SILENCE_LIMIT, "not before the server had its chance to answer");
+        server.abort();
+    }
+
+    /// The connection a logout (or a newer login) overtook while it was
+    /// still opening: it must close again at once instead of running on
+    /// under the old token, and leave the slots to whoever holds them now.
+    #[tokio::test]
+    async fn a_connection_that_opens_after_being_superseded_closes_at_once() {
+        let _globals = TEST_GLOBALS.lock().await;
+        let (url, server) = local_ws_server(|mut ws| async move {
+            let next = tokio::time::timeout(Duration::from_secs(5), ws.next()).await;
+            assert!(
+                matches!(next, Ok(Some(Ok(Message::Close(_)))) | Ok(None) | Ok(Some(Err(_)))),
+                "the superseded client must close, not stay connected"
+            );
+        })
+        .await;
+        let db: &'static Mutex<Database> = Box::leak(Box::new(Mutex::new(Database::open_in_memory().unwrap())));
+
+        let stale_generation = GENERATION.load(Ordering::SeqCst).wrapping_add(1000);
+        let outcome = tokio::time::timeout(
+            Duration::from_secs(5),
+            run(url, "tok".into(), "me".into(), db, false, stale_generation),
+        )
+        .await
+        .expect("a superseded connection must return straight away");
+
+        assert!(matches!(outcome, Ok(Ended::ByRequest)), "superseded is not a drop: no reconnect");
+        server.await.expect("the server saw the client close");
+    }
+
+    /// An old connection winding down must not empty a slot a newer one
+    /// has filled meanwhile — logout would then have no way to reach it.
+    #[test]
+    fn an_old_connection_leaves_a_newer_ones_slot_alone() {
+        let slot_m: Mutex<Option<mpsc::UnboundedSender<()>>> = Mutex::new(None);
+        let (old, _old_rx) = mpsc::unbounded_channel::<()>();
+        let (new, _new_rx) = mpsc::unbounded_channel::<()>();
+
+        *slot(&slot_m) = Some(new.clone());
+        clear_if_ours(&slot_m, &old);
+        assert!(slot(&slot_m).as_ref().is_some_and(|s| s.same_channel(&new)), "the newer sender stays");
+
+        clear_if_ours(&slot_m, &new);
+        assert!(slot(&slot_m).is_none(), "its own sender is cleared");
     }
 
     /// A connection that opens and is closed straight away is what a refused

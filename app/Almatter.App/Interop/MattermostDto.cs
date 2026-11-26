@@ -361,4 +361,6 @@ internal sealed class MentionEventsData
 {
     [JsonPropertyName("events")] public List<MentionEventDto> Events { get; set; } = [];
     [JsonPropertyName("reactions")] public List<ReactionEventDto> Reactions { get; set; } = [];
+    /// <summary>How many reconnections have finished catching up; see ws::resync_count in the core.</summary>
+    [JsonPropertyName("resyncs")] public long Resyncs { get; set; }
 }

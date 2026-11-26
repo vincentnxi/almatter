@@ -151,7 +151,29 @@ impl Database {
         if let Some(parent) = path.parent() {
             let _ = std::fs::create_dir_all(parent);
         }
-        Self::open(&path.to_string_lossy())
+        Self::open_or_replace(&path)
+    }
+
+    /// Opens the cache at `path`, starting a fresh one if the file there is
+    /// damaged — a power cut mid-write, a full disk, a sector gone bad.
+    /// Without this, every request failed on "failed to open the local cache
+    /// database", signing in included, and the app stayed unusable until
+    /// someone found and deleted the file by hand. Everything in it but the
+    /// unsent messages can be fetched again from the server, and those are
+    /// in the damaged file anyway: it is kept, as `cache.sqlite3.damaged`
+    /// (only the latest one), rather than deleted. Only SQLite's own verdict
+    /// on the file counts: a file merely locked by another program is left
+    /// alone, since replacing a healthy cache would lose the unsent messages
+    /// for nothing.
+    fn open_or_replace(path: &Path) -> rusqlite::Result<Self> {
+        match Self::open(&path.to_string_lossy()) {
+            Err(error) if is_damaged_file(&error) => {
+                log("cache", &format!("the cache database is damaged ({error}); starting a new one"));
+                set_damaged_aside(path);
+                Self::open(&path.to_string_lossy())
+            }
+            other => other,
+        }
     }
 
     fn init_schema(&self) -> rusqlite::Result<()> {
@@ -1377,6 +1399,38 @@ fn app_data_dir() -> PathBuf {
     data_dir().0.clone()
 }
 
+/// SQLite saying the file is not a database it can read — as opposed to one it
+/// cannot reach right now (locked, busy, no permission).
+fn is_damaged_file(error: &rusqlite::Error) -> bool {
+    matches!(
+        error,
+        rusqlite::Error::SqliteFailure(failure, _)
+            if matches!(failure.code, rusqlite::ErrorCode::DatabaseCorrupt | rusqlite::ErrorCode::NotADatabase)
+    )
+}
+
+/// Moves a damaged cache out of the way, with its write-ahead log: replayed
+/// into a new, empty file, a log from the old one would damage that too. The
+/// shared-memory index is rebuilt from scratch by SQLite and simply deleted.
+fn set_damaged_aside(path: &Path) {
+    let with_suffix = |suffix: &str| {
+        let mut name = path.as_os_str().to_owned();
+        name.push(suffix);
+        PathBuf::from(name)
+    };
+    for (from, to) in [("", ".damaged"), ("-wal", ".damaged-wal")] {
+        let (from, to) = (with_suffix(from), with_suffix(to));
+        let _ = std::fs::remove_file(&to);
+        if from.exists() {
+            if let Err(e) = std::fs::rename(&from, &to) {
+                log("cache", &format!("could not set {} aside: {e}", from.display()));
+                let _ = std::fs::remove_file(&from);
+            }
+        }
+    }
+    let _ = std::fs::remove_file(with_suffix("-shm"));
+}
+
 /// The folder in use, and why it isn't the intended one if the move away from
 /// the old location failed. Settled once per run, on first use, so that every
 /// path handed out during a run agrees — and before the database opens, since
@@ -1651,6 +1705,38 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         dir
+    }
+
+    #[test]
+    fn a_damaged_cache_file_is_set_aside_and_replaced() {
+        let dir = empty_test_dir("damaged-cache");
+        let path = dir.join("cache.sqlite3");
+        // What a torn write leaves behind: something, but not a database.
+        std::fs::write(&path, vec![0xA5u8; 8192]).unwrap();
+        assert!(Database::open(&path.to_string_lossy()).is_err(), "the test file must really be unreadable");
+
+        let db = Database::open_or_replace(&path).expect("a damaged cache must not keep the app from starting");
+        db.upsert_team(&Team { id: "t1".into(), name: "t".into(), display_name: "T".into() }).unwrap();
+        assert_eq!(db.cached_teams().unwrap().len(), 1, "the new cache must be usable");
+        drop(db);
+
+        assert_eq!(std::fs::read(dir.join("cache.sqlite3.damaged")).unwrap(), vec![0xA5u8; 8192], "the damaged file is kept aside");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_healthy_cache_file_is_kept() {
+        let dir = empty_test_dir("healthy-cache");
+        let path = dir.join("cache.sqlite3");
+        {
+            let db = Database::open(&path.to_string_lossy()).unwrap();
+            db.upsert_team(&Team { id: "t1".into(), name: "t".into(), display_name: "T".into() }).unwrap();
+        }
+        let db = Database::open_or_replace(&path).unwrap();
+        assert_eq!(db.cached_teams().unwrap().len(), 1);
+        assert!(!dir.join("cache.sqlite3.damaged").exists());
+        drop(db);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// Another account on the machine must not be able to open the folder

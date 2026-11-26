@@ -201,10 +201,15 @@ public sealed class MattermostService
     /// a drain, not a peek. Both come back together because the poll loop
     /// wants them on the same tick.
     /// </summary>
-    public async Task<(List<MentionEventDto> Mentions, List<ReactionEventDto> Reactions)> GetAndClearNotificationEventsAsync()
+    /// <summary>
+    /// Drains both notification queues. <c>Resyncs</c> rides along: it moves
+    /// each time the live connection came back and caught up, which is the
+    /// caller's cue to fetch the open channel again.
+    /// </summary>
+    public async Task<(List<MentionEventDto> Mentions, List<ReactionEventDto> Reactions, long Resyncs)> GetAndClearNotificationEventsAsync()
     {
         var data = await CallAsync<MentionEventsData>(new JsonObject { ["command"] = "get_and_clear_mention_events" });
-        return (data.Events, data.Reactions);
+        return (data.Events, data.Reactions, data.Resyncs);
     }
 
     public async Task<List<UserDto>> GetCachedUsersAsync(IEnumerable<string> userIds)

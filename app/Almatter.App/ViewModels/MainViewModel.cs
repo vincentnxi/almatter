@@ -1248,7 +1248,12 @@ public partial class MainViewModel : ViewModelBase
 
                 try
                 {
-                    var (mentions, reactions) = await _service.GetAndClearNotificationEventsAsync();
+                    var (mentions, reactions, resyncs) = await _service.GetAndClearNotificationEventsAsync();
+                    if (_seenResyncs is { } seenResyncs && resyncs != seenResyncs)
+                    {
+                        await CatchUpAfterReconnectAsync();
+                    }
+                    _seenResyncs = resyncs;
                     if (mentions.Count > 0)
                     {
                         CrashLogger.Write("mentions", $"drained {mentions.Count} mention(s): {string.Join(", ", mentions.Select(m => $"{m.PostId}@{m.ChannelId}"))}, activeChannel={_activeChannelId}, inForeground={WindowIsInForeground}");
@@ -1305,6 +1310,54 @@ public partial class MainViewModel : ViewModelBase
                 }
             }
         });
+    }
+
+    /// <summary>
+    /// The resync count last seen by the polling loop; null until its first
+    /// tick, which only takes note of it.
+    /// </summary>
+    private long? _seenResyncs;
+
+    /// <summary>
+    /// The live connection dropped and came back (a laptop waking up, a
+    /// network change). The core caught up on the channel list and the read
+    /// state, but the messages posted meanwhile in the channel on screen
+    /// were never sent to this app: the polling loop reads that channel from
+    /// the cache, so they stayed missing until the user went to another
+    /// channel and back. Fetching the open channel and thread writes them to
+    /// the cache, and the next tick repaints from there as usual.
+    /// </summary>
+    private async Task CatchUpAfterReconnectAsync()
+    {
+        CrashLogger.Write("poll", "live connection came back: fetching the open channel and thread again");
+        try
+        {
+            if (_activeChannelId is { } channelId)
+            {
+                var posts = await _service.GetPostsAsync(_session.BaseUrl, _session.Token, channelId);
+                await FetchAuthorsAsync(posts);
+            }
+            if (_openThreadRootId is { } rootId)
+            {
+                var replies = await _service.GetThreadAsync(_session.BaseUrl, _session.Token, rootId);
+                await FetchAuthorsAsync(replies);
+            }
+        }
+        catch (Exception ex)
+        {
+            // Offline again already, most likely; the next channel switch
+            // fetches anyway.
+            CrashLogger.Write("poll: catch-up after reconnect", ex);
+        }
+
+        async Task FetchAuthorsAsync(List<PostDto> posts)
+        {
+            var authorIds = posts.Select(p => p.UserId).Distinct().ToList();
+            if (authorIds.Count > 0)
+            {
+                await _service.GetUsersAsync(_session.BaseUrl, _session.Token, authorIds);
+            }
+        }
     }
 
     /// <summary>

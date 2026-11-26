@@ -854,7 +854,11 @@ async fn handle(request_json: &str, db: &'static Mutex<Database>) -> Value {
             cache
                 .drain_mention_events()
                 .and_then(|events| Ok((events, cache.drain_reaction_events()?)))
-                .map(|(events, reactions)| json!({ "events": events, "reactions": reactions }))
+                // Rides along on this tick's call rather than costing one of
+                // its own: see `ws::resync_count`.
+                .map(|(events, reactions)| {
+                    json!({ "events": events, "reactions": reactions, "resyncs": crate::ws::resync_count() })
+                })
                 .map_err(|e| e.to_string())
         }
         Request::SendTyping { channel_id, parent_id } => {
@@ -2100,6 +2104,7 @@ mod tests {
 
     #[tokio::test]
     async fn stop_websocket_is_ok_even_with_no_active_connection() {
+        let _globals = crate::ws::TEST_GLOBALS.lock().await;
         let db = test_db();
         let response = dispatch(r#"{"command":"stop_web_socket"}"#, db).await;
         assert!(response.contains(r#""ok":true"#), "unexpected response: {response}");
