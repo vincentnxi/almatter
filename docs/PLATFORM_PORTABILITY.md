@@ -96,6 +96,20 @@ côté, sur aucun OS. Deux conséquences pour le portage :
   premier). L'interop COM classique (`[ComImport]`) n'existe pas non plus — voir la ligne
   du badge ci-dessus. Les `DllImport` simples, eux, fonctionnent tels quels.
 
+**Mise à jour automatique (depuis le 2026-11-26)** : le cœur Rust télécharge l'installeur
+de la nouvelle version et sa signature Ed25519 (`core/almatter-core/src/updates.rs`,
+portable), puis l'app lance l'installeur en silencieux (`/SILENT /AUTOUPDATE=1`) et se
+ferme ; l'installeur relance Almatter (`[Run]` avec `Check: IsAutoUpdate` dans
+`Almatter.iss`). Côté app (`ViewModels/MainViewModel.Updates.cs`, `CanInstallUpdates`),
+c'est réservé à Windows et à une copie installée dans `%LOCALAPPDATA%\Programs\Almatter` ;
+ailleurs, le bandeau renvoie vers la page GitHub comme avant. L'installeur est écrit sans
+marque « provenant d'Internet » : la signature vérifiée remplace la question de
+SmartScreen. Pistes : macOS, Sparkle (qui a sa propre signature EdDSA) ou le même
+téléchargement suivi d'un remplacement du `.app` ; Linux, AppImageUpdate, ou laisser le
+gestionnaire de paquets/Flatpak s'en charger. La vérification de signature du cœur se
+réutilise telle quelle ; il faudrait signer chaque paquet de la même façon
+(`tools/sign-update.ps1` est, lui, propre à Windows : DPAPI pour garder la clé).
+
 `dotnet build` (et donc `build-linux.yml` et le lancement en développement) n'est pas
 concerné : il produit toujours une version classique, compilée à la volée.
 `installer/test-in-sandbox.ps1` teste l'installation sur un Windows vierge via Windows

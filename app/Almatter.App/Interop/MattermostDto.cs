@@ -279,6 +279,13 @@ public sealed class NewerReleaseDto
     [JsonPropertyName("url")] public string Url { get; set; } = "";
 }
 
+/// <summary>A newer version's installer, downloaded and its signature checked by the core just now.</summary>
+internal sealed class DownloadedUpdateData
+{
+    [JsonPropertyName("version")] public string Version { get; set; } = "";
+    [JsonPropertyName("path")] public string Path { get; set; } = "";
+}
+
 internal sealed class ChannelData
 {
     [JsonPropertyName("channel")] public ChannelDto Channel { get; set; } = new();

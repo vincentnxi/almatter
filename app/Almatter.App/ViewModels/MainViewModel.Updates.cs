@@ -1,4 +1,6 @@
 using System;
+using System.Diagnostics;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Threading;
@@ -11,14 +13,139 @@ namespace Almatter.App.ViewModels;
 
 /// <summary>
 /// "A newer version is out": a banner above the conversation, and a switch
-/// plus a "check now" button in the settings. Only ever tells — the banner's
-/// button opens the release's page on GitHub, and the user downloads the
-/// installer from there as before. The asking is done by the core (see
-/// almatter-core's updates.rs), through the same guarded client as link
+/// plus a "check now" button in the settings. The asking is done by the core
+/// (see almatter-core's updates.rs), through the same guarded client as link
 /// previews, so the app loads no second network stack for it.
+///
+/// On Windows, in an installed copy, the core then downloads the new
+/// installer in the background and checks its Ed25519 signature; once that
+/// passes, the banner offers "Restart to update", which checks the file once
+/// more, runs it silently and quits — the installer starts Almatter again.
+/// Nothing is installed without that click. Anywhere else, or when any step
+/// fails, the banner's button opens the release's page on GitHub as before.
 /// </summary>
 public partial class MainViewModel
 {
+    /// <summary>Asks the window to close, which quits the app, so the installer can replace its files.</summary>
+    public event EventHandler? QuitForUpdateRequested;
+
+    /// <summary>
+    /// Only a copy installed by the installer updates itself: one run from a
+    /// build folder (a developer's) would install over the real one. The
+    /// installer always puts Almatter in %LOCALAPPDATA%\Programs\Almatter.
+    /// </summary>
+    private static readonly bool CanInstallUpdates = OperatingSystem.IsWindows() && IsInstalledCopy();
+
+    private static bool IsInstalledCopy()
+    {
+        var exeDir = Path.GetDirectoryName(Environment.ProcessPath);
+        var installDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "Almatter");
+        return exeDir is not null && string.Equals(Path.GetFullPath(exeDir).TrimEnd('\\'), Path.GetFullPath(installDir).TrimEnd('\\'), StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>The version whose installer is downloaded and checked. Null while there is none.</summary>
+    private string? _readyUpdateVersion;
+
+    /// <summary>The version being downloaded, so two checks don't fetch it twice.</summary>
+    private string? _downloadingUpdateVersion;
+
+    private bool _isRestartingForUpdate;
+
+    /// <summary>Set when the installer could not be run after all: the banner goes back to the GitHub page.</summary>
+    private bool _updateInstallFailed;
+
+    /// <summary>The banner offers "Restart to update" rather than "View on GitHub".</summary>
+    public bool IsUpdateReady => AvailableUpdate is { } update && update.Version == _readyUpdateVersion && !_updateInstallFailed;
+
+    public bool IsUpdateNotReady => !IsUpdateReady;
+
+    public string UpdateRestartText => _isRestartingForUpdate ? Loc.S.UpdateRestarting : Loc.S.UpdateRestart;
+
+    public bool CanRestartToUpdate => !_isRestartingForUpdate;
+
+    private void RefreshUpdateReadiness()
+    {
+        OnPropertyChanged(nameof(IsUpdateReady));
+        OnPropertyChanged(nameof(IsUpdateNotReady));
+        OnPropertyChanged(nameof(UpdateBannerTitle));
+        OnPropertyChanged(nameof(UpdateBannerDetail));
+        OnPropertyChanged(nameof(UpdateRestartText));
+        OnPropertyChanged(nameof(CanRestartToUpdate));
+    }
+
+    partial void OnAvailableUpdateChanged(NewerReleaseDto? value)
+    {
+        RefreshUpdateReadiness();
+        if (value is not null)
+        {
+            _ = DownloadUpdateInBackgroundAsync(value.Version);
+        }
+    }
+
+    /// <summary>
+    /// Fetches and checks the installer while the banner says "available";
+    /// once it passes, the banner says "ready". A failure is only logged:
+    /// the banner keeps offering the GitHub page, and the next check tries
+    /// again.
+    /// </summary>
+    private async Task DownloadUpdateInBackgroundAsync(string version)
+    {
+        if (!CanInstallUpdates || version == _readyUpdateVersion || version == _downloadingUpdateVersion)
+        {
+            return;
+        }
+        _downloadingUpdateVersion = version;
+        try
+        {
+            await _service.DownloadUpdateAsync(version);
+            _readyUpdateVersion = version;
+            _updateInstallFailed = false;
+        }
+        catch (Exception ex)
+        {
+            Diagnostics.CrashLogger.Write($"update: download of {version} failed", ex.Message);
+        }
+        finally
+        {
+            _downloadingUpdateVersion = null;
+            RefreshUpdateReadiness();
+        }
+    }
+
+    [RelayCommand]
+    private async Task RestartToUpdate()
+    {
+        if (AvailableUpdate is not { } update || !IsUpdateReady || _isRestartingForUpdate)
+        {
+            return;
+        }
+        _isRestartingForUpdate = true;
+        RefreshUpdateReadiness();
+        try
+        {
+            // Checked again now rather than trusted from the download: this
+            // path is about to be run.
+            var installer = await _service.DownloadUpdateAsync(update.Version);
+            var start = new ProcessStartInfo(installer) { UseShellExecute = false };
+            // Progress window only, no questions; /AUTOUPDATE=1 has the
+            // installer start Almatter again at the end (Almatter.iss).
+            foreach (var argument in new[] { "/SILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/AUTOUPDATE=1" })
+            {
+                start.ArgumentList.Add(argument);
+            }
+            using (Process.Start(start) ?? throw new InvalidOperationException("the installer did not start"))
+            {
+            }
+            QuitForUpdateRequested?.Invoke(this, EventArgs.Empty);
+        }
+        catch (Exception ex)
+        {
+            Diagnostics.CrashLogger.Write($"update: installing {update.Version} failed", ex.Message);
+            _updateInstallFailed = true;
+            _isRestartingForUpdate = false;
+            RefreshUpdateReadiness();
+        }
+    }
     /// <summary>Long enough after startup not to compete with loading the channels.</summary>
     private static readonly TimeSpan FirstUpdateCheckDelay = TimeSpan.FromSeconds(20);
 
@@ -37,9 +164,11 @@ public partial class MainViewModel
 
     public bool ShowUpdateBanner => AvailableUpdate is not null;
 
-    public string UpdateBannerTitle => AvailableUpdate is { } update ? Loc.S.UpdateAvailable(update.Version) : "";
+    public string UpdateBannerTitle => AvailableUpdate is not { } update ? ""
+        : IsUpdateReady ? Loc.S.UpdateReady(update.Version)
+        : Loc.S.UpdateAvailable(update.Version);
 
-    public string UpdateBannerDetail => Loc.S.UpdateYouHave(AppVersion);
+    public string UpdateBannerDetail => _updateInstallFailed ? Loc.S.UpdateInstallFailed : Loc.S.UpdateYouHave(AppVersion);
 
     public string InstalledVersionText => Loc.S.InstalledVersion(AppVersion);
 
@@ -176,6 +305,7 @@ public partial class MainViewModel
         OnPropertyChanged(nameof(UpdateBannerDetail));
         OnPropertyChanged(nameof(InstalledVersionText));
         OnPropertyChanged(nameof(UpdateCheckStatusText));
+        OnPropertyChanged(nameof(UpdateRestartText));
     }
 
     [RelayCommand]

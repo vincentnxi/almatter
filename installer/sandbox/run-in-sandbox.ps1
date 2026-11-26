@@ -57,12 +57,25 @@ if ($previous) {
 }
 
 $setup =Get-ChildItem 'C:\Almatter\setup' -Filter 'Almatter-Setup-*.exe' | Sort-Object LastWriteTime -Descending | Select-Object -First 1
-Write-Report "Running $($setup.Name) /VERYSILENT"
+# test-in-sandbox.ps1 -AsAutoUpdate: the arguments the app's "Restart to
+# update" passes (MainViewModel.Updates.cs), after which Almatter must be
+# started again by Setup itself.
+$asAutoUpdate = Test-Path 'C:\Almatter\previous\as-auto-update'
+$setupArguments = if ($asAutoUpdate) { '/SILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/AUTOUPDATE=1' } else { '/VERYSILENT', '/SUPPRESSMSGBOXES' }
+Write-Report "Running $($setup.Name) $($setupArguments -join ' ')"
 $started = Get-Date
-$process = Start-Process $setup.FullName -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', "/LOG=$results\setup.log" -Wait -PassThru
+$process = Start-Process $setup.FullName -ArgumentList ($setupArguments + "/LOG=$results\setup.log") -Wait -PassThru
 Write-Report "Setup exit code: $($process.ExitCode) after $([int]((Get-Date) - $started).TotalSeconds) s"
 Write-Report ".NET 10 after install: '$(Get-DotNet10)'"
 Write-Report "Almatter.exe installed: $(Test-Path "$app\Almatter.exe")"
+if ($asAutoUpdate) {
+    Start-Sleep -Seconds 10
+    $restarted = Get-Process Almatter -ErrorAction SilentlyContinue |
+        Where-Object { $_.Path -eq "$app\Almatter.exe" -and (-not $oldAlmatter -or $_.Id -ne $oldAlmatter.Id) }
+    Write-Report "AUTO-UPDATE: Almatter started again by Setup: $([bool]$restarted)"
+    # Out of the way of the start-up check further down, which starts its own.
+    $restarted | Stop-Process -Force -ErrorAction SilentlyContinue
+}
 
 if ($previous) {
     if ($oldAlmatter) {

@@ -195,7 +195,7 @@ public sealed partial class Strings
         SettingsAccount = "Account",
         LogOut = "Sign out",
         CheckForUpdates = "Check for new versions",
-        CheckForUpdatesHint = "Almatter reads the list of versions on GitHub shortly after it starts, then once a day. Nothing about you is sent; GitHub only sees your IP address.",
+        CheckForUpdatesHint = "Almatter reads the list of versions on GitHub shortly after it starts, then once a day. When a new one is out, Almatter downloads it and checks its signature; it is installed when you choose \"Restart to update\". Nothing about you is sent; GitHub only sees your IP address.",
         InstalledVersion = version => $"Installed version: {version}",
         CheckForUpdatesNow = "Check now",
         UpdateChecking = "Checking…",
@@ -206,6 +206,11 @@ public sealed partial class Strings
         UpdateOpenPage = "View on GitHub",
         UpdateSkip = "Skip this version",
         UpdateLater = "Later",
+        UpdateReady = version => $"Almatter {version} is ready.",
+        UpdateRestart = "Restart to update",
+        UpdateRestarting = "Restarting…",
+        UpdateWhatsNew = "What's new",
+        UpdateInstallFailed = "The update couldn't be installed automatically. You can download it from GitHub.",
 
         // ── Notifications and taskbar ────────────────────────────────
         Someone = "Someone",

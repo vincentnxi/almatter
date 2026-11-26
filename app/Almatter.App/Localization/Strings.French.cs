@@ -197,7 +197,7 @@ public sealed partial class Strings
         SettingsAccount = "Compte",
         LogOut = "Se déconnecter",
         CheckForUpdates = "Vérifier les nouvelles versions",
-        CheckForUpdatesHint = "Almatter consulte la liste des versions sur GitHub peu après le démarrage, puis une fois par jour. Rien sur vous n'est envoyé ; GitHub voit seulement votre adresse IP.",
+        CheckForUpdatesHint = "Almatter consulte la liste des versions sur GitHub peu après le démarrage, puis une fois par jour. Quand une nouvelle version sort, Almatter la télécharge et vérifie sa signature ; elle s'installe quand vous choisissez « Redémarrer pour mettre à jour ». Rien sur vous n'est envoyé ; GitHub voit seulement votre adresse IP.",
         InstalledVersion = version => $"Version installée : {version}",
         CheckForUpdatesNow = "Vérifier maintenant",
         UpdateChecking = "Vérification…",
@@ -208,6 +208,11 @@ public sealed partial class Strings
         UpdateOpenPage = "Voir sur GitHub",
         UpdateSkip = "Ignorer cette version",
         UpdateLater = "Plus tard",
+        UpdateReady = version => $"Almatter {version} est prête.",
+        UpdateRestart = "Redémarrer pour mettre à jour",
+        UpdateRestarting = "Redémarrage…",
+        UpdateWhatsNew = "Nouveautés",
+        UpdateInstallFailed = "La mise à jour n'a pas pu s'installer d'elle-même. Vous pouvez la télécharger depuis GitHub.",
 
         // ── Notifications and taskbar ────────────────────────────────
         Someone = "Quelqu'un",

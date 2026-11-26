@@ -36,6 +36,7 @@ namespace Almatter.App.Interop;
 [JsonSerializable(typeof(Envelope<StatusesData>))]
 [JsonSerializable(typeof(Envelope<TeamsData>))]
 [JsonSerializable(typeof(Envelope<UpdateCheckData>))]
+[JsonSerializable(typeof(Envelope<DownloadedUpdateData>))]
 [JsonSerializable(typeof(Envelope<UploadFileData>))]
 [JsonSerializable(typeof(Envelope<UserIdsData>))]
 [JsonSerializable(typeof(Envelope<UsersData>))]

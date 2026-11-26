@@ -794,7 +794,22 @@
                     <TextBlock Grid.Column="1" Margin="10,0" VerticalAlignment="Center" TextWrapping="Wrap" Foreground="{DynamicResource AccentInkBrush}">
                         <Run Text="{Binding UpdateBannerTitle}" FontWeight="SemiBold" /><Run Text=" " /><Run Text="{Binding UpdateBannerDetail}" />
                     </TextBlock>
-                    <Button Grid.Column="2" Classes="row-button" VerticalAlignment="Center" Command="{Binding OpenUpdatePageCommand}">
+                    <!-- Installer downloaded and its signature checked: one
+                         click installs it and brings Almatter back, and the
+                         release notes move to a plain link beside it. -->
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" IsVisible="{Binding IsUpdateReady}">
+                        <Button Classes="row-button" VerticalAlignment="Center" Command="{Binding RestartToUpdateCommand}" IsEnabled="{Binding CanRestartToUpdate}">
+                            <Border Background="{DynamicResource AccentBrush}" CornerRadius="{DynamicResource RowRadiusValue}" Padding="12,5">
+                                <TextBlock Text="{Binding UpdateRestartText}" Foreground="{DynamicResource OnAccentBrush}" FontSize="12.5" />
+                            </Border>
+                        </Button>
+                        <Button Classes="row-button" VerticalAlignment="Center" Margin="4,0,0,0" Command="{Binding OpenUpdatePageCommand}">
+                            <Border Background="Transparent" CornerRadius="{DynamicResource RowRadiusValue}" Padding="10,5">
+                                <TextBlock Text="{Binding T.UpdateWhatsNew, Source={x:Static loc:Loc.Instance}}" Foreground="{DynamicResource AccentInkBrush}" FontSize="12.5" />
+                            </Border>
+                        </Button>
+                    </StackPanel>
+                    <Button Grid.Column="2" Classes="row-button" VerticalAlignment="Center" Command="{Binding OpenUpdatePageCommand}" IsVisible="{Binding IsUpdateNotReady}">
                         <Border Background="{DynamicResource AccentBrush}" CornerRadius="{DynamicResource RowRadiusValue}" Padding="12,5">
                             <TextBlock Text="{Binding T.UpdateOpenPage, Source={x:Static loc:Loc.Instance}}" Foreground="{DynamicResource OnAccentBrush}" FontSize="12.5" />
                         </Border>
