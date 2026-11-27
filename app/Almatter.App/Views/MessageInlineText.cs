@@ -13,6 +13,7 @@ using Avalonia.Media;
 using Avalonia.Media.TextFormatting;
 using Almatter.App.Localization;
 using Almatter.App.Models;
+using Almatter.App.Services;
 
 namespace Almatter.App.Views;
 
@@ -106,6 +107,39 @@ public sealed class MessageInlineText : SelectableTextBlock
         }));
 
         AddHandler(ContextRequestedEvent, OnContextRequested, RoutingStrategies.Bubble);
+        AddHandler(CopyingToClipboardEvent, OnCopyingToClipboard, RoutingStrategies.Bubble);
+    }
+
+    /// <summary>
+    /// Ctrl+C and the menu's "Copier": when the selection holds a link, the
+    /// clipboard gets HTML with that link as well as the plain text (see
+    /// LinkAwareCopy). Without a link, the usual plain copy goes ahead.
+    /// </summary>
+    private async void OnCopyingToClipboard(object? sender, RoutedEventArgs e)
+    {
+        if (Segments is not { } segments
+            || LinkAwareCopy.Build(segments, SelectionStart, SelectionEnd) is not { } copied
+            || TopLevel.GetTopLevel(this)?.Clipboard is not { } clipboard)
+        {
+            return;
+        }
+        e.Handled = true;
+        try
+        {
+            await LinkAwareCopy.CopyAsync(clipboard, copied.Text, copied.Html);
+        }
+        catch
+        {
+            // The clipboard can be briefly held by another app; fall back to the plain text.
+            try
+            {
+                await clipboard.SetTextAsync(copied.Text);
+            }
+            catch
+            {
+                // Not worth an error banner just for a failed copy.
+            }
+        }
     }
 
     /// <summary>Picks up SelectableTextBlock's theme — selection colors, the I-beam cursor, the copy menu.</summary>

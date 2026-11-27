@@ -1023,6 +1023,7 @@ public partial class MainViewModel : ViewModelBase
         IsChannelsSectionExpanded = Settings.ChannelsExpanded;
         IsDirectMessagesSectionExpanded = Settings.DirectMessagesExpanded;
         _collapsedImagePosts = [.. Settings.CollapsedImagePostIds];
+        _collapsedLinkPreviewPosts = [.. Settings.CollapsedLinkPreviewPostIds];
         if (!string.IsNullOrEmpty(Settings.LastChannelId))
         {
             _activeChannelId = Settings.LastChannelId;
@@ -5598,6 +5599,7 @@ public partial class MainViewModel : ViewModelBase
                 MentionsMe = post.UserId != _session.User.Id && MentionTextHelper.MentionsUser(post.Message, _session.User.Username),
                 IsEdited = post.EditAt > 0,
                 LinkPreview = BuildLinkPreview(post),
+                IsLinkPreviewCollapsed = _collapsedLinkPreviewPosts.Contains(post.Id),
                 LinkedMessage = BuildLinkedMessage(post, authors),
                 IsContinuation = IsContinuationOf(previous, post.UserId, post.CreateAt),
                 DateSeparatorLabel = DateSeparatorFor(dayBefore, post.CreateAt),
@@ -6934,6 +6936,7 @@ public partial class MainViewModel : ViewModelBase
             QuotedAuthorName = quotedAuthorName,
             QuotedText = quotedText,
             LinkPreview = BuildLinkPreview(post),
+            IsLinkPreviewCollapsed = _collapsedLinkPreviewPosts.Contains(post.Id),
             LinkedMessage = BuildLinkedMessage(post, authors),
             IsContinuation = IsContinuationOf(previous, post.UserId, post.CreateAt),
             DateSeparatorLabel = DateSeparatorFor(previous?.CreateAtMillis, post.CreateAt),
@@ -7477,6 +7480,29 @@ public partial class MainViewModel : ViewModelBase
         _collapsedImagePosts = [.. ids];
         // A new list, not the same one changed: the assignment is what saves the settings.
         Settings.CollapsedImagePostIds = ids;
+    }
+
+    /// <summary>Settings.CollapsedLinkPreviewPostIds as a set, like _collapsedImagePosts.</summary>
+    private HashSet<string> _collapsedLinkPreviewPosts = [];
+
+    /// <summary>Bound to the arrow above a link's preview card: folds it to that line or brings it back, remembered like the pictures.</summary>
+    [RelayCommand]
+    private void ToggleLinkPreviewCollapsed(MessageItem message)
+    {
+        var collapse = !message.IsLinkPreviewCollapsed;
+        message.IsLinkPreviewCollapsed = collapse;
+
+        var ids = Settings.CollapsedLinkPreviewPostIds.Where(id => id != message.Id).ToList();
+        if (collapse)
+        {
+            ids.Add(message.Id);
+            if (ids.Count > MaxRememberedCollapsedImages)
+            {
+                ids.RemoveRange(0, ids.Count - MaxRememberedCollapsedImages);
+            }
+        }
+        _collapsedLinkPreviewPosts = [.. ids];
+        Settings.CollapsedLinkPreviewPostIds = ids;
     }
 
     /// <summary>The GIF playing right now, if any — there is only ever one.</summary>

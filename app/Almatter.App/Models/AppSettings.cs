@@ -93,6 +93,10 @@ public sealed partial class AppSettings : ObservableObject
     [ObservableProperty]
     public partial List<string> CollapsedImagePostIds { get; set; } = [];
 
+    /// <summary>Messages whose link preview card the reader folded away, kept and capped like CollapsedImagePostIds.</summary>
+    [ObservableProperty]
+    public partial List<string> CollapsedLinkPreviewPostIds { get; set; } = [];
+
     /// <summary>
     /// Softens the palette for long reading sessions — see
     /// ThemeDefinition.Softened. Applies to both themes: pure black on white

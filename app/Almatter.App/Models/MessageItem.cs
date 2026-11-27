@@ -47,6 +47,33 @@ public sealed partial class MessageItem : ObservableObject
     public LinkPreviewItem? LinkPreview { get; init; }
     public bool HasLinkPreview => LinkPreview is not null;
 
+    /// <summary>
+    /// The reader folded the link's preview card away with the arrow above
+    /// it, like the pictures (see AreImagesCollapsed). Remembered across
+    /// restarts — see MainViewModel.ToggleLinkPreviewCollapsed.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShownLinkPreview))]
+    [NotifyPropertyChangedFor(nameof(LinkPreviewToggleTip))]
+    public partial bool IsLinkPreviewCollapsed { get; set; }
+
+    /// <summary>
+    /// The preview while it is unfolded, null while folded. The card is built
+    /// from this, so a folded card is not built at all and its picture is
+    /// never fetched.
+    /// </summary>
+    public LinkPreviewItem? ShownLinkPreview => IsLinkPreviewCollapsed ? null : LinkPreview;
+
+    /// <summary>The line above the card: the site's name, or its address when it gives none.</summary>
+    public string LinkPreviewToggleLabel => LinkPreview switch
+    {
+        null => "",
+        { HasSiteName: true } preview => preview.SiteName,
+        var preview => Uri.TryCreate(preview.Url, UriKind.Absolute, out var uri) ? uri.Host : preview.Url,
+    };
+
+    public string LinkPreviewToggleTip => IsLinkPreviewCollapsed ? Loc.S.ExpandLinkPreview : Loc.S.CollapseLinkPreview;
+
     /// <summary>The message this one links to, when it holds a link to another message — see LinkedMessageItem. Set once when the row is built, for the same row-height reason as the quote above.</summary>
     public LinkedMessageItem? LinkedMessage { get; init; }
     public bool HasLinkedMessage => LinkedMessage is not null;

@@ -597,6 +597,22 @@ public partial class MainWindow : Window
         vm.ToggleImagesCollapsedCommand.Execute(message);
     }
 
+    /// <summary>The arrow above a link's preview card, holding the view still the same way as for the pictures.</summary>
+    private void OnLinkPreviewToggleClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Control { DataContext: MessageItem message } || DataContext is not MainViewModel vm)
+        {
+            return;
+        }
+        var collapsing = !message.IsLinkPreviewCollapsed;
+        if (!collapsing)
+        {
+            _messagesFollower?.Release();
+        }
+        _jumpTarget?.HoldInPlace(message, keepTopInView: collapsing);
+        vm.ToggleLinkPreviewCollapsedCommand.Execute(message);
+    }
+
     /// <summary>
     /// A playing GIF stops once it is out of sight: scrolled out of the view,
     /// or its row taken off screen or handed to another message by the

@@ -64,6 +64,8 @@ public sealed partial class Strings
         ImageCount = count => $"{count} images",
         CollapseImages = "Hide images",
         ExpandImages = "Show images",
+        CollapseLinkPreview = "Hide preview",
+        ExpandLinkPreview = "Show preview",
         PlayGif = "Click to play",
         StopGif = "Click to stop",
         Edit = "Edit",

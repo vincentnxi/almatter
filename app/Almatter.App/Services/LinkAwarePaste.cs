@@ -37,7 +37,7 @@ internal static class LinkAwarePaste
     /// Windows format is UTF-8, and letting a generic text conversion guess
     /// at the encoding is how accented labels come out mangled.
     /// </summary>
-    private static readonly DataFormat<byte[]> HtmlClipboardFormat = DataFormat.CreateBytesPlatformFormat(
+    internal static readonly DataFormat<byte[]> HtmlClipboardFormat = DataFormat.CreateBytesPlatformFormat(
         OperatingSystem.IsWindows() ? "HTML Format"
         : OperatingSystem.IsMacOS() ? "public.html"
         : "text/html");

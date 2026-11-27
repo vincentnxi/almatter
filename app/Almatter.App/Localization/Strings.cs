@@ -81,6 +81,9 @@ public sealed partial class Strings
     public required Func<int, string> ImageCount { get; init; }
     public required string CollapseImages { get; init; }
     public required string ExpandImages { get; init; }
+    /// <summary>Tooltips of the line above a link's preview card, which folds it away.</summary>
+    public required string CollapseLinkPreview { get; init; }
+    public required string ExpandLinkPreview { get; init; }
     /// <summary>What a click on an attached GIF does, shown in its tooltip.</summary>
     public required string PlayGif { get; init; }
     public required string StopGif { get; init; }

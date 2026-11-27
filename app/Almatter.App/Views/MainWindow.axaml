@@ -211,17 +211,40 @@
              MessageItem itself, and only ever shown when that message starts a
              new day (see MessageItem.DateSeparatorLabel). -->
         <DataTemplate x:Key="DateSeparatorTemplate" DataType="models:MessageItem">
-            <!-- A solid rule each side of a pill. -->
+            <!-- A solid rule each side of a small card, rounded like the
+                 rows and attachment cards rather than a full pill, and
+                 lifted off the rule by a light shadow. -->
             <Grid ColumnDefinitions="*,Auto,*" Margin="0,10,0,14">
                 <Border Grid.Column="0" Height="1" VerticalAlignment="Center" Background="{DynamicResource DividerStrongBrush}" />
-                <Border Grid.Column="1" Margin="10,0" Padding="12,4" CornerRadius="12"
+                <Border Grid.Column="1" Margin="10,0" Padding="10,3" CornerRadius="{DynamicResource RowRadiusValue}"
                         Background="{DynamicResource CardBgBrush}"
-                        BorderBrush="{DynamicResource DividerStrongBrush}" BorderThickness="1">
+                        BorderBrush="{DynamicResource DividerStrongBrush}" BorderThickness="1"
+                        BoxShadow="{DynamicResource RaisedShadow}">
                     <TextBlock Text="{Binding DateSeparatorLabel}" FontSize="11.5" FontWeight="SemiBold"
                                Foreground="{DynamicResource TextSecondaryBrush}" />
                 </Border>
                 <Border Grid.Column="2" Height="1" VerticalAlignment="Center" Background="{DynamicResource DividerStrongBrush}" />
             </Grid>
+        </DataTemplate>
+
+        <!-- The line above a link's preview card: an arrow and the site's
+             name, folding the card away or bringing it back. Drawn like
+             the line above a message's pictures. Shared by the channel list,
+             the thread root and the thread replies. -->
+        <DataTemplate x:Key="LinkPreviewToggleTemplate" DataType="models:MessageItem">
+            <Button Classes="row-button" Padding="2,1" HorizontalAlignment="Left"
+                    ToolTip.Tip="{Binding LinkPreviewToggleTip}" Click="OnLinkPreviewToggleClick">
+                <StackPanel Orientation="Horizontal" Spacing="4">
+                    <Panel Width="12" Height="12" VerticalAlignment="Center">
+                        <Path IsVisible="{Binding !IsLinkPreviewCollapsed}" Data="M6 9l6 6 6-6"
+                              Stroke="{DynamicResource TextTertiaryBrush}" StrokeThickness="2" StrokeLineCap="Round" StrokeJoin="Round" Stretch="Uniform" />
+                        <Path IsVisible="{Binding IsLinkPreviewCollapsed}" Data="M9 6l6 6-6 6"
+                              Stroke="{DynamicResource TextTertiaryBrush}" StrokeThickness="2" StrokeLineCap="Round" StrokeJoin="Round" Stretch="Uniform" />
+                    </Panel>
+                    <TextBlock Text="{Binding LinkPreviewToggleLabel}" FontSize="11.5" Foreground="{DynamicResource TextTertiaryBrush}"
+                               MaxWidth="340" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                </StackPanel>
+            </Button>
         </DataTemplate>
 
         <!-- A message's Markdown blocks, cut short with a fade when they run
@@ -390,7 +413,7 @@
         <Style Selector="Border.body-toggle-pill">
             <Setter Property="Height" Value="32" />
             <Setter Property="Padding" Value="14,0" />
-            <Setter Property="CornerRadius" Value="16" />
+            <Setter Property="CornerRadius" Value="{DynamicResource RowRadiusValue}" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="BorderBrush" Value="{DynamicResource DividerStrongBrush}" />
             <Setter Property="Background" Value="{DynamicResource CardBgBrush}" />
@@ -513,6 +536,7 @@
         <Style Selector="Border.composer-frame">
             <Setter Property="BorderBrush" Value="{DynamicResource DividerStrongBrush}" />
             <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BoxShadow" Value="{DynamicResource ComposerShadow}" />
         </Style>
         <Style Selector="Border.composer-frame.drop-target">
             <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
@@ -1128,10 +1152,16 @@
                                             </Border>
                                         </Button>
 
-                                        <Border IsVisible="{Binding HasLinkPreview}" Margin="0,6,0,0" MaxWidth="420" HorizontalAlignment="Left">
-                                            <Border IsVisible="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.ShowLinkPreviews}"
-                                                    Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1"
-                                                    CornerRadius="8" DataContext="{Binding LinkPreview}">
+                                        <!-- The link's preview card, under a line that folds it away
+                                             (remembered across restarts), like the pictures. -->
+                                        <StackPanel IsVisible="{Binding HasLinkPreview}" Margin="0,6,0,0" MaxWidth="420" HorizontalAlignment="Left">
+                                            <StackPanel IsVisible="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.ShowLinkPreviews}">
+                                                <ContentControl Content="{Binding}" ContentTemplate="{StaticResource LinkPreviewToggleTemplate}" />
+                                                <ContentControl Content="{Binding ShownLinkPreview}" Margin="0,4,0,0">
+                                                    <ContentControl.ContentTemplate>
+                                                        <DataTemplate DataType="models:LinkPreviewItem">
+                                                    <Border Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1"
+                                                            CornerRadius="8">
                                                 <StackPanel>
                                                     <Button Classes="row-button" ToolTip.Tip="{Binding Url}"
                                                             Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).OpenLinkCommand}"
@@ -1147,8 +1177,12 @@
                                                         <Image Source="{Binding ImageSource}" Stretch="UniformToFill" IsVisible="{Binding ImageSource, Converter={x:Static conv:ObjectConverters.IsNotNull}}" />
                                                     </Border>
                                                 </StackPanel>
-                                            </Border>
-                                        </Border>
+                                                    </Border>
+                                                        </DataTemplate>
+                                                    </ContentControl.ContentTemplate>
+                                                </ContentControl>
+                                            </StackPanel>
+                                        </StackPanel>
 
                                         <TextBlock Text="{Binding T.Edited, Source={x:Static loc:Loc.Instance}}" IsVisible="{Binding IsEdited}" Margin="6,1,0,0"
                                                    FontSize="11" FontStyle="Italic" Foreground="{DynamicResource TextTertiaryBrush}" />
@@ -1591,7 +1625,7 @@
                             </Button>
                         </StackPanel>
                         <Button Grid.Column="2" Classes="row-button" Margin="6,0,0,0" Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).SendMessageCommand}">
-                            <Border Width="30" Height="30" CornerRadius="7" Background="{DynamicResource AccentBrush}">
+                            <Border Width="30" Height="30" CornerRadius="7" Background="{DynamicResource AccentBrush}" BoxShadow="{DynamicResource RaisedShadow}">
                                 <Path Data="M3 11l18-8-8 18-2.5-7.5L3 11z" Fill="{DynamicResource OnAccentBrush}" Width="15" Height="15" Stretch="Uniform"
                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
                             </Border>
@@ -1748,10 +1782,16 @@
                                             </Border>
                                         </Button>
 
-                                        <Border IsVisible="{Binding HasLinkPreview}" Margin="0,6,0,0" MaxWidth="380" HorizontalAlignment="Left">
-                                            <Border IsVisible="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.ShowLinkPreviews}"
-                                                    Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1"
-                                                    CornerRadius="8" DataContext="{Binding LinkPreview}">
+                                        <!-- The link's preview card, under a line that folds it away
+                                             (remembered across restarts), like the pictures. -->
+                                        <StackPanel IsVisible="{Binding HasLinkPreview}" Margin="0,6,0,0" MaxWidth="380" HorizontalAlignment="Left">
+                                            <StackPanel IsVisible="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.ShowLinkPreviews}">
+                                                <ContentControl Content="{Binding}" ContentTemplate="{StaticResource LinkPreviewToggleTemplate}" />
+                                                <ContentControl Content="{Binding ShownLinkPreview}" Margin="0,4,0,0">
+                                                    <ContentControl.ContentTemplate>
+                                                        <DataTemplate DataType="models:LinkPreviewItem">
+                                                    <Border Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1"
+                                                            CornerRadius="8">
                                                 <StackPanel>
                                                     <Button Classes="row-button" ToolTip.Tip="{Binding Url}"
                                                             Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).OpenLinkCommand}"
@@ -1767,8 +1807,12 @@
                                                         <Image Source="{Binding ImageSource}" Stretch="UniformToFill" IsVisible="{Binding ImageSource, Converter={x:Static conv:ObjectConverters.IsNotNull}}" />
                                                     </Border>
                                                 </StackPanel>
-                                            </Border>
-                                        </Border>
+                                                    </Border>
+                                                        </DataTemplate>
+                                                    </ContentControl.ContentTemplate>
+                                                </ContentControl>
+                                            </StackPanel>
+                                        </StackPanel>
                                     </StackPanel>
                                 </Grid>
                                 </Border>
@@ -1872,10 +1916,16 @@
                                                     </Border>
                                                 </Button>
 
-                                                <Border IsVisible="{Binding HasLinkPreview}" Margin="0,6,0,0" MaxWidth="340" HorizontalAlignment="Left">
-                                                    <Border IsVisible="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.ShowLinkPreviews}"
-                                                            Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1"
-                                                            CornerRadius="8" DataContext="{Binding LinkPreview}">
+                                                <!-- The link's preview card, under a line that folds it away
+                                                     (remembered across restarts), like the pictures. -->
+                                                <StackPanel IsVisible="{Binding HasLinkPreview}" Margin="0,6,0,0" MaxWidth="340" HorizontalAlignment="Left">
+                                                    <StackPanel IsVisible="{Binding #RootWindow.((vm:MainViewModel)DataContext).Settings.ShowLinkPreviews}">
+                                                        <ContentControl Content="{Binding}" ContentTemplate="{StaticResource LinkPreviewToggleTemplate}" />
+                                                        <ContentControl Content="{Binding ShownLinkPreview}" Margin="0,4,0,0">
+                                                            <ContentControl.ContentTemplate>
+                                                                <DataTemplate DataType="models:LinkPreviewItem">
+                                                            <Border Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1"
+                                                                    CornerRadius="8">
                                                         <StackPanel>
                                                             <Button Classes="row-button" ToolTip.Tip="{Binding Url}"
                                                                     Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).OpenLinkCommand}"
@@ -1891,8 +1941,12 @@
                                                                 <Image Source="{Binding ImageSource}" Stretch="UniformToFill" IsVisible="{Binding ImageSource, Converter={x:Static conv:ObjectConverters.IsNotNull}}" />
                                                             </Border>
                                                         </StackPanel>
-                                                    </Border>
-                                                </Border>
+                                                            </Border>
+                                                                </DataTemplate>
+                                                            </ContentControl.ContentTemplate>
+                                                        </ContentControl>
+                                                    </StackPanel>
+                                                </StackPanel>
                                             </StackPanel>
                                         </Grid>
                                       </StackPanel>

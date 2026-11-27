@@ -109,6 +109,14 @@ internal static class ThemeResources
         var shadows = !settings.PerformanceMode;
         resources["PopoverShadow"] = shadows ? BoxShadows.Parse(theme.PopoverShadow) : default(BoxShadows);
         resources["CardShadow"] = shadows ? BoxShadows.Parse(theme.CardShadow) : default(BoxShadows);
+        // A touch of depth: the composers sit on the conversation like a
+        // sheet of paper (a tight contact shadow plus a soft one below), and
+        // small labels such as the date card lift barely off their rule.
+        // Small or still areas, so cheap to draw on the CPU.
+        resources["ComposerShadow"] = !shadows ? default
+            : BoxShadows.Parse(theme.IsDark ? "0 1 2 0 #59000000, 0 6 18 -4 #8C000000" : "0 1 2 0 #14101114, 0 6 16 -4 #2E101114");
+        resources["RaisedShadow"] = !shadows ? default
+            : BoxShadows.Parse(theme.IsDark ? "0 1 3 0 #66000000" : "0 1 3 0 #1F101114");
         resources["RowRadiusValue"] = new CornerRadius(theme.RowRadius);
         resources["SurfaceRadiusValue"] = new CornerRadius(theme.SurfaceRadius);
 
