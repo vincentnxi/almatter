@@ -220,6 +220,17 @@ internal sealed class PostsData
     [JsonPropertyName("posts")] public List<PostDto> Posts { get; set; } = [];
 }
 
+internal sealed class OlderPostsData
+{
+    [JsonPropertyName("posts")] public List<PostDto> Posts { get; set; } = [];
+    [JsonPropertyName("at_start")] public bool AtStart { get; set; }
+}
+
+internal sealed class HistoryCompleteData
+{
+    [JsonPropertyName("complete")] public bool Complete { get; set; }
+}
+
 /// <summary>One of a channel's bookmarks, as the core caches it (see almatter-core's ChannelBookmark).</summary>
 public sealed class ChannelBookmarkDto
 {

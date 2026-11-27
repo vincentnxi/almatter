@@ -268,6 +268,9 @@ public sealed partial class Strings
 
     /// <summary>The label on the red rule above the first message the reader hasn't seen. In capitals.</summary>
     public required string NewMessagesMarker { get; init; }
+    public required string ChannelStartChannel { get; init; }
+    public required string ChannelStartConversation { get; init; }
+    public required string LoadingOlderMessages { get; init; }
     public required Func<int, string> TaskbarNotifications { get; init; }
 
     // ── Errors ───────────────────────────────────────────────────────

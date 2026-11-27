@@ -79,6 +79,31 @@ public sealed class MattermostService
         return data.Posts;
     }
 
+    /// <summary>
+    /// The page of messages just before the oldest one the channel shows,
+    /// now cached as part of its history; and whether that reached the
+    /// channel's first message (nothing is asked once it has).
+    /// </summary>
+    public async Task<(List<PostDto> Posts, bool AtStart)> GetOlderPostsAsync(string baseUrl, string token, string channelId)
+    {
+        var request = new JsonObject
+        {
+            ["command"] = "get_older_posts",
+            ["base_url"] = baseUrl,
+            ["token"] = token,
+            ["channel_id"] = channelId,
+        };
+        var data = await CallAsync<OlderPostsData>(request);
+        return (data.Posts, data.AtStart);
+    }
+
+    /// <summary>Whether the channel's very first message is in what it shows. Cache only.</summary>
+    public async Task<bool> IsHistoryCompleteAsync(string channelId)
+    {
+        var data = await CallAsync<HistoryCompleteData>(new JsonObject { ["command"] = "get_history_complete", ["channel_id"] = channelId });
+        return data.Complete;
+    }
+
     public async Task<List<UserDto>> GetUsersAsync(string baseUrl, string token, IEnumerable<string> userIds)
     {
         var request = new JsonObject

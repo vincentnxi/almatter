@@ -282,8 +282,17 @@ public partial class MainWindow : Window
             // Drives the floating "back to the latest message" button. Also
             // covers the content growing underneath a reader who has scrolled
             // up, since that changes the extent and raises this too.
-            MessagesScroller.ScrollChanged += (_, _) =>
+            MessagesScroller.ScrollChanged += (_, e) =>
+            {
                 vm.IsAwayFromLiveTail = DistanceFromBottom(MessagesScroller) > AwayFromTailThreshold;
+                // Scrolling up near the top fetches the messages before. Only
+                // on a move upwards: a list just rebuilt starts at the top for
+                // a moment before it is sent to its end.
+                if (e.OffsetDelta.Y < 0 && MessagesScroller.Offset.Y < LoadOlderThreshold)
+                {
+                    _ = vm.LoadOlderMessagesAsync();
+                }
+            };
             vm.ThreadRepliesAppended += (_, _) => FollowIfAtBottom(ThreadScroller);
 
             // Images are decoded for the screen's physical pixels; follow the
@@ -1692,6 +1701,13 @@ public partial class MainWindow : Window
     /// button doesn't blink in and out while the last row is half-scrolled.
     /// </summary>
     private const double AwayFromTailThreshold = 120;
+
+    /// <summary>
+    /// How close to the top of the conversation, scrolling up, fetches the
+    /// messages before: a few rows' worth, so they are usually in before the
+    /// reader gets there.
+    /// </summary>
+    private const double LoadOlderThreshold = 600;
 
     private static double DistanceFromBottom(ScrollViewer scroller) =>
         scroller.Extent.Height - scroller.Viewport.Height - scroller.Offset.Y;

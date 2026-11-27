@@ -31,6 +31,8 @@ namespace Almatter.App.Interop;
 [JsonSerializable(typeof(Envelope<OutboxData>))]
 [JsonSerializable(typeof(Envelope<PostData>))]
 [JsonSerializable(typeof(Envelope<PostsData>))]
+[JsonSerializable(typeof(Envelope<OlderPostsData>))]
+[JsonSerializable(typeof(Envelope<HistoryCompleteData>))]
 [JsonSerializable(typeof(Envelope<PublicChannelsData>))]
 [JsonSerializable(typeof(Envelope<RevisionData>))]
 [JsonSerializable(typeof(Envelope<SearchData>))]

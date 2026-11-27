@@ -1380,6 +1380,9 @@ public partial class MainViewModel : ViewModelBase
     private async Task<bool> RefetchAfterCacheResetAsync()
     {
         CrashLogger.Write("poll", "the core replaced a damaged cache: fetching the channels, the open channel and thread again");
+        // The new cache starts empty: no channel shows its first message any
+        // more. On the UI thread, which every other use of the set is on.
+        await Dispatcher.UIThread.InvokeAsync(_channelsAtStart.Clear);
         try
         {
             // The polling loop runs off the UI thread; this repaints the sidebar.
@@ -1865,6 +1868,7 @@ public partial class MainViewModel : ViewModelBase
                 {
                     ScrollMessagesToEndRequested?.Invoke(this, EventArgs.Empty);
                 }
+                await RefreshChannelStartAsync(channelId);
             }
         }
         catch (MattermostServiceException ex)
@@ -5845,6 +5849,7 @@ public partial class MainViewModel : ViewModelBase
             {
                 ScrollMessagesToEndRequested?.Invoke(this, EventArgs.Empty);
             }
+            await RefreshChannelStartAsync(targetChannelId);
         }
     }
 
@@ -6715,6 +6720,38 @@ public partial class MainViewModel : ViewModelBase
             Messages.RemoveAt(Messages.Count - 1);
         }
 
+        // Older messages loaded above what is shown (scrolling up past the
+        // top): the new list holds them, then exactly what is on screen.
+        // They are inserted at the top and the rest left where it is; the
+        // reading position keeper holds the view on the message the reader
+        // was looking at. Rebuilt instead, the list would jump back to its
+        // start or end.
+        if (Messages.Count == _lastRenderedPostKeys.Count && Messages.Count > 0 && keys.Count > Messages.Count)
+        {
+            var shownIds = _lastRenderedPostKeys.Select(PostIdOfKey).ToList();
+            var addedHead = keys.FindIndex(key => PostIdOfKey(key) == shownIds[0]);
+            if (addedHead > 0
+                && keys.Count >= addedHead + shownIds.Count
+                && keys.Skip(addedHead).Take(shownIds.Count).Select(PostIdOfKey).SequenceEqual(shownIds))
+            {
+                MessageRowsChanging?.Invoke(this, EventArgs.Empty);
+                MessageItem? above = null;
+                for (var i = 0; i < addedHead; i++)
+                {
+                    above = BuildMessageItem(ordered[i], above, postsById, authors);
+                    Messages.Insert(i, above);
+                }
+                // The message that opened the list now follows another: its
+                // day may be that one's, and it may continue that author's.
+                var formerFirst = Messages[addedHead];
+                formerFirst.DateSeparatorLabel = DateSeparatorFor(above!.CreateAtMillis, formerFirst.CreateAtMillis);
+                formerFirst.IsContinuation = IsContinuationOf(above, formerFirst.AuthorUserId, formerFirst.CreateAtMillis);
+                // As if these had always been on screen: what follows
+                // compares, updates and appends as usual.
+                _lastRenderedPostKeys = keys.Take(addedHead).Concat(_lastRenderedPostKeys).ToList();
+            }
+        }
+
         // The overwhelmingly common update is "one more message arrived":
         // everything already on screen is still there, unchanged, in the
         // same order. Rebuilding the whole list for that discarded and
@@ -6831,60 +6868,12 @@ public partial class MainViewModel : ViewModelBase
         foreach (var post in ordered.Skip(keptCount))
         {
             appended = true;
-            authors.TryGetValue(post.UserId, out var author);
-
-            // A burst of replies to the same message only quotes it once: a
-            // reply that follows the same author's previous reply in that
-            // thread by under two minutes reads as a plain continuation. It
-            // still belongs to the thread (ThreadRootId below), so "Répondre"
-            // keeps opening it.
-            var continuesSameThread = !string.IsNullOrEmpty(post.RootId)
-                && previous?.ThreadRootId == post.RootId
-                && IsContinuationOf(previous, post.UserId, post.CreateAt);
-
-            string? quotedAuthorName = null;
-            string? quotedText = null;
-            if (!string.IsNullOrEmpty(post.RootId) && !continuesSameThread && postsById.TryGetValue(post.RootId, out var rootPost))
-            {
-                authors.TryGetValue(rootPost.UserId, out var rootAuthor);
-                quotedAuthorName = rootAuthor?.DisplayName ?? Loc.S.UnknownUser;
-                quotedText = TruncateQuote(rootPost.Message);
-            }
-
-            var item = new MessageItem
-            {
-                Id = post.Id,
-                AuthorUserId = post.UserId,
-                AuthorName = author?.DisplayName ?? Loc.S.UnknownUser,
-                AuthorInitials = author?.Initials ?? "?",
-                AvatarHex = AvatarColorFor(post.UserId),
-                TimeLabel = FormatTime(post.CreateAt),
-                CreateAtMillis = post.CreateAt,
-                Text = post.Message,
-                IsMine = post.UserId == _session.User.Id,
-                MentionsMe = post.UserId != _session.User.Id && MentionTextHelper.MentionsUser(post.Message, _session.User.Username),
-                IsEdited = post.EditAt > 0,
-                ThreadReplyCount = (int)post.ReplyCount,
-                ThreadRootId = string.IsNullOrEmpty(post.RootId) ? null : post.RootId,
-                QuotedAuthorName = quotedAuthorName,
-                QuotedText = quotedText,
-                LinkPreview = BuildLinkPreview(post),
-                LinkedMessage = BuildLinkedMessage(post, authors),
-                IsContinuation = IsContinuationOf(previous, post.UserId, post.CreateAt),
-                DateSeparatorLabel = DateSeparatorFor(previous?.CreateAtMillis, post.CreateAt),
-                Reactions = BuildReactions(post),
-                Attachments = BuildAttachments(post),
-                LinkedPictures = BuildLinkedPictures(post),
-                ShowsLinkedPictures = Settings.ShowLinkPreviews,
-                AreImagesCollapsed = _collapsedImagePosts.Contains(post.Id),
-                IsPinned = post.IsPinned,
-                EmojiImageResolver = ResolveTextEmojiAsync,
-            };
-            _ = ResolveMessageAvatarAsync(item, post.UserId);
-            ApplyPresence(item);
+            var item = BuildMessageItem(post, previous, postsById, authors);
             Messages.Add(item);
             previous = item;
         }
+
+        UpdateChannelStartCard(announce: keptCount > 0);
 
         // Anyone here the presence table has never seen — a channel's
         // authors mostly aren't in the DM sidebar — is looked up in the
@@ -6899,6 +6888,66 @@ public partial class MainViewModel : ViewModelBase
             MessagesAppended?.Invoke(this, EventArgs.Empty);
         }
         return keptCount == 0;
+    }
+
+    /// <summary>
+    /// One row of the channel list, for `post` shown right after `previous`
+    /// (null at the top). Starts the avatar lookup on its way out.
+    /// </summary>
+    private MessageItem BuildMessageItem(PostDto post, MessageItem? previous, Dictionary<string, PostDto> postsById, Dictionary<string, UserDto> authors)
+    {
+        authors.TryGetValue(post.UserId, out var author);
+
+        // A burst of replies to the same message only quotes it once: a
+        // reply that follows the same author's previous reply in that
+        // thread by under two minutes reads as a plain continuation. It
+        // still belongs to the thread (ThreadRootId below), so "Répondre"
+        // keeps opening it.
+        var continuesSameThread = !string.IsNullOrEmpty(post.RootId)
+            && previous?.ThreadRootId == post.RootId
+            && IsContinuationOf(previous, post.UserId, post.CreateAt);
+
+        string? quotedAuthorName = null;
+        string? quotedText = null;
+        if (!string.IsNullOrEmpty(post.RootId) && !continuesSameThread && postsById.TryGetValue(post.RootId, out var rootPost))
+        {
+            authors.TryGetValue(rootPost.UserId, out var rootAuthor);
+            quotedAuthorName = rootAuthor?.DisplayName ?? Loc.S.UnknownUser;
+            quotedText = TruncateQuote(rootPost.Message);
+        }
+
+        var item = new MessageItem
+        {
+            Id = post.Id,
+            AuthorUserId = post.UserId,
+            AuthorName = author?.DisplayName ?? Loc.S.UnknownUser,
+            AuthorInitials = author?.Initials ?? "?",
+            AvatarHex = AvatarColorFor(post.UserId),
+            TimeLabel = FormatTime(post.CreateAt),
+            CreateAtMillis = post.CreateAt,
+            Text = post.Message,
+            IsMine = post.UserId == _session.User.Id,
+            MentionsMe = post.UserId != _session.User.Id && MentionTextHelper.MentionsUser(post.Message, _session.User.Username),
+            IsEdited = post.EditAt > 0,
+            ThreadReplyCount = (int)post.ReplyCount,
+            ThreadRootId = string.IsNullOrEmpty(post.RootId) ? null : post.RootId,
+            QuotedAuthorName = quotedAuthorName,
+            QuotedText = quotedText,
+            LinkPreview = BuildLinkPreview(post),
+            LinkedMessage = BuildLinkedMessage(post, authors),
+            IsContinuation = IsContinuationOf(previous, post.UserId, post.CreateAt),
+            DateSeparatorLabel = DateSeparatorFor(previous?.CreateAtMillis, post.CreateAt),
+            Reactions = BuildReactions(post),
+            Attachments = BuildAttachments(post),
+            LinkedPictures = BuildLinkedPictures(post),
+            ShowsLinkedPictures = Settings.ShowLinkPreviews,
+            AreImagesCollapsed = _collapsedImagePosts.Contains(post.Id),
+            IsPinned = post.IsPinned,
+            EmojiImageResolver = ResolveTextEmojiAsync,
+        };
+        _ = ResolveMessageAvatarAsync(item, post.UserId);
+        ApplyPresence(item);
+        return item;
     }
 
     /// <summary>
@@ -6975,6 +7024,129 @@ public partial class MainViewModel : ViewModelBase
     /// with the authors of its older messages added, or the page itself if
     /// the cache doesn't hold it (a failed write).
     /// </summary>
+    /// <summary>Channels known to show their very first message (see IsHistoryCompleteAsync).</summary>
+    private readonly HashSet<string> _channelsAtStart = [];
+
+    /// <summary>The message carrying the "start of the channel" card, if any.</summary>
+    private MessageItem? _channelStartHolder;
+
+    /// <summary>While the page before the oldest message shown is being fetched: a small pill at the top says so.</summary>
+    [ObservableProperty]
+    public partial bool IsLoadingOlderMessages { get; set; }
+
+    /// <summary>When fetching older messages last failed: offline, the next scroll waits a little before asking again.</summary>
+    private DateTime _olderMessagesFailedAt = DateTime.MinValue;
+
+    private static readonly TimeSpan OlderMessagesRetryDelay = TimeSpan.FromSeconds(5);
+
+    /// <summary>
+    /// Scrolled up near the top of the channel: fetches the page of messages
+    /// before the oldest one shown and adds it above, the view staying on
+    /// the message being read (see PopulateMessages). Called by the window
+    /// as the reader scrolls; does nothing while a fetch is under way, once
+    /// the channel's first message is shown, or while a search result's
+    /// window is displayed instead of the channel.
+    /// </summary>
+    public async Task LoadOlderMessagesAsync()
+    {
+        if (_activeChannelId is not { } channelId
+            || IsLoadingOlderMessages
+            || IsViewingJumpedMessage
+            || Messages.Count == 0
+            || _channelsAtStart.Contains(channelId)
+            || DateTime.UtcNow - _olderMessagesFailedAt < OlderMessagesRetryDelay)
+        {
+            return;
+        }
+
+        IsLoadingOlderMessages = true;
+        try
+        {
+            var (older, atStart) = await _service.GetOlderPostsAsync(_session.BaseUrl, _session.Token, channelId);
+            if (atStart)
+            {
+                _channelsAtStart.Add(channelId);
+            }
+            if (older.Count > 0)
+            {
+                // Authors first, so the rows are built with their names.
+                var authorIds = older.Select(p => p.UserId).Distinct().ToList();
+                await _service.GetUsersAsync(_session.BaseUrl, _session.Token, authorIds);
+            }
+            if (channelId != _activeChannelId || IsViewingJumpedMessage)
+            {
+                return;
+            }
+
+            var posts = await _service.GetCachedPostsAsync(channelId);
+            var authors = (await _service.GetCachedUsersAsync(posts.Select(p => p.UserId).Distinct().ToList())).ToDictionary(u => u.Id);
+            await PopulateMessagesWithOutboxAsync(channelId, posts, authors);
+        }
+        catch (Exception ex)
+        {
+            // Offline, most likely: the next scroll up tries again.
+            _olderMessagesFailedAt = DateTime.UtcNow;
+            CrashLogger.Write("load older messages", ex.Message);
+        }
+        finally
+        {
+            IsLoadingOlderMessages = false;
+        }
+    }
+
+    /// <summary>
+    /// Asks the core whether the channel shows its very first message, after
+    /// a fetch that may have changed it, and puts up or takes down the card.
+    /// </summary>
+    private async Task RefreshChannelStartAsync(string channelId)
+    {
+        try
+        {
+            var complete = await _service.IsHistoryCompleteAsync(channelId);
+            var changed = complete ? _channelsAtStart.Add(channelId) : _channelsAtStart.Remove(channelId);
+            if (changed && channelId == _activeChannelId)
+            {
+                UpdateChannelStartCard();
+            }
+        }
+        catch
+        {
+            // A cache read failing here only leaves the card as it was.
+        }
+    }
+
+    /// <summary>
+    /// Puts the "start of the channel" card on the first message when the
+    /// channel's very first message is shown, and takes it off any other.
+    /// </summary>
+    private void UpdateChannelStartCard(bool announce = true)
+    {
+        var first = Messages.Count > 0 && !Messages[0].IsPending ? Messages[0] : null;
+        var holder = !IsViewingJumpedMessage && _activeChannelId is { } channelId && _channelsAtStart.Contains(channelId) ? first : null;
+        if (holder == _channelStartHolder && (holder is null || holder.HasChannelStart))
+        {
+            return;
+        }
+
+        // The card changes a row's height: hold the view where it is — unless
+        // the list was just rebuilt, which does its own scrolling.
+        if (announce)
+        {
+            MessageRowsChanging?.Invoke(this, EventArgs.Empty);
+        }
+        if (_channelStartHolder is not null && _channelStartHolder != holder)
+        {
+            _channelStartHolder.ChannelStartTitle = null;
+        }
+        if (holder is not null)
+        {
+            var isConversation = _loadedChannels.FirstOrDefault(c => c.Id == _activeChannelId)?.Type is "D" or "G";
+            holder.ChannelStartText = isConversation ? Loc.S.ChannelStartConversation : Loc.S.ChannelStartChannel;
+            holder.ChannelStartTitle = ActiveChannelName;
+        }
+        _channelStartHolder = holder;
+    }
+
     private async Task<List<PostDto>> WithCachedHistoryAsync(string channelId, List<PostDto> page, Dictionary<string, UserDto> authors)
     {
         try

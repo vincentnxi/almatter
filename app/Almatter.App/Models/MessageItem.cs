@@ -96,7 +96,26 @@ public sealed partial class MessageItem : ObservableObject
     }
 
     /// <summary>True when this message follows one from the same author less than two minutes ago — the avatar/name header is skipped, official-client style, so a quick back-to-back exchange doesn't repeat it for every line.</summary>
-    public bool IsContinuation { get; init; }
+    /// <remarks>Settable for the one message whose predecessor changes after it
+    /// is shown: the first one, when older messages are loaded above it.</remarks>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(RowPadding))]
+    public partial bool IsContinuation { get; set; }
+
+    /// <summary>
+    /// The channel's name, on the first message of a channel whose very first
+    /// message is shown: a "this is the start" card is drawn above it. Null
+    /// on every other message.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasChannelStart))]
+    public partial string? ChannelStartTitle { get; set; }
+
+    public bool HasChannelStart => ChannelStartTitle is not null;
+
+    /// <summary>The card's text under the name: a channel's or a conversation's start.</summary>
+    [ObservableProperty]
+    public partial string ChannelStartText { get; set; } = "";
 
     /// <summary>Extra breathing room above a new sender's first message so it doesn't crowd the previous person's last line — a continuation (same sender, grouped) stays snug underneath it instead.</summary>
     /// <remarks>A row that names the reader starts 10 px further left, for its bar

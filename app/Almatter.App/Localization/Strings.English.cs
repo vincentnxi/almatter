@@ -224,6 +224,9 @@ public sealed partial class Strings
         ReactedToQuote = (emoji, quote) => $"reacted {emoji} to “{quote}”",
         TaskbarNewMessages = "New messages",
         NewMessagesMarker = "NEW",
+        ChannelStartChannel = "This is the start of the channel. There are no older messages.",
+        ChannelStartConversation = "This is the start of the conversation. There are no older messages.",
+        LoadingOlderMessages = "Loading earlier messages…",
         TaskbarNotifications = count => count == 1 ? "1 notification" : $"{count} notifications",
 
         // ── Errors ───────────────────────────────────────────────────
