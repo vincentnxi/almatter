@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU64, Ordering};
 use std::sync::Mutex;
 use std::time::Duration;
 
@@ -153,6 +153,32 @@ static RESYNCS: AtomicU64 = AtomicU64::new(0);
 
 pub fn resync_count() -> u64 {
     RESYNCS.load(Ordering::SeqCst)
+}
+
+/// How many times the live connection has come up in this run, the first
+/// included. Before each one, messages may have been posted that no event
+/// will ever bring (the app closed, a laptop asleep, a network gone), so a
+/// channel's cache can have a hole between what it held and what arrived
+/// live since. `dispatch::fetch_channel_posts` checks a channel for one the
+/// first time it is opened after each new connection.
+static CONNECTIONS: AtomicU64 = AtomicU64::new(0);
+
+pub fn connection_count() -> u64 {
+    CONNECTIONS.load(Ordering::SeqCst)
+}
+
+/// When (Unix ms, this machine's clock) the live connection last came up.
+static CONNECTED_AT_MS: AtomicI64 = AtomicI64::new(0);
+
+/// When messages started coming live: the latest connection, or before the
+/// first one, the start of this run. A message cached that is older than
+/// this was cached before the gap a new connection may leave.
+pub fn live_since_ms() -> i64 {
+    static RUN_STARTED_MS: std::sync::OnceLock<i64> = std::sync::OnceLock::new();
+    match CONNECTED_AT_MS.load(Ordering::SeqCst) {
+        0 => *RUN_STARTED_MS.get_or_init(|| chrono::Utc::now().timestamp_millis()),
+        at => at,
+    }
 }
 
 /// The two slots below are only ever swapped or emptied, never left half
@@ -384,6 +410,8 @@ async fn run(
         return Ok(Ended::ByRequest);
     }
 
+    CONNECTED_AT_MS.store(chrono::Utc::now().timestamp_millis(), Ordering::SeqCst);
+    CONNECTIONS.fetch_add(1, Ordering::SeqCst);
     let client = MattermostClient::new(base_url).with_token(token);
 
     // Whatever happened while the socket was down — a laptop asleep while

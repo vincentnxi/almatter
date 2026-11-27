@@ -83,6 +83,9 @@ fn upload_http_client() -> reqwest::Client {
         .clone()
 }
 
+/// Posts in the page `get_posts` asks for: the server's own default.
+pub const POSTS_PAGE: u32 = 60;
+
 /// The post prop carrying the id this app gave a message before sending it.
 const LOCAL_ID_PROP: &str = "almatter_local_id";
 
@@ -422,11 +425,23 @@ impl MattermostClient {
         self.post_json("/users/search", &body).await
     }
 
+    /// A channel's newest posts: one page of `POSTS_PAGE`, the server's
+    /// default, newest first. A full page means older ones may follow.
     pub async fn get_posts(&self, channel_id: &str) -> Result<Vec<Post>, ApiError> {
         let list: PostList = self
-            .get_json(&format!("/channels/{channel_id}/posts"))
+            .get_json(&format!("/channels/{channel_id}/posts?page=0&per_page={POSTS_PAGE}"))
             .await?;
         Ok(list.into_ordered_posts())
+    }
+
+    /// Up to `per_page` posts older than `post_id` in its channel, newest
+    /// first, and whether the server may have still older ones (a full page).
+    pub async fn get_posts_before(&self, channel_id: &str, post_id: &str, per_page: u32) -> Result<(Vec<Post>, bool), ApiError> {
+        let list: PostList = self
+            .get_json(&format!("/channels/{channel_id}/posts?before={post_id}&per_page={per_page}"))
+            .await?;
+        let full = list.order.len() >= per_page as usize;
+        Ok((list.into_ordered_posts(), full))
     }
 
     /// The root post plus all its replies.

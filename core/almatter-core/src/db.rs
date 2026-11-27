@@ -1161,6 +1161,60 @@ impl Database {
         Ok(gone.len())
     }
 
+    /// When the newest cached message of a channel older than `before` (ms)
+    /// was posted. None if the cache holds nothing that old.
+    ///
+    /// Only messages that came with the channel's history count. Thread
+    /// replies are left out, since a channel page may leave them out; pinned
+    /// messages too, since the pinned panel caches them however old they
+    /// are. Without that, the cache's newest message before a hole could be
+    /// a pinned one from months ago, and the hole between the two — however
+    /// short in truth — was filled up to the limit of a thousand messages.
+    pub fn newest_root_post_before(&self, channel_id: &str, before: i64) -> rusqlite::Result<Option<i64>> {
+        self.conn.query_row(
+            "SELECT MAX(create_at) FROM posts WHERE channel_id = ?1 AND root_id = '' AND is_pinned = 0 AND create_at < ?2",
+            params![channel_id, before],
+            |row| row.get(0),
+        )
+    }
+
+    /// Whether the cache already holds one of `ids` posted before `before`
+    /// (ms). Asked before a freshly fetched page is written in. Pinned
+    /// messages do not count, for the reason given in
+    /// `newest_root_post_before`.
+    pub fn holds_any_post_before(&self, ids: &[&str], before: i64) -> rusqlite::Result<bool> {
+        let mut stmt = self.conn.prepare_cached("SELECT 1 FROM posts WHERE id = ?1 AND is_pinned = 0 AND create_at < ?2")?;
+        for id in ids {
+            if stmt.exists(params![id, before])? {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+
+    /// Forgets a channel's cached messages older than `before` (ms), with
+    /// the replies to them. For a hole too long to fill: what lies before it
+    /// would be shown right next to what lies after, as if nothing had been
+    /// said in between. Replies to a message that stays are kept, like in
+    /// `prune_channel_posts`. Returns how many went.
+    pub fn forget_posts_before(&self, channel_id: &str, before: i64) -> rusqlite::Result<usize> {
+        let doomed: Vec<String> = {
+            let mut stmt = self.conn.prepare(
+                "SELECT id FROM posts
+                 WHERE channel_id = ?1 AND create_at < ?2
+                   AND (root_id = '' OR root_id NOT IN (
+                       SELECT id FROM posts WHERE channel_id = ?1 AND create_at >= ?2
+                   ))",
+            )?;
+            let rows = stmt.query_map(params![channel_id, before], |row| row.get(0))?;
+            rows.collect::<rusqlite::Result<_>>()?
+        };
+        for id in &doomed {
+            self.delete_post(id)?;
+        }
+        Ok(doomed.len())
+    }
+
     /// Keeps a channel's cached history bounded. Without this the posts
     /// table only ever grows: every read of a channel, every poll tick and
     /// every channel switch then costs a little more than the day before,
