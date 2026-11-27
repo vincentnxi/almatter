@@ -73,6 +73,21 @@
     <AvaloniaResource Include="Assets\**" />
   </ItemGroup>
 
+  <!-- A Debug build wears the logo in orange (tools/generate-app-icon.ps1
+       -Variant Debug): its executable, shortcuts, taskbar button, windows
+       and notification-area icon, so a build from the repo is never taken
+       for the installed app. The orange files stand in for the blue ones at
+       the same resource paths, so no XAML changes; Release and the
+       installer never see them. -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
+    <ApplicationIcon>DebugAssets\almatter-logo.ico</ApplicationIcon>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(Configuration)' == 'Debug'">
+    <AvaloniaResource Remove="Assets\almatter-logo.ico;Assets\almatter-logo.png" />
+    <AvaloniaResource Include="DebugAssets\almatter-logo.ico" Link="Assets\almatter-logo.ico" />
+    <AvaloniaResource Include="DebugAssets\almatter-logo.png" Link="Assets\almatter-logo.png" />
+  </ItemGroup>
+
   <PropertyGroup>
     <!-- Rust core, built separately: `cargo build` (Debug config here) or
          a release-mode Cargo build (Release config) in ../../core. Picks

@@ -5,12 +5,20 @@
 # what gave the desktop shortcut its stair-stepped corners.
 #
 # Usage (Windows PowerShell 5.1):  powershell -File tools\generate-app-icon.ps1
+#
+# With -Variant Debug it draws the same logo in orange and writes it to
+# app/Almatter.App/DebugAssets/ instead: the icon a Debug build carries, so a
+# shortcut to a build from the repo can't be mistaken for the installed app.
+
+param([ValidateSet('Release', 'Debug')] [string] $Variant = 'Release')
 
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Drawing
 
 # Same dark blue as the official Mattermost desktop app icon.
 $background = [System.Drawing.Color]::FromArgb(255, 0x28, 0x42, 0x7B)
+# Debug builds: a burnt orange, about as dark as the blue so the white stripes read the same.
+if ($Variant -eq 'Debug') { $background = [System.Drawing.Color]::FromArgb(255, 0xB8, 0x4A, 0x12) }
 $foreground = [System.Drawing.Color]::White
 
 # Geometry on a 256-unit canvas.
@@ -28,7 +36,8 @@ $stripes = @(
 $icoSizes = 16, 20, 24, 30, 32, 36, 40, 48, 60, 64, 72, 80, 96, 128, 256
 $supersample = 8
 
-$assets = Join-Path $PSScriptRoot '..\app\Almatter.App\Assets'
+$assets = Join-Path $PSScriptRoot $(if ($Variant -eq 'Debug') { '..\app\Almatter.App\DebugAssets' } else { '..\app\Almatter.App\Assets' })
+New-Item -ItemType Directory -Force $assets | Out-Null
 
 function New-LogoBitmap([int] $size) {
     $big = $size * $supersample
