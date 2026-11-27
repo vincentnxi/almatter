@@ -109,6 +109,10 @@ public sealed partial class AppSettings : ObservableObject
     [ObservableProperty]
     public partial AppAccent Accent { get; set; } = AppAccent.Blue;
 
+    /// <summary>The logo's colour (windows, taskbar, notification area, shortcuts), blue unless changed. Independent of the theme.</summary>
+    [ObservableProperty]
+    public partial AppIconTint AppIconTint { get; set; } = AppIconTint.Blue;
+
     /// <summary>
     /// A named theme (Nord, Crème…), or None for Almatter's own palette.
     /// While one is chosen it decides what ThemeMode, Accent and

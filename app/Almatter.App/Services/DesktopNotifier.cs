@@ -31,17 +31,20 @@ internal interface IDesktopNotifier : IDisposable
     /// shown beside the text; null (or unreadable) keeps the plain look.
     /// </summary>
     void Show(string title, string text, bool personal, bool sound, string? avatarPath);
+
+    /// <summary>Redraws the notification-area icon from an .ico file (see AppIcon). Null or unreadable keeps the current one.</summary>
+    void SetIcon(string? iconPath);
 }
 
 internal static class DesktopNotifier
 {
-    public static IDesktopNotifier Create(Window window)
+    public static IDesktopNotifier Create(Window window, string? iconPath)
     {
         if (OperatingSystem.IsWindows())
         {
             try
             {
-                return new WindowsTrayNotifier(window);
+                return new WindowsTrayNotifier(window, iconPath);
             }
             catch (Exception ex)
             {
@@ -55,6 +58,7 @@ internal static class DesktopNotifier
     {
         public event EventHandler? Clicked { add { } remove { } }
         public void Show(string title, string text, bool personal, bool sound, string? avatarPath) { }
+        public void SetIcon(string? iconPath) { }
         public void Dispose() { }
     }
 }
@@ -99,10 +103,10 @@ internal sealed class WindowsTrayNotifier : IDesktopNotifier
 
     private readonly Window _window;
     private readonly IntPtr _hwnd;
-    private readonly IntPtr _icon;
+    private IntPtr _icon;
 
     /// <summary>False when <see cref="_icon"/> is the shared system icon, which must never be destroyed.</summary>
-    private readonly bool _ownsIcon;
+    private bool _ownsIcon;
 
     /// <summary>
     /// Sent to every top-level window when Explorer restarts. The notification
@@ -121,14 +125,19 @@ internal sealed class WindowsTrayNotifier : IDesktopNotifier
 
     public event EventHandler? Clicked;
 
-    public WindowsTrayNotifier(Window window)
+    public WindowsTrayNotifier(Window window, string? iconPath)
     {
         _window = window;
         _hwnd = window.TryGetPlatformHandle()?.Handle
             ?? throw new InvalidOperationException("The window has no native handle yet.");
 
-        var exePath = Environment.ProcessPath ?? "";
-        _icon = ExtractIconW(IntPtr.Zero, exePath, 0);
+        // The logo in the chosen tint when its file is there (see AppIcon),
+        // else the one built into the executable.
+        _icon = ExtractIcon(iconPath);
+        if (_icon == IntPtr.Zero)
+        {
+            _icon = ExtractIcon(Environment.ProcessPath);
+        }
         _ownsIcon = _icon != IntPtr.Zero;
 
         // Windows accepts a notification-area icon with no image, then
@@ -150,6 +159,50 @@ internal sealed class WindowsTrayNotifier : IDesktopNotifier
         {
             Dispose();
             throw new InvalidOperationException("Shell_NotifyIcon refused to add the icon.");
+        }
+    }
+
+    /// <summary>
+    /// The first icon in an .ico or executable file, or zero. ExtractIconW
+    /// answers 1, not zero, for a file that holds no icon at all.
+    /// </summary>
+    private static IntPtr ExtractIcon(string? path)
+    {
+        if (string.IsNullOrEmpty(path))
+        {
+            return IntPtr.Zero;
+        }
+        var icon = ExtractIconW(IntPtr.Zero, path, 0);
+        return icon == new IntPtr(1) ? IntPtr.Zero : icon;
+    }
+
+    public void SetIcon(string? iconPath)
+    {
+        if (_disposed)
+        {
+            return;
+        }
+        var icon = ExtractIcon(iconPath);
+        if (icon == IntPtr.Zero)
+        {
+            return;
+        }
+        var data = NewData();
+        data.uFlags = NIF_ICON;
+        data.hIcon = icon;
+        if (!Shell_NotifyIconW(NIM_MODIFY, ref data))
+        {
+            DestroyIcon(icon);
+            return;
+        }
+        // The shell has its own copy now; the old one can go.
+        var previous = _icon;
+        var ownedPrevious = _ownsIcon;
+        _icon = icon;
+        _ownsIcon = true;
+        if (ownedPrevious)
+        {
+            DestroyIcon(previous);
         }
     }
 

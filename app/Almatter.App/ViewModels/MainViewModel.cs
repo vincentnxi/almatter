@@ -838,6 +838,10 @@ public partial class MainViewModel : ViewModelBase
         },
     ];
 
+    /// <summary>The logos in the Apparence icon picker, in AppIconTints.All order.</summary>
+    public ObservableCollection<AppIconTintOption> AppIconTintOptions { get; } =
+        [.. AppIconTints.All.Select(tint => new AppIconTintOption { Tint = tint })];
+
     public ObservableCollection<AccentOption> AccentOptions { get; } =
     [
         new() { Accent = AppAccent.Blue },
@@ -1044,6 +1048,7 @@ public partial class MainViewModel : ViewModelBase
         RefreshEmojiStyleSelection();
         RefreshFontSizeSelection();
         InitializeEmojiPicker();
+        RefreshAppIconTintSelection();
         Settings.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName is nameof(AppSettings.ThemeMode) or nameof(AppSettings.ReducedContrast) or nameof(AppSettings.Accent)
@@ -1081,6 +1086,11 @@ public partial class MainViewModel : ViewModelBase
                     RequestSkippedLinkPreviewImages();
                 }
                 ApplyLinkedPicturesSetting();
+            }
+            else if (e.PropertyName == nameof(AppSettings.AppIconTint))
+            {
+                RefreshAppIconTintSelection();
+                AppIconTintChanged?.Invoke(this, EventArgs.Empty);
             }
             else if (e.PropertyName == nameof(AppSettings.CheckForUpdates))
             {
@@ -5276,6 +5286,21 @@ public partial class MainViewModel : ViewModelBase
     private void SetAccent(AppAccent accent) => Settings.Accent = accent;
 
     [RelayCommand]
+    private void SetAppIconTint(AppIconTint tint) => Settings.AppIconTint = tint;
+
+    private void RefreshAppIconTintSelection()
+    {
+        var current = AppIconTints.Known(Settings.AppIconTint);
+        foreach (var option in AppIconTintOptions)
+        {
+            option.IsSelected = option.Tint == current;
+        }
+    }
+
+    /// <summary>The logo's tint changed: the window repaints its icons (see AppIcon).</summary>
+    public event EventHandler? AppIconTintChanged;
+
+    [RelayCommand]
     private void ToggleThemeMenu() => IsThemeMenuOpen = !IsThemeMenuOpen;
 
     /// <summary>
@@ -5328,6 +5353,10 @@ public partial class MainViewModel : ViewModelBase
             option.RefreshLanguage();
         }
         foreach (var option in AccentOptions)
+        {
+            option.RefreshLanguage();
+        }
+        foreach (var option in AppIconTintOptions)
         {
             option.RefreshLanguage();
         }
@@ -5420,6 +5449,10 @@ public partial class MainViewModel : ViewModelBase
         foreach (var option in AccentOptions)
         {
             option.IsSelected = option.Accent == Settings.Accent;
+            option.RefreshColors();
+        }
+        foreach (var option in AppIconTintOptions)
+        {
             option.RefreshColors();
         }
         Settings.RefreshColors();

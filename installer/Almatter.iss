@@ -83,10 +83,20 @@ Source: "publish\*"; DestDir: "{app}"; Excludes: "*.pdb"; Flags: ignoreversion r
 ; Sans OFL requires its text to travel with the font).
 Source: "..\LICENSE"; DestDir: "{app}"; DestName: "LICENSE.txt"; Flags: ignoreversion
 Source: "..\licenses\*"; DestDir: "{app}\licenses"; Flags: ignoreversion
+; The picture the shortcuts show, a copy of the blue logo to start with.
+; Almatter rewrites it in the tint chosen in its settings (Services/AppIcon.cs),
+; so it is only laid down when missing: an update must not undo the choice.
+Source: "..\app\Almatter.App\Assets\almatter-logo.ico"; DestDir: "{app}"; DestName: "almatter-icon.ico"; Flags: onlyifdoesntexist
 
 [Icons]
-Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExeName}"
-Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExeName}"; Tasks: desktopicon
+; Pointed at almatter-icon.ico rather than at the executable, whose built-in
+; icon can't change once installed.
+Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExeName}"; IconFilename: "{app}\almatter-icon.ico"
+Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExeName}"; IconFilename: "{app}\almatter-icon.ico"; Tasks: desktopicon
+
+[UninstallDelete]
+; Left behind only if Almatter was stopped halfway through rewriting the icon.
+Type: files; Name: "{app}\almatter-icon.ico.new"
 
 [Run]
 Filename: "{app}\{#AppExeName}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent

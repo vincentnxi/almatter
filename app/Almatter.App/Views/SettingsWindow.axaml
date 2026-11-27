@@ -386,6 +386,45 @@
                             </Grid>
                         </Button>
                     </StackPanel>
+
+                    <!-- The logo's colour, whatever the theme: each choice is the
+                         logo itself, drawn here from the same geometry as
+                         tools/generate-app-icon.ps1, the one in use ringed in
+                         the accent colour. -->
+                    <Border Classes="separator" />
+                    <StackPanel Spacing="8">
+                        <StackPanel Spacing="2">
+                            <TextBlock Classes="setting-label" Text="{Binding T.AppIconLabel, Source={x:Static loc:Loc.Instance}}" />
+                            <TextBlock Classes="setting-hint" Text="{Binding T.AppIconHint, Source={x:Static loc:Loc.Instance}}" />
+                        </StackPanel>
+                        <ItemsControl ItemsSource="{Binding AppIconTintOptions}" Margin="-3,0,0,0">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="models:AppIconTintOption">
+                                    <Button Classes="swatch-button" Margin="0,0,6,6" ToolTip.Tip="{Binding Name}"
+                                            Command="{Binding #RootWindow.((vm:MainViewModel)DataContext).SetAppIconTintCommand}"
+                                            CommandParameter="{Binding Tint}">
+                                        <Border Width="64" Padding="3,4,3,3" CornerRadius="10" BorderThickness="2" BorderBrush="{Binding RingBrush}">
+                                            <StackPanel Spacing="4" HorizontalAlignment="Center">
+                                                <Viewbox Width="40" Height="40">
+                                                    <Canvas Width="256" Height="256">
+                                                        <Border Canvas.Left="2" Canvas.Top="2" Width="252" Height="252" CornerRadius="28" Background="{Binding GroundBrush}" />
+                                                        <Path Data="M49.66,153.03 L84.14,197.17 M77.73,104.49 L138.07,181.71 M110.5,52.14 L196.7,162.46"
+                                                              Stroke="White" StrokeThickness="31" StrokeLineCap="Round" />
+                                                    </Canvas>
+                                                </Viewbox>
+                                                <TextBlock Text="{Binding Name}" Foreground="{Binding NameBrush}" FontSize="11.5" HorizontalAlignment="Center" />
+                                            </StackPanel>
+                                        </Border>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
                 </StackPanel>
 
                 <!-- ── TEXTE ─────────────────────────────────────────── -->

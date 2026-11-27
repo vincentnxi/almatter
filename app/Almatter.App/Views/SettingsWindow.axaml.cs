@@ -35,6 +35,7 @@ public partial class SettingsWindow : Window
         _vm = vm;
         DataContext = vm;
         ThemeResources.Apply(this, vm.Settings);
+        Icon = Services.AppIcon.ForWindows(vm.Settings.AppIconTint);
 
         // Unhooked on Closed: the view model outlives this window, and a
         // handler left on it would keep every closed settings window alive.

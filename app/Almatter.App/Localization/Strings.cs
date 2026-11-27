@@ -211,6 +211,15 @@ public sealed partial class Strings
     public required string AccentAmber { get; init; }
     public required string AccentRose { get; init; }
     public required string AccentViolet { get; init; }
+    /// <summary>The logo-colour picker in Apparence.</summary>
+    public required string AppIconLabel { get; init; }
+    public required string AppIconHint { get; init; }
+    public required string IconTintBlue { get; init; }
+    public required string IconTintOrange { get; init; }
+    public required string IconTintGreen { get; init; }
+    public required string IconTintViolet { get; init; }
+    public required string IconTintRaspberry { get; init; }
+    public required string IconTintGraphite { get; init; }
     public required string ReducedContrast { get; init; }
     public required string ReducedContrastHint { get; init; }
     public required string SettingsTheme { get; init; }
