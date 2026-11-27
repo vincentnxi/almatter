@@ -92,7 +92,7 @@ if ($previous) {
     }
     # What a Native AOT install should hold: the exe, the four native
     # libraries and the licence. Anything else came from the older version.
-    $expected = 'Almatter.exe', 'almatter_ffi.dll', 'av_libglesv2.dll', 'libHarfBuzzSharp.dll', 'libSkiaSharp.dll', 'LICENSE.txt', 'unins000.dat', 'unins000.exe'
+    $expected = 'Almatter.exe', 'almatter-icon.ico', 'almatter_ffi.dll','av_libglesv2.dll', 'libHarfBuzzSharp.dll', 'libSkiaSharp.dll', 'LICENSE.txt', 'unins000.dat', 'unins000.exe'
     $leftovers = Get-ChildItem $app -File -ErrorAction SilentlyContinue | Where-Object { $_.Name -notin $expected }
     if ($leftovers) {
         Write-Report "LEFTOVERS from the older version: $(($leftovers | ForEach-Object Name) -join ', ')"
@@ -100,6 +100,27 @@ if ($previous) {
     else {
         Write-Report 'No leftovers from the older version.'
     }
+}
+
+# Shortcuts show almatter-icon.ico, which the app rewrites in the tint picked
+# in its settings; a later install must leave that file alone.
+$iconFile = "$app\almatter-icon.ico"
+$startShortcut = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Almatter.lnk"
+Write-Report "almatter-icon.ico installed: $(Test-Path $iconFile)"
+if (Test-Path $startShortcut) {
+    Write-Report "Start menu shortcut icon: '$((New-Object -ComObject WScript.Shell).CreateShortcut($startShortcut).IconLocation)'"
+}
+else {
+    Write-Report 'Start menu shortcut: MISSING'
+}
+if (Test-Path $iconFile) {
+    # Stands in for the app having written another tint.
+    [IO.File]::AppendAllText($iconFile, 'x')
+    $before = (Get-FileHash $iconFile).Hash
+    $process = Start-Process $setup.FullName -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', "/LOG=$results\setup-again.log" -PassThru
+    $process.WaitForExit()
+    Write-Report "Second install exit code: $($process.ExitCode); chosen icon kept: $((Get-FileHash $iconFile).Hash -eq $before)"
+    Get-Process Almatter -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 }
 
 # The app only loads the Rust core after sign-in, so a missing native
