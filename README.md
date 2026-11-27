@@ -22,13 +22,14 @@ desktop app is an Electron wrapper that routinely uses 500–600 MB of memory; A
 aims to do the everyday work — reading, writing, threads, search, notifications — in a
 fraction of that, and to stay usable on older machines.
 
-> **Status: early pre-release (0.18.2).** It is used daily, but expect rough edges.
+> **Status: early pre-release (0.19.0).** It is used daily, but expect rough edges.
 > The interface is available **in English and French**, switchable in the settings.
 
 ## Features
 
 - **Fast channel switching** — messages are cached locally (SQLite), so a channel opens
-  instantly from the cache and then catches up with the server.
+  instantly from the cache and then catches up with the server. Scrolling up past the
+  top loads the older messages, back to the channel's start.
 - **Real-time updates** over WebSocket: new messages, edits, reactions, typing indicators,
   presence, and read state synced with your other devices.
 - **Messaging** — Markdown rendering with a formatting toolbar, edit and delete, threads
@@ -243,14 +244,15 @@ de mémoire. Almatter vise à assurer l'usage quotidien — lire, écrire, suivr
 chercher, recevoir les notifications — pour une fraction de cette consommation, et à
 rester utilisable sur des machines anciennes.
 
-> **État : préversion (0.18.2).** Utilisé au quotidien, mais tout n'est pas encore poli.
+> **État : préversion (0.19.0).** Utilisé au quotidien, mais tout n'est pas encore poli.
 > L'interface est disponible **en français et en anglais**, au choix dans les réglages.
 
 ## Fonctionnalités
 
 - **Changement de canal instantané** — les messages sont gardés en cache sur le disque
   (SQLite) : un canal s'ouvre tout de suite depuis le cache, puis se met à jour auprès
-  du serveur.
+  du serveur. En remontant la conversation, les messages plus anciens se chargent,
+  jusqu'au début du canal.
 - **Mises à jour en temps réel** par WebSocket : nouveaux messages, modifications,
   réactions, indicateur de saisie, présence, et état de lecture synchronisé avec vos
   autres appareils.
