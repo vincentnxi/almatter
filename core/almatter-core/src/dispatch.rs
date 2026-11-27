@@ -46,6 +46,17 @@ enum Request {
         token: String,
         channel_id: String,
     },
+    /// The page of messages just before the oldest one the channel shows:
+    /// scrolling up past the top. See `fetch_older_posts`.
+    GetOlderPosts {
+        base_url: String,
+        token: String,
+        channel_id: String,
+    },
+    /// Whether the channel shows its very first message.
+    GetHistoryComplete {
+        channel_id: String,
+    },
     GetUsers {
         base_url: String,
         token: String,
@@ -506,6 +517,17 @@ async fn handle(request_json: &str, db: &'static Mutex<Database>) -> Value {
                 .map(|posts| json!({ "posts": posts }))
                 .map_err(error_text)
         }
+        Request::GetOlderPosts { base_url, token, channel_id } => {
+            let client = MattermostClient::new(base_url).with_token(token);
+            fetch_older_posts(&client, db, &channel_id)
+                .await
+                .map(|(posts, at_start)| json!({ "posts": posts, "at_start": at_start }))
+                .map_err(error_text)
+        }
+        Request::GetHistoryComplete { channel_id } => crate::db::lock(db)
+            .history_from(&channel_id)
+            .map(|from| json!({ "complete": from == Some(0) }))
+            .map_err(error_text),
         Request::GetUsers { base_url, token, user_ids } => MattermostClient::new(base_url)
             .with_token(token)
             .get_users_by_ids(&user_ids)
@@ -1217,12 +1239,14 @@ pub(crate) async fn fetch_channel_posts(
     // The margin covers this machine's clock against the server's.
     let reaches_cache = || {
         let ids: Vec<&str> = posts.iter().map(|p| p.id.as_str()).collect();
-        let held = { crate::db::lock(db).holds_any_post_before(&ids, live_since.saturating_sub(CLOCK_MARGIN_MS)) };
+        let held = { crate::db::lock(db).holds_any_post_before(channel_id, &ids, live_since.saturating_sub(CLOCK_MARGIN_MS)) };
         held.inspect_err(crate::db::note_error).unwrap_or(false)
     };
 
-    let mut hole = Hole::None;
-    if !checked && posts.len() >= crate::api::POSTS_PAGE as usize && !reaches_cache() {
+    let mut hole = Hole::NotNeeded;
+    if posts.len() < crate::api::POSTS_PAGE as usize {
+        hole = Hole::WholeChannel;
+    } else if !checked && !reaches_cache() {
         hole = match fill_hole(client, db, channel_id, &mut posts).await {
             Ok(hole) => hole,
             Err(e) => {
@@ -1243,10 +1267,32 @@ pub(crate) async fn fetch_channel_posts(
         if deleted > 0 {
             crate::db::log("cache", &format!("dropped {deleted} message(s) deleted from channel {channel_id} in the meantime"));
         }
+        let oldest_fetched = posts.iter().map(|p| p.create_at).min();
         match hole {
-            Hole::Filled(count) => crate::db::log("cache", &format!("filled a gap of {count} message(s) in channel {channel_id}")),
+            Hole::NotNeeded | Hole::Joined(_) => {
+                if let Hole::Joined(count @ 1..) = hole {
+                    crate::db::log("cache", &format!("filled a gap of {count} message(s) in channel {channel_id}"));
+                }
+                // A cache filled before channel_history existed was shown
+                // whole: it is taken as one history (see oldest_history_post).
+                if cache.history_from(channel_id)?.is_none() {
+                    if let Some(from) = cache.oldest_history_post(channel_id)? {
+                        cache.set_history_from(channel_id, from)?;
+                    }
+                }
+            }
+            Hole::WholeChannel => cache.set_history_from(channel_id, 0)?,
+            Hole::ReachedStart(count) => {
+                crate::db::log("cache", &format!("filled a gap of {count} message(s) in channel {channel_id}, back to its start"));
+                cache.set_history_from(channel_id, 0)?;
+            }
+            Hole::NothingOlder => {
+                if let Some(oldest) = oldest_fetched {
+                    cache.set_history_from(channel_id, oldest)?;
+                }
+            }
             Hole::TooLong => {
-                if let Some(oldest) = posts.iter().map(|p| p.create_at).min() {
+                if let Some(oldest) = oldest_fetched {
                     let forgotten = cache.forget_posts_before(channel_id, oldest)?;
                     crate::db::log(
                         "cache",
@@ -1254,7 +1300,7 @@ pub(crate) async fn fetch_channel_posts(
                     );
                 }
             }
-            Hole::None | Hole::NotChecked => {}
+            Hole::NotChecked => {}
         }
         // Opportunistic, and here rather than on every single insert:
         // opening a channel is already the moment the user waits for its
@@ -1270,13 +1316,71 @@ pub(crate) async fn fetch_channel_posts(
     Ok(posts)
 }
 
-/// What `fill_hole` found between a channel's newest page and its cache.
+/// Messages asked for each time the reader scrolls past the top.
+const OLDER_PAGE: u32 = 60;
+
+/// The page of messages just before the oldest one the channel shows, laid
+/// down in the cache with the channel's history now starting there; and
+/// whether that reached the channel's first message. The cache only ever
+/// grew forward: scrolling up stopped at whatever it happened to hold, while
+/// the server had everything. Nothing is asked once the start is reached.
+/// The cache's limit (`CHANNEL_HISTORY_LIMIT`) still applies the next time
+/// the channel is opened, which trims back what was read this way.
+pub(crate) async fn fetch_older_posts(
+    client: &MattermostClient,
+    db: &Mutex<Database>,
+    channel_id: &str,
+) -> Result<(Vec<crate::models::Post>, bool), String> {
+    let (from, oldest_id) = {
+        let cache = crate::db::lock(db);
+        let from = cache.history_from(channel_id).map_err(error_text)?;
+        let oldest_id = cache.oldest_shown_post_id(channel_id).map_err(error_text)?;
+        (from, oldest_id)
+    };
+    if from == Some(0) {
+        return Ok((Vec::new(), true));
+    }
+    // Nothing shown yet: the newest page comes first, through get_posts.
+    let Some(oldest_id) = oldest_id else {
+        return Ok((Vec::new(), false));
+    };
+
+    let (older, more) = client.get_posts_before(channel_id, &oldest_id, OLDER_PAGE).await.map_err(error_text)?;
+    let at_start = !more || older.is_empty();
+    cache_write(db, |cache| {
+        for post in &older {
+            cache.upsert_post(post)?;
+        }
+        let start = if at_start { Some(0) } else { older.iter().map(|p| p.create_at).min() };
+        if let Some(start) = start {
+            if cache.history_from(channel_id)?.is_none_or(|current| start < current) {
+                cache.set_history_from(channel_id, start)?;
+            }
+        }
+        Ok(())
+    });
+    Ok((older, at_start))
+}
+
+/// How the messages just fetched meet the channel's cached history — what
+/// decides where that history starts now (`channel_history`).
 #[derive(Clone, Copy)]
 enum Hole {
-    /// No hole: the page reached the cache, or nothing older was cached.
-    None,
-    /// A hole of this many messages, now fetched.
-    Filled(usize),
+    /// Nothing to check: already checked since the connection came up, or
+    /// the page holds a message of the cached history. The history goes on
+    /// from where it started.
+    NotNeeded,
+    /// The page is the channel's whole history (it was not full).
+    WholeChannel,
+    /// Older pages reached the cached history; this many messages filled
+    /// the hole between (0: there was none).
+    Joined(usize),
+    /// Older pages reached the channel's first message without meeting the
+    /// cached history.
+    ReachedStart(usize),
+    /// The cache held no history older than the page: it starts with the
+    /// messages fetched.
+    NothingOlder,
     /// Longer than `CHANNEL_HISTORY_LIMIT`: the older cached messages go.
     TooLong,
     /// Not checked (a page failed): left as it was, for the next opening.
@@ -1294,14 +1398,14 @@ async fn fill_hole(
     let mut fetched = 0usize;
     loop {
         let Some(oldest) = posts.iter().min_by_key(|p| p.create_at) else {
-            return Ok(Hole::None);
+            return Ok(Hole::NothingOlder);
         };
         let (oldest_id, oldest_at) = (oldest.id.clone(), oldest.create_at);
         let cached = { crate::db::lock(db).newest_root_post_before(channel_id, oldest_at) };
         let anchor = match cached {
             Ok(Some(anchor)) => anchor,
             // Nothing older cached: nothing for a hole to separate.
-            Ok(None) => return Ok(if fetched > 0 { Hole::Filled(fetched) } else { Hole::None }),
+            Ok(None) => return Ok(Hole::NothingOlder),
             Err(e) => {
                 crate::db::note_error(&e);
                 return Ok(Hole::NotChecked);
@@ -1316,10 +1420,13 @@ async fn fill_hole(
         let empty = older.is_empty();
         fetched += new;
         posts.extend(older);
-        // Reached the cache, or the channel's very first message (the
-        // cached one older than that is then gone from the server).
-        if reached || !more || empty {
-            return Ok(if fetched > 0 { Hole::Filled(fetched) } else { Hole::None });
+        if reached {
+            return Ok(Hole::Joined(fetched));
+        }
+        // The channel's very first message, without meeting the cached one
+        // (which is then gone from the server).
+        if !more || empty {
+            return Ok(Hole::ReachedStart(fetched));
         }
     }
 }
@@ -2826,6 +2933,66 @@ mod tests {
         let response = dispatch(&get_posts, db).await;
         assert!(response.contains(r#""ok":true"#), "{response}");
         assert_eq!(before_requests.load(std::sync::atomic::Ordering::SeqCst), 0);
+    }
+
+    /// Scrolling up past the top fetches the page before, again and again,
+    /// until the channel's first message — then asks nothing more.
+    #[tokio::test]
+    async fn older_messages_are_fetched_page_by_page_back_to_the_start() {
+        let db = test_db();
+        let (server, before_requests) = serve_history("older", 400).await;
+        let request = |command: &str| {
+            format!(r#"{{"command":"{command}","base_url":"{}","token":"tok","channel_id":"older"}}"#, server.uri())
+        };
+
+        assert!(dispatch(&request("get_posts"), db).await.contains(r#""ok":true"#));
+        assert_eq!(cached_indexes(db, "older"), (340..400).collect::<Vec<_>>(), "the newest page only");
+
+        let response = dispatch(&request("get_older_posts"), db).await;
+        assert!(response.contains(r#""at_start":false"#), "{response}");
+        assert_eq!(cached_indexes(db, "older"), (280..400).collect::<Vec<_>>(), "one page more, right above");
+
+        for _ in 0..5 {
+            dispatch(&request("get_older_posts"), db).await;
+        }
+        assert_eq!(cached_indexes(db, "older"), (0..400).collect::<Vec<_>>());
+        let complete = dispatch(r#"{"command":"get_history_complete","channel_id":"older"}"#, db).await;
+        assert!(complete.contains(r#""complete":true"#), "{complete}");
+
+        let asked = before_requests.load(std::sync::atomic::Ordering::SeqCst);
+        let response = dispatch(&request("get_older_posts"), db).await;
+        assert!(response.contains(r#""at_start":true"#), "{response}");
+        assert_eq!(before_requests.load(std::sync::atomic::Ordering::SeqCst), asked, "nothing asked past the start");
+    }
+
+    /// An old message cached for the pinned panel or a search result is not
+    /// part of the channel's history, and must not be shown right above it.
+    #[tokio::test]
+    async fn an_old_message_cached_on_its_own_is_not_shown_in_the_channel() {
+        let db = test_db();
+        let (server, _) = serve_history("islands", 400).await;
+        let get_posts = format!(r#"{{"command":"get_posts","base_url":"{}","token":"tok","channel_id":"islands"}}"#, server.uri());
+        assert!(dispatch(&get_posts, db).await.contains(r#""ok":true"#));
+
+        for (id, at, is_pinned) in [("p10", history_time(10), true), ("p20", history_time(20), false)] {
+            db.lock()
+                .unwrap()
+                .upsert_post(&crate::models::Post {
+                    id: id.into(),
+                    channel_id: "islands".into(),
+                    root_id: "".into(),
+                    user_id: "u1".into(),
+                    message: id.into(),
+                    create_at: at,
+                    reply_count: 0,
+                    edit_at: 0,
+                    is_pinned,
+                    metadata: Default::default(),
+                })
+                .unwrap();
+        }
+        assert_eq!(cached_indexes(db, "islands"), (340..400).collect::<Vec<_>>(), "the pinned one and the search one stay out");
+        assert!(db.lock().unwrap().cached_post("p10").unwrap().is_some(), "both are still cached");
     }
 
     /// The sidebar repaints from the cache, so a channel the server stopped

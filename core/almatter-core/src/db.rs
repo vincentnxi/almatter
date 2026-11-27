@@ -399,6 +399,17 @@ impl Database {
                 json       TEXT NOT NULL,
                 rev        INTEGER NOT NULL
             );
+
+            -- Where a channel's unbroken history starts in the cache (ms):
+            -- every message posted since is in it. Older cached messages
+            -- (pinned ones, the window around a search result) are islands,
+            -- kept for their own panels but not shown in the channel. 0: the
+            -- channel's very first message is in. No row: not known yet, and
+            -- the whole cache is shown, as before this table.
+            CREATE TABLE IF NOT EXISTS channel_history (
+                channel_id   TEXT PRIMARY KEY,
+                history_from INTEGER NOT NULL
+            );
             "#,
         )?;
 
@@ -1170,26 +1181,78 @@ impl Database {
     /// are. Without that, the cache's newest message before a hole could be
     /// a pinned one from months ago, and the hole between the two — however
     /// short in truth — was filled up to the limit of a thousand messages.
+    ///
+    /// Once the channel's unbroken history is known (`history_from`), only
+    /// messages in it count: anything older is an island.
     pub fn newest_root_post_before(&self, channel_id: &str, before: i64) -> rusqlite::Result<Option<i64>> {
         self.conn.query_row(
-            "SELECT MAX(create_at) FROM posts WHERE channel_id = ?1 AND root_id = '' AND is_pinned = 0 AND create_at < ?2",
-            params![channel_id, before],
+            "SELECT MAX(create_at) FROM posts
+             WHERE channel_id = ?1 AND root_id = '' AND is_pinned = 0 AND create_at < ?2
+               AND create_at >= COALESCE((SELECT history_from FROM channel_history WHERE channel_id = ?1), ?3)",
+            params![channel_id, before, i64::MIN],
             |row| row.get(0),
         )
     }
 
     /// Whether the cache already holds one of `ids` posted before `before`
-    /// (ms). Asked before a freshly fetched page is written in. Pinned
-    /// messages do not count, for the reason given in
-    /// `newest_root_post_before`.
-    pub fn holds_any_post_before(&self, ids: &[&str], before: i64) -> rusqlite::Result<bool> {
-        let mut stmt = self.conn.prepare_cached("SELECT 1 FROM posts WHERE id = ?1 AND is_pinned = 0 AND create_at < ?2")?;
+    /// (ms) in the channel's unbroken history. Asked before a freshly
+    /// fetched page is written in. Pinned messages do not count, for the
+    /// reason given in `newest_root_post_before`.
+    pub fn holds_any_post_before(&self, channel_id: &str, ids: &[&str], before: i64) -> rusqlite::Result<bool> {
+        let mut stmt = self.conn.prepare_cached(
+            "SELECT 1 FROM posts
+             WHERE id = ?1 AND is_pinned = 0 AND create_at < ?2
+               AND create_at >= COALESCE((SELECT history_from FROM channel_history WHERE channel_id = ?3), ?4)",
+        )?;
         for id in ids {
-            if stmt.exists(params![id, before])? {
+            if stmt.exists(params![id, before, channel_id, i64::MIN])? {
                 return Ok(true);
             }
         }
         Ok(false)
+    }
+
+    /// Where the channel's unbroken history starts in the cache (see the
+    /// `channel_history` table). None: not known yet.
+    pub fn history_from(&self, channel_id: &str) -> rusqlite::Result<Option<i64>> {
+        self.conn
+            .query_row("SELECT history_from FROM channel_history WHERE channel_id = ?1", params![channel_id], |row| row.get(0))
+            .optional()
+    }
+
+    pub fn set_history_from(&self, channel_id: &str, history_from: i64) -> rusqlite::Result<()> {
+        self.conn.execute(
+            "INSERT INTO channel_history (channel_id, history_from) VALUES (?1, ?2)
+             ON CONFLICT(channel_id) DO UPDATE SET history_from = excluded.history_from",
+            params![channel_id, history_from],
+        )?;
+        Ok(())
+    }
+
+    /// For a cache filled before `channel_history` existed: its messages
+    /// were all shown as one history, so they are taken as one, pinned ones
+    /// aside. None if it holds none.
+    pub fn oldest_history_post(&self, channel_id: &str) -> rusqlite::Result<Option<i64>> {
+        self.conn.query_row(
+            "SELECT MIN(create_at) FROM posts WHERE channel_id = ?1 AND root_id = '' AND is_pinned = 0",
+            params![channel_id],
+            |row| row.get(0),
+        )
+    }
+
+    /// The oldest message of the channel's unbroken history, by id: where
+    /// fetching older ones starts from.
+    pub fn oldest_shown_post_id(&self, channel_id: &str) -> rusqlite::Result<Option<String>> {
+        self.conn
+            .query_row(
+                "SELECT id FROM posts
+                 WHERE channel_id = ?1
+                   AND create_at >= COALESCE((SELECT history_from FROM channel_history WHERE channel_id = ?1), ?2)
+                 ORDER BY create_at ASC LIMIT 1",
+                params![channel_id, i64::MIN],
+                |row| row.get(0),
+            )
+            .optional()
     }
 
     /// Forgets a channel's cached messages older than `before` (ms), with
@@ -1212,6 +1275,7 @@ impl Database {
         for id in &doomed {
             self.delete_post(id)?;
         }
+        self.set_history_from(channel_id, before)?;
         Ok(doomed.len())
     }
 
@@ -1244,6 +1308,14 @@ impl Database {
 
         for id in &doomed {
             self.delete_post(id)?;
+        }
+        // The unbroken history now starts no earlier than what is left of it.
+        if !doomed.is_empty() {
+            if let (Some(from), Some(oldest)) = (self.history_from(channel_id)?, self.oldest_history_post(channel_id)?) {
+                if oldest > from {
+                    self.set_history_from(channel_id, oldest)?;
+                }
+            }
         }
         Ok(doomed.len())
     }
@@ -1382,9 +1454,15 @@ impl Database {
             "SELECT p.id, p.channel_id, p.root_id, p.user_id, p.message, p.create_at,
                     (SELECT COUNT(*) FROM posts r WHERE r.root_id = p.id) AS reply_count, p.edit_at, p.embeds_json, p.is_pinned
              FROM posts p
-             WHERE p.channel_id = ?1 ORDER BY p.create_at ASC",
+             WHERE p.channel_id = ?1
+               AND p.create_at >= COALESCE((SELECT history_from FROM channel_history WHERE channel_id = ?1), ?2)
+             ORDER BY p.create_at ASC",
         )?;
-        let rows = stmt.query_map(params![channel_id], Self::post_from_row)?;
+        // Only the unbroken history (see `channel_history`): an old pinned
+        // message or the window around a search result stays cached for its
+        // own panel, but shown here it sat right above messages from weeks
+        // later, as if it had come just before them.
+        let rows = stmt.query_map(params![channel_id, i64::MIN], Self::post_from_row)?;
         self.attach_metadata(rows.collect::<rusqlite::Result<Vec<_>>>()?)
     }
 
@@ -1575,6 +1653,7 @@ const ACCOUNT_TABLES: &[&str] = &[
     "typing_events",
     "channel_participants",
     "channel_bookmarks",
+    "channel_history",
 ];
 
 /// The folders of files fetched for an account: attachments and their
