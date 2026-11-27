@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicI64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU64, Ordering};
 use std::sync::{Mutex, MutexGuard, OnceLock, PoisonError};
 
 use rusqlite::{params, Connection, OptionalExtension};
@@ -25,6 +25,9 @@ pub fn lock(db: &Mutex<Database>) -> MutexGuard<'_, Database> {
 /// full while offline.
 pub struct Database {
     conn: Connection,
+    /// The file behind this cache, so a damaged one can be replaced during
+    /// a session (`recover_if_damaged`). None for an in-memory database.
+    path: Option<PathBuf>,
 }
 
 impl Database {
@@ -54,14 +57,14 @@ impl Database {
         ) {
             REACTION_SEQ.fetch_max(highest, Ordering::SeqCst);
         }
-        let db = Self { conn };
+        let db = Self { conn, path: Some(PathBuf::from(path)) };
         db.init_schema()?;
         Ok(db)
     }
 
     pub fn open_in_memory() -> rusqlite::Result<Self> {
         let conn = Connection::open_in_memory()?;
-        let db = Self { conn };
+        let db = Self { conn, path: None };
         db.init_schema()?;
         Ok(db)
     }
@@ -160,19 +163,53 @@ impl Database {
     /// database", signing in included, and the app stayed unusable until
     /// someone found and deleted the file by hand. Everything in it but the
     /// unsent messages can be fetched again from the server, and those are
-    /// in the damaged file anyway: it is kept, as `cache.sqlite3.damaged`
-    /// (only the latest one), rather than deleted. Only SQLite's own verdict
-    /// on the file counts: a file merely locked by another program is left
-    /// alone, since replacing a healthy cache would lose the unsent messages
-    /// for nothing.
+    /// carried over to the new one when the damaged file still lets them
+    /// be read (`Salvage`), and the damaged file is kept anyway, as
+    /// `cache.sqlite3.damaged` (only the latest one), rather than deleted.
+    /// Only SQLite's own verdict on the file counts: a file merely locked by
+    /// another program is left alone, since replacing a healthy cache would
+    /// lose the unsent messages for nothing.
     fn open_or_replace(path: &Path) -> rusqlite::Result<Self> {
         match Self::open(&path.to_string_lossy()) {
             Err(error) if is_damaged_file(&error) => {
                 log("cache", &format!("the cache database is damaged ({error}); starting a new one"));
+                // Read-only, and closed again before the file is moved:
+                // Windows will not rename a file something holds open.
+                let salvage = Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
+                    .map(|conn| Salvage::read(&conn))
+                    .unwrap_or_default();
                 set_damaged_aside(path);
-                Self::open(&path.to_string_lossy())
+                let db = Self::open(&path.to_string_lossy())?;
+                db.restore(&salvage);
+                Ok(db)
             }
             other => other,
+        }
+    }
+
+    /// Puts back what `Salvage::read` got out of a damaged cache. Best
+    /// effort: a failure is logged, and the new cache is used as it is.
+    fn restore(&self, salvage: &Salvage) {
+        let restored = self.in_transaction(|| {
+            for m in &salvage.outbox {
+                self.conn.execute(
+                    "INSERT OR IGNORE INTO outbox (local_id, channel_id, root_id, message, created_at, attempt_count)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                    params![m.local_id, m.channel_id, m.root_id, m.message, m.created_at, m.attempt_count],
+                )?;
+            }
+            if let Some(account) = &salvage.account {
+                self.conn.execute(
+                    "INSERT INTO sync_state (key, value) VALUES ('account', ?1)
+                     ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                    params![account],
+                )?;
+            }
+            Ok(())
+        });
+        match restored {
+            Ok(()) => log("cache", &format!("carried {} unsent message(s) over to the new cache", salvage.outbox.len())),
+            Err(e) => log("cache", &format!("could not carry the unsent messages over to the new cache: {e}")),
         }
     }
 
@@ -1507,6 +1544,117 @@ fn is_damaged_file(error: &rusqlite::Error) -> bool {
     )
 }
 
+/// Set when SQLite reports the cache file damaged during a session, read by
+/// `recover_if_damaged`. One flag for the process: the app has one cache.
+static DAMAGE_SEEN: AtomicBool = AtomicBool::new(false);
+
+/// How many times the cache was replaced during this session. The UI
+/// compares it from one poll to the next: a change means the cache is empty
+/// again and everything on screen must be fetched anew.
+static CACHE_RESETS: AtomicU64 = AtomicU64::new(0);
+
+pub fn cache_resets() -> u64 {
+    CACHE_RESETS.load(Ordering::SeqCst)
+}
+
+/// Takes note of a failed cache call. Only SQLite's verdict that the file
+/// itself is damaged counts; anything else (a busy file, a full disk, a
+/// query error) is left to the caller, as before.
+pub fn note_error(error: &rusqlite::Error) {
+    if is_damaged_file(error) {
+        DAMAGE_SEEN.store(true, Ordering::SeqCst);
+    }
+}
+
+/// Replaces the cache file if a call found it damaged since the last time,
+/// and returns whether it did. Damage found at startup was already handled
+/// by `open_or_replace`; this is the same for damage that shows up later —
+/// a page of the file gone bad under a running app. Without it every call
+/// touching that page kept failing until the app was restarted: channels or
+/// messages missing, and nothing said why.
+///
+/// Same steps as at startup: what only this machine knows (unsent messages,
+/// whose cache it is) is read out, the damaged file is set aside, a new one
+/// takes its place and gets them back. Everything else is fetched again from
+/// the server, which `cache_resets` tells the UI to do. If no new file can be
+/// created, the rest of the session runs on a cache in memory.
+///
+/// Takes the lock: must not be called while holding it.
+pub fn recover_if_damaged(db: &Mutex<Database>) -> bool {
+    if !DAMAGE_SEEN.load(Ordering::SeqCst) {
+        return false;
+    }
+    let mut cache = lock(db);
+    let Some(path) = cache.path.clone() else {
+        // An in-memory cache has no file to replace.
+        return false;
+    };
+    let salvage = Salvage::read(&cache.conn);
+    let in_memory = match Database::open_in_memory() {
+        Ok(in_memory) => in_memory,
+        Err(e) => {
+            log("cache", &format!("the cache database is damaged, but no replacement could be made: {e}"));
+            return false;
+        }
+    };
+    // The old connection is closed first: Windows will not rename a file
+    // something holds open.
+    drop(std::mem::replace(&mut *cache, in_memory));
+    log("cache", "the cache database was found damaged during the session; starting a new one");
+    set_damaged_aside(&path);
+    match Database::open(&path.to_string_lossy()) {
+        Ok(fresh) => *cache = fresh,
+        Err(e) => log("cache", &format!("could not create a new cache file ({e}); keeping this session's cache in memory")),
+    }
+    cache.restore(&salvage);
+    // Errors noted against the old file while this was waiting for the lock
+    // say nothing about the new one.
+    DAMAGE_SEEN.store(false, Ordering::SeqCst);
+    CACHE_RESETS.fetch_add(1, Ordering::SeqCst);
+    true
+}
+
+/// What a damaged cache holds that the server cannot give back: messages
+/// written but not sent yet, and whose cache it is (`claim_for_account`
+/// would otherwise take the next sign-in for a first one). Read row by row,
+/// keeping whatever comes out before a damaged page stops the reading.
+#[derive(Default)]
+struct Salvage {
+    outbox: Vec<crate::sync::OutboxMessage>,
+    account: Option<String>,
+}
+
+impl Salvage {
+    fn read(conn: &Connection) -> Self {
+        let mut outbox = Vec::new();
+        if let Ok(mut statement) =
+            conn.prepare("SELECT local_id, channel_id, root_id, message, created_at, attempt_count FROM outbox")
+        {
+            if let Ok(mut rows) = statement.query([]) {
+                while let Ok(Some(row)) = rows.next() {
+                    let message = (|| {
+                        Ok::<_, rusqlite::Error>(crate::sync::OutboxMessage {
+                            local_id: row.get(0)?,
+                            channel_id: row.get(1)?,
+                            root_id: row.get(2)?,
+                            message: row.get(3)?,
+                            created_at: row.get(4)?,
+                            attempt_count: row.get(5)?,
+                        })
+                    })();
+                    if let Ok(message) = message {
+                        outbox.push(message);
+                    }
+                }
+            }
+        }
+        let account = conn
+            .query_row("SELECT value FROM sync_state WHERE key = 'account'", [], |row| row.get(0))
+            .ok();
+        Self { outbox, account }
+    }
+}
+
 /// Moves a damaged cache out of the way, with its write-ahead log: replayed
 /// into a new, empty file, a log from the old one would damage that too. The
 /// shared-memory index is rebuilt from scratch by SQLite and simply deleted.
@@ -1826,6 +1974,62 @@ mod tests {
         drop(db);
 
         assert_eq!(std::fs::read(dir.join("cache.sqlite3.damaged")).unwrap(), vec![0xA5u8; 8192], "the damaged file is kept aside");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A cache found damaged while the app runs is replaced on the spot,
+    /// keeping the unsent messages and whose cache it is, and the UI is told.
+    #[test]
+    fn a_cache_damaged_during_a_session_is_replaced_and_keeps_unsent_messages() {
+        let dir = empty_test_dir("damaged-mid-session");
+        let path = dir.join("cache.sqlite3");
+        let db: &'static Mutex<Database> =
+            Box::leak(Box::new(Mutex::new(Database::open(&path.to_string_lossy()).unwrap())));
+        {
+            let cache = lock(db);
+            cache.claim_for_account("https://chat.example.com|u1").unwrap();
+            cache.upsert_team(&Team { id: "t1".into(), name: "t".into(), display_name: "T".into() }).unwrap();
+            crate::sync::SyncEngine::new(&cache).enqueue_outbox_message("l1", "c1", Some("r1"), "pas encore parti", 1000).unwrap();
+        }
+
+        assert!(!recover_if_damaged(db), "nothing noted, nothing replaced");
+        // Any other failure (a busy file, a full disk) is not damage.
+        note_error(&rusqlite::Error::SqliteFailure(rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_BUSY), None));
+        assert!(!recover_if_damaged(db));
+        assert_eq!(lock(db).cached_teams().unwrap().len(), 1, "a healthy cache stays as it is");
+
+        let resets_before = cache_resets();
+        note_error(&rusqlite::Error::SqliteFailure(rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_CORRUPT), None));
+        assert!(recover_if_damaged(db));
+        assert!(cache_resets() > resets_before, "the UI must learn that the cache is empty again");
+
+        let cache = lock(db);
+        assert!(cache.cached_teams().unwrap().is_empty(), "a new, empty cache");
+        let pending = crate::sync::SyncEngine::new(&cache).pending_messages().unwrap();
+        assert_eq!(pending.len(), 1, "the unsent message is carried over");
+        assert_eq!((pending[0].local_id.as_str(), pending[0].root_id.as_deref(), pending[0].message.as_str()), ("l1", Some("r1"), "pas encore parti"));
+        assert!(!cache.claim_for_account("https://chat.example.com|u1").unwrap(), "still this account's cache: nothing emptied");
+        assert!(dir.join("cache.sqlite3.damaged").exists(), "the damaged file is kept aside");
+        drop(cache);
+        assert!(!recover_if_damaged(db), "replaced once, not on every call after");
+    }
+
+    /// Unsent messages are read out of a damaged file at startup too, when
+    /// SQLite still lets that part of it be read.
+    #[test]
+    fn unsent_messages_survive_a_cache_replaced_at_startup() {
+        let dir = empty_test_dir("salvage-at-startup");
+        let path = dir.join("cache.sqlite3");
+        {
+            let cache = Database::open(&path.to_string_lossy()).unwrap();
+            crate::sync::SyncEngine::new(&cache).enqueue_outbox_message("l1", "c1", None, "bonjour", 1000).unwrap();
+        }
+        let salvage = Salvage::read(&Connection::open(&path).unwrap());
+        assert_eq!(salvage.outbox.len(), 1);
+
+        let fresh = Database::open_in_memory().unwrap();
+        fresh.restore(&salvage);
+        assert_eq!(crate::sync::SyncEngine::new(&fresh).pending_count().unwrap(), 1);
         let _ = std::fs::remove_dir_all(&dir);
     }
 

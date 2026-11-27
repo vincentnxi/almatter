@@ -476,7 +476,7 @@ async fn handle(request_json: &str, db: &'static Mutex<Database>) -> Value {
             .logout()
             .await
             .map(|()| json!({}))
-            .map_err(|e| e.to_string()),
+            .map_err(error_text),
         Request::GetTeams { base_url, token } => MattermostClient::new(base_url)
             .with_token(token)
             .get_teams()
@@ -490,13 +490,13 @@ async fn handle(request_json: &str, db: &'static Mutex<Database>) -> Value {
                 });
                 json!({ "teams": teams })
             })
-            .map_err(|e| e.to_string()),
+            .map_err(error_text),
         Request::GetChannels { base_url, token, team_id } => {
             let client = MattermostClient::new(base_url).with_token(token);
             refresh_team_channels(&client, db, &team_id)
                 .await
                 .map(|channels| json!({ "channels": channels }))
-                .map_err(|e| e.to_string())
+                .map_err(error_text)
         }
         Request::GetPosts { base_url, token, channel_id } => MattermostClient::new(base_url)
             .with_token(token)
@@ -524,7 +524,7 @@ async fn handle(request_json: &str, db: &'static Mutex<Database>) -> Value {
                 });
                 json!({ "posts": posts })
             })
-            .map_err(|e| e.to_string()),
+            .map_err(error_text),
         Request::GetUsers { base_url, token, user_ids } => MattermostClient::new(base_url)
             .with_token(token)
             .get_users_by_ids(&user_ids)
@@ -538,23 +538,23 @@ async fn handle(request_json: &str, db: &'static Mutex<Database>) -> Value {
                 });
                 json!({ "users": users })
             })
-            .map_err(|e| e.to_string()),
+            .map_err(error_text),
         Request::GetCachedTeams => crate::db::lock(db)
             .cached_teams()
             .map(|teams| json!({ "teams": teams }))
-            .map_err(|e| e.to_string()),
+            .map_err(error_text),
         Request::GetCachedChannels { team_id } => crate::db::lock(db)
             .cached_channels_for_team(&team_id)
             .map(|channels| json!({ "channels": channels }))
-            .map_err(|e| e.to_string()),
+            .map_err(error_text),
         Request::GetCachedPosts { channel_id } => crate::db::lock(db)
             .cached_posts_for_channel(&channel_id)
             .map(|posts| json!({ "posts": posts }))
-            .map_err(|e| e.to_string()),
+            .map_err(error_text),
         Request::GetCachedUsers { user_ids } => crate::db::lock(db)
             .cached_users(&user_ids)
             .map(|users| json!({ "users": users }))
-            .map_err(|e| e.to_string()),
+            .map_err(error_text),
         Request::StartWebSocket { base_url, token, user_id } => {
             crate::ws::start(base_url, token, user_id, db);
             Ok(json!({}))
@@ -576,23 +576,23 @@ async fn handle(request_json: &str, db: &'static Mutex<Database>) -> Value {
                 });
                 json!({ "posts": posts })
             })
-            .map_err(|e| e.to_string()),
+            .map_err(error_text),
         Request::GetCachedThread { root_id } => crate::db::lock(db)
             .cached_thread_posts(&root_id)
             .map(|posts| json!({ "posts": posts }))
-            .map_err(|e| e.to_string()),
+            .map_err(error_text),
         Request::GetStatuses { base_url, token, user_ids } => MattermostClient::new(base_url)
             .with_token(token)
             .get_statuses_by_ids(&user_ids)
             .await
             .map(|statuses| json!({ "statuses": statuses }))
-            .map_err(|e| e.to_string()),
+            .map_err(error_text),
         Request::SetStatus { base_url, token, user_id, status } => MattermostClient::new(base_url)
             .with_token(token)
             .set_status(&user_id, &status)
             .await
             .map(|()| json!({}))
-            .map_err(|e| e.to_string()),
+            .map_err(error_text),
         Request::AddReaction { base_url, token, user_id, post_id, emoji_name } => {
             let client = MattermostClient::new(base_url).with_token(token);
             match client.add_reaction(&user_id, &post_id, &emoji_name).await {
@@ -624,31 +624,31 @@ async fn handle(request_json: &str, db: &'static Mutex<Database>) -> Value {
                 });
                 json!({ "posts": posts })
             })
-            .map_err(|e| e.to_string()),
+            .map_err(error_text),
         Request::GetCachedPinnedPosts { channel_id } => crate::db::lock(db)
             .cached_pinned_posts(&channel_id)
             .map(|posts| json!({ "posts": posts }))
-            .map_err(|e| e.to_string()),
+            .map_err(error_text),
         Request::GetChannelBookmarks { base_url, token, channel_id } => {
             refresh_channel_bookmarks(&MattermostClient::new(base_url).with_token(token), db, &channel_id)
                 .await
                 .map(|bookmarks| json!({ "bookmarks": bookmarks }))
-                .map_err(|e| e.to_string())
+                .map_err(error_text)
         }
         Request::GetCachedChannelBookmarks { channel_id } => crate::db::lock(db)
             .cached_channel_bookmarks(&channel_id)
             .map(|bookmarks| json!({ "bookmarks": bookmarks }))
-            .map_err(|e| e.to_string()),
+            .map_err(error_text),
         Request::SearchChannelFiles { base_url, token, team_id, channel_id, page } => MattermostClient::new(base_url)
             .with_token(token)
             .search_channel_files(&team_id, &channel_id, page, CHANNEL_FILES_PAGE)
             .await
             .map(|(files, has_more)| json!({ "files": files, "has_more": has_more }))
-            .map_err(|e| e.to_string()),
+            .map_err(error_text),
         Request::GetCachedChannelFiles { channel_id } => crate::db::lock(db)
             .cached_channel_files(&channel_id)
             .map(|files| json!({ "files": files, "has_more": false }))
-            .map_err(|e| e.to_string()),
+            .map_err(error_text),
         Request::GetPost { base_url, token, post_id } => {
             let cached = crate::db::lock(db).cached_post(&post_id).ok().flatten();
             match cached {
@@ -683,11 +683,11 @@ async fn handle(request_json: &str, db: &'static Mutex<Database>) -> Value {
                 });
                 json!({ "emoji": emoji })
             })
-            .map_err(|e| e.to_string()),
+            .map_err(error_text),
         Request::GetCachedCustomEmoji => crate::db::lock(db)
             .cached_custom_emoji()
             .map(|emoji| json!({ "emoji": emoji }))
-            .map_err(|e| e.to_string()),
+            .map_err(error_text),
         Request::MarkChannelViewed { base_url, token, channel_id } => {
             let client = MattermostClient::new(base_url).with_token(token);
             match client.mark_channel_viewed(&channel_id).await {
@@ -703,7 +703,7 @@ async fn handle(request_json: &str, db: &'static Mutex<Database>) -> Value {
             .get_my_channel_member(&channel_id)
             .await
             .map(|member| json!({ "last_viewed_at": member.last_viewed_at }))
-            .map_err(|e| e.to_string()),
+            .map_err(error_text),
         Request::SendMessage { base_url, token, channel_id, root_id, local_id, message, file_ids } => {
             let client = MattermostClient::new(base_url).with_token(token);
             match client.create_post(&channel_id, &message, root_id.as_deref(), &file_ids, &local_id).await {
@@ -751,7 +751,7 @@ async fn handle(request_json: &str, db: &'static Mutex<Database>) -> Value {
                         .upload_file(&channel_id, &file_name, bytes)
                         .await
                         .map(|info| json!({ "file": info }))
-                        .map_err(|e| e.to_string())
+                        .map_err(error_text)
                 }
                 Err(e) => Err(e),
             }
@@ -771,7 +771,7 @@ async fn handle(request_json: &str, db: &'static Mutex<Database>) -> Value {
                     cache_write(db, |cache| cache.update_post_text(&post.id, &post.message, post.edit_at, post.is_pinned));
                     json!({ "post": post })
                 })
-                .map_err(|e| e.to_string())
+                .map_err(error_text)
         }
         Request::DeleteMessage { base_url, token, post_id } => {
             let client = MattermostClient::new(base_url).with_token(token);
@@ -788,7 +788,7 @@ async fn handle(request_json: &str, db: &'static Mutex<Database>) -> Value {
             SyncEngine::new(&cache)
                 .pending_messages()
                 .map(|items| json!({ "items": items }))
-                .map_err(|e| e.to_string())
+                .map_err(error_text)
         }
         Request::FlushOutbox { base_url, token } => {
             let pending = {
@@ -867,7 +867,7 @@ async fn handle(request_json: &str, db: &'static Mutex<Database>) -> Value {
         Request::SearchCachedMessages { query } => crate::db::lock(db)
             .search_posts(&query, 50)
             .map(|posts| json!({ "posts": posts }))
-            .map_err(|e| e.to_string()),
+            .map_err(error_text),
         Request::SearchMessages { base_url, token, team_id, query } => MattermostClient::new(base_url)
             .with_token(token)
             .search_posts(&team_id, &query)
@@ -881,7 +881,7 @@ async fn handle(request_json: &str, db: &'static Mutex<Database>) -> Value {
                 });
                 json!({ "posts": posts })
             })
-            .map_err(|e| e.to_string()),
+            .map_err(error_text),
         Request::GetPostsAroundMessage { base_url, token, channel_id, post_id } => MattermostClient::new(base_url)
             .with_token(token)
             .get_posts_around(&channel_id, &post_id)
@@ -895,7 +895,7 @@ async fn handle(request_json: &str, db: &'static Mutex<Database>) -> Value {
                 });
                 json!({ "posts": posts })
             })
-            .map_err(|e| e.to_string()),
+            .map_err(error_text),
         // Both queues in one answer: the UI drains them on the same tick, and
         // a second round trip per poll would buy nothing.
         Request::GetAndClearMentionEvents => {
@@ -906,9 +906,14 @@ async fn handle(request_json: &str, db: &'static Mutex<Database>) -> Value {
                 // Rides along on this tick's call rather than costing one of
                 // its own: see `ws::resync_count`.
                 .map(|(events, reactions)| {
-                    json!({ "events": events, "reactions": reactions, "resyncs": crate::ws::resync_count() })
+                    json!({
+                        "events": events,
+                        "reactions": reactions,
+                        "resyncs": crate::ws::resync_count(),
+                        "cache_resets": crate::db::cache_resets(),
+                    })
                 })
-                .map_err(|e| e.to_string())
+                .map_err(error_text)
         }
         Request::SendTyping { channel_id, parent_id } => {
             crate::ws::send_typing(&channel_id, &parent_id);
@@ -928,7 +933,7 @@ async fn handle(request_json: &str, db: &'static Mutex<Database>) -> Value {
             crate::db::lock(db)
                 .typing_users_for_channel(&channel_id, now, TYPING_TTL_MILLIS)
                 .map(|user_ids| json!({ "user_ids": user_ids }))
-                .map_err(|e| e.to_string())
+                .map_err(error_text)
         }
         Request::GetEmojiImage { base_url, token, emoji_id } => {
             let client = MattermostClient::new(base_url).with_token(token);
@@ -976,11 +981,11 @@ async fn handle(request_json: &str, db: &'static Mutex<Database>) -> Value {
                 cache_write(db, |cache| cache.replace_favorite_channels(&ids));
                 json!({ "channel_ids": ids })
             })
-            .map_err(|e| e.to_string()),
+            .map_err(error_text),
         Request::GetCachedFavorites => crate::db::lock(db)
             .cached_favorite_channel_ids()
             .map(|ids| json!({ "channel_ids": ids }))
-            .map_err(|e| e.to_string()),
+            .map_err(error_text),
         Request::SetFavorite { base_url, token, user_id, channel_id, is_favorite } => {
             let client = MattermostClient::new(base_url).with_token(token);
             match client.set_favorite_channel(&user_id, &channel_id, is_favorite).await {
@@ -999,11 +1004,11 @@ async fn handle(request_json: &str, db: &'static Mutex<Database>) -> Value {
                 cache_write(db, |cache| cache.replace_channel_aliases(&aliases));
                 json!({ "aliases": aliases_to_json(aliases) })
             })
-            .map_err(|e| e.to_string()),
+            .map_err(error_text),
         Request::GetCachedChannelAliases => crate::db::lock(db)
             .cached_channel_aliases()
             .map(|aliases| json!({ "aliases": aliases_to_json(aliases) }))
-            .map_err(|e| e.to_string()),
+            .map_err(error_text),
         Request::SetChannelAlias { base_url, token, user_id, channel_id, alias } => {
             let alias = alias.trim().to_string();
             let client = MattermostClient::new(base_url).with_token(token);
@@ -1049,7 +1054,7 @@ async fn handle(request_json: &str, db: &'static Mutex<Database>) -> Value {
         Request::GetCachedChannelMembers { channel_id } => crate::db::lock(db)
             .cached_channel_participants(&channel_id)
             .map(|user_ids| json!({ "user_ids": user_ids }))
-            .map_err(|e| e.to_string()),
+            .map_err(error_text),
         Request::SearchUsers { base_url, token, channel_id, term } => MattermostClient::new(base_url)
             .with_token(token)
             .search_users(&channel_id, &term)
@@ -1063,27 +1068,27 @@ async fn handle(request_json: &str, db: &'static Mutex<Database>) -> Value {
                 });
                 json!({ "users": users })
             })
-            .map_err(|e| e.to_string()),
+            .map_err(error_text),
         Request::GetPublicChannels { base_url, token, team_id } => MattermostClient::new(base_url)
             .with_token(token)
             .get_public_channels_for_team(&team_id)
             .await
             .map(|channels| json!({ "channels": channels }))
-            .map_err(|e| e.to_string()),
+            .map_err(error_text),
         Request::JoinChannel { base_url, token, channel_id, user_id } => MattermostClient::new(base_url)
             .with_token(token)
             .join_channel(&channel_id, &user_id)
             .await
             .map(|()| json!({ "joined": true }))
-            .map_err(|e| e.to_string()),
+            .map_err(error_text),
         Request::GetChannelRevision { channel_id } => crate::db::lock(db)
             .channel_revision(&channel_id)
             .map(|r| revision_json(&r))
-            .map_err(|e| e.to_string()),
+            .map_err(error_text),
         Request::GetThreadRevision { root_id } => crate::db::lock(db)
             .thread_revision(&root_id)
             .map(|r| revision_json(&r))
-            .map_err(|e| e.to_string()),
+            .map_err(error_text),
         Request::SearchTeamUsers { base_url, token, team_id, term } => MattermostClient::new(base_url)
             .with_token(token)
             .search_team_users(&team_id, &term)
@@ -1097,13 +1102,28 @@ async fn handle(request_json: &str, db: &'static Mutex<Database>) -> Value {
                 });
                 json!({ "users": users })
             })
-            .map_err(|e| e.to_string()),
+            .map_err(error_text),
     };
+
+    // Here, after the request, with no lock held: a damaged cache found by
+    // this request (or any other since the last one) is replaced at once, and
+    // the UI's next poll sees `cache_resets` move and fetches everything anew.
+    crate::db::recover_if_damaged(db);
 
     match result {
         Ok(data) => json!({ "ok": true, "data": data }),
         Err(e) => json!({ "ok": false, "error": e }),
     }
+}
+
+/// An error as the app is sent it. A cache error saying the file itself is
+/// damaged is noted on the way (see `db::recover_if_damaged`); the requests
+/// mix cache and network errors, hence the check by type.
+fn error_text<E: std::fmt::Display + 'static>(error: E) -> String {
+    if let Some(error) = (&error as &dyn std::any::Any).downcast_ref::<rusqlite::Error>() {
+        crate::db::note_error(error);
+    }
+    error.to_string()
 }
 
 /// A channel's (or thread's) fingerprint as the app reads it. Every field of
@@ -1178,6 +1198,7 @@ fn cache_write(db: &Mutex<Database>, f: impl FnOnce(&Database) -> rusqlite::Resu
     // per post when caching a channel's worth of messages) — see
     // Database::in_transaction.
     if let Err(e) = cache.in_transaction(|| f(&cache)) {
+        crate::db::note_error(&e);
         // Into core.log rather than stderr: a WinExe has no console, so a
         // failed cache write printed there was seen by no one.
         crate::db::log("cache", &format!("failed to update local cache: {e}"));

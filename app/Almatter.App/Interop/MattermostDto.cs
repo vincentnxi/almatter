@@ -412,4 +412,6 @@ internal sealed class MentionEventsData
     [JsonPropertyName("reactions")] public List<ReactionEventDto> Reactions { get; set; } = [];
     /// <summary>How many reconnections have finished catching up; see ws::resync_count in the core.</summary>
     [JsonPropertyName("resyncs")] public long Resyncs { get; set; }
+    /// <summary>How many times a damaged cache was replaced during this session; see db::cache_resets in the core.</summary>
+    [JsonPropertyName("cache_resets")] public long CacheResets { get; set; }
 }

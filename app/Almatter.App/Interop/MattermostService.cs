@@ -204,12 +204,14 @@ public sealed class MattermostService
     /// <summary>
     /// Drains both notification queues. <c>Resyncs</c> rides along: it moves
     /// each time the live connection came back and caught up, which is the
-    /// caller's cue to fetch the open channel again.
+    /// caller's cue to fetch the open channel again. <c>CacheResets</c> moves
+    /// each time the core replaced a damaged cache: the cache is empty, and
+    /// the caller fetches everything on screen again.
     /// </summary>
-    public async Task<(List<MentionEventDto> Mentions, List<ReactionEventDto> Reactions, long Resyncs)> GetAndClearNotificationEventsAsync()
+    public async Task<(List<MentionEventDto> Mentions, List<ReactionEventDto> Reactions, long Resyncs, long CacheResets)> GetAndClearNotificationEventsAsync()
     {
         var data = await CallAsync<MentionEventsData>(new JsonObject { ["command"] = "get_and_clear_mention_events" });
-        return (data.Events, data.Reactions, data.Resyncs);
+        return (data.Events, data.Reactions, data.Resyncs, data.CacheResets);
     }
 
     public async Task<List<UserDto>> GetCachedUsersAsync(IEnumerable<string> userIds)

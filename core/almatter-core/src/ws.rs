@@ -527,6 +527,7 @@ async fn handle_event(text: &str, user_id: &str, client: &MattermostClient, db: 
             {
                 let cache = crate::db::lock(db);
                 if let Err(e) = cache.update_post_text(&post.id, &post.message, post.edit_at, post.is_pinned) {
+                    crate::db::note_error(&e);
                     crate::db::log("ws", &format!("failed to apply an edit: {e}"));
                 }
             }
@@ -539,6 +540,7 @@ async fn handle_event(text: &str, user_id: &str, client: &MattermostClient, db: 
             {
                 let cache = crate::db::lock(db);
                 if let Err(e) = cache.delete_post(&post.id) {
+                    crate::db::note_error(&e);
                     crate::db::log("ws", &format!("failed to apply a deletion: {e}"));
                 }
             }
@@ -593,6 +595,7 @@ async fn handle_event(text: &str, user_id: &str, client: &MattermostClient, db: 
             let cache = crate::db::lock(db);
             for channel_id in viewed {
                 if let Err(e) = cache.mark_channel_read(channel_id) {
+                    crate::db::note_error(&e);
                     crate::db::log("ws", &format!("failed to apply a channel view: {e}"));
                 }
             }
@@ -607,6 +610,7 @@ async fn handle_event(text: &str, user_id: &str, client: &MattermostClient, db: 
                 let mention_count = data.and_then(|d| d.mention_count).unwrap_or(0);
                 let cache = crate::db::lock(db);
                 if let Err(e) = cache.set_channel_read_state(channel_id, msg_count, mention_count) {
+                    crate::db::note_error(&e);
                     crate::db::log("ws", &format!("failed to apply a mark-unread: {e}"));
                 }
             }
@@ -654,6 +658,7 @@ async fn handle_event(text: &str, user_id: &str, client: &MattermostClient, db: 
     let author_already_cached = {
         let cache = crate::db::lock(db);
         if let Err(e) = cache.upsert_post(&post) {
+            crate::db::note_error(&e);
             crate::db::log("ws", &format!("failed to cache a live post: {e}"));
         }
         // Reply counts are computed live from the posts table on every read
@@ -785,10 +790,12 @@ async fn cache_new_channel(channel_id: &str, client: &MattermostClient, db: &'st
     }
     if !participant_ids.is_empty() {
         if let Err(e) = cache.replace_channel_participants(channel_id, &participant_ids) {
+            crate::db::note_error(&e);
             crate::db::log("ws", &format!("failed to cache new group's members: {e}"));
         }
     }
     if let Err(e) = cache.upsert_channel(&channel) {
+        crate::db::note_error(&e);
         crate::db::log("ws", &format!("failed to cache new channel: {e}"));
         return false;
     }
@@ -961,6 +968,7 @@ fn handle_typing_event(envelope: &EventEnvelope, user_id: &str, db: &'static Mut
     let now = chrono::Utc::now().timestamp_millis();
     let cache = crate::db::lock(db);
     if let Err(e) = cache.record_typing(channel_id, typing_user_id, now) {
+        crate::db::note_error(&e);
         crate::db::log("ws", &format!("failed to record typing: {e}"));
     }
 }

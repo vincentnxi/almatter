@@ -1284,7 +1284,20 @@ public partial class MainViewModel : ViewModelBase
 
                 try
                 {
-                    var (mentions, reactions, resyncs) = await _service.GetAndClearNotificationEventsAsync();
+                    var (mentions, reactions, resyncs, cacheResets) = await _service.GetAndClearNotificationEventsAsync();
+                    if (_seenCacheResets is { } seenCacheResets && cacheResets != seenCacheResets)
+                    {
+                        // Only taken note of once the fetch worked: offline,
+                        // the next tick tries again.
+                        if (await RefetchAfterCacheResetAsync())
+                        {
+                            _seenCacheResets = cacheResets;
+                        }
+                    }
+                    else
+                    {
+                        _seenCacheResets = cacheResets;
+                    }
                     if (_seenResyncs is { } seenResyncs && resyncs != seenResyncs)
                     {
                         await CatchUpAfterReconnectAsync();
@@ -1353,6 +1366,41 @@ public partial class MainViewModel : ViewModelBase
     /// tick, which only takes note of it.
     /// </summary>
     private long? _seenResyncs;
+
+    /// <summary>The core's cache-reset count last seen by the polling loop; null until its first tick.</summary>
+    private long? _seenCacheResets;
+
+    /// <summary>
+    /// The core found the cache file damaged and started an empty one,
+    /// keeping only the unsent messages. What the window shows stays on
+    /// screen, but the cache it repaints from is empty: the channel list,
+    /// the open channel and the open thread are fetched again, which fills
+    /// it back up. Returns false if that failed (offline, most likely).
+    /// </summary>
+    private async Task<bool> RefetchAfterCacheResetAsync()
+    {
+        CrashLogger.Write("poll", "the core replaced a damaged cache: fetching the channels, the open channel and thread again");
+        try
+        {
+            // The polling loop runs off the UI thread; this repaints the sidebar.
+            await Dispatcher.UIThread.InvokeAsync(RefreshFromNetworkAsync);
+            if (_openThreadRootId is { } rootId)
+            {
+                var replies = await _service.GetThreadAsync(_session.BaseUrl, _session.Token, rootId);
+                var authorIds = replies.Select(p => p.UserId).Distinct().ToList();
+                if (authorIds.Count > 0)
+                {
+                    await _service.GetUsersAsync(_session.BaseUrl, _session.Token, authorIds);
+                }
+            }
+            return true;
+        }
+        catch (Exception ex)
+        {
+            CrashLogger.Write("poll: refetch after cache reset", ex);
+            return false;
+        }
+    }
 
     /// <summary>
     /// The live connection dropped and came back (a laptop waking up, a
