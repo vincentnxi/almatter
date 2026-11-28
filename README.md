@@ -22,7 +22,7 @@ desktop app is an Electron wrapper that routinely uses 500–600 MB of memory; A
 aims to do the everyday work — reading, writing, threads, search, notifications — in a
 fraction of that, and to stay usable on older machines.
 
-> **Status: early pre-release (0.20.0).** It is used daily, but expect rough edges.
+> **Status: early pre-release (0.21.0).** It is used daily, but expect rough edges.
 > The interface is available **in English and French**, switchable in the settings.
 
 ## Features
@@ -54,7 +54,7 @@ fraction of that, and to stay usable on older machines.
   reduced-contrast mode, seven named colour themes (Aube and Crépuscule on a gradient, Salon in
   slate greys, light or dark, Nord, Cardamome, Crème, Graphite with a dark sidebar), message text size set to the half point, a choice
   between the official client's Open Sans, Lato and the system UI font, and between the
-  system's emoji and Twemoji. A "new" line marks where the unread messages start, and
+  system's emoji and Twemoji, and six tints for the app icon. A "new" line marks where the unread messages start, and
   messages that mention you stand out. The settings open in a window of their own.
 
 ### Not supported (yet)
@@ -250,7 +250,7 @@ de mémoire. Almatter vise à assurer l'usage quotidien — lire, écrire, suivr
 chercher, recevoir les notifications — pour une fraction de cette consommation, et à
 rester utilisable sur des machines anciennes.
 
-> **État : préversion (0.20.0).** Utilisé au quotidien, mais tout n'est pas encore poli.
+> **État : préversion (0.21.0).** Utilisé au quotidien, mais tout n'est pas encore poli.
 > L'interface est disponible **en français et en anglais**, au choix dans les réglages.
 
 ## Fonctionnalités
@@ -286,7 +286,7 @@ rester utilisable sur des machines anciennes.
   d'accentuation, mode contraste réduit, sept thèmes de couleurs (Aube et Crépuscule en
   dégradé, Salon en gris ardoise, clair ou sombre, Nord, Cardamome, Crème, Graphite à colonne sombre), taille du texte des
   messages réglable au demi-point, choix entre Open Sans (la police du client officiel),
-  Lato et la police système, et entre les émojis du système et Twemoji. Une ligne
+  Lato et la police système, entre les émojis du système et Twemoji, et six teintes pour l'icône de l'application. Une ligne
   « nouveau » marque le début des messages non lus, et les messages qui vous mentionnent
   ressortent. Les réglages s'ouvrent dans une fenêtre à part.
 
