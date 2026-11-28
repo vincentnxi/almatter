@@ -26,6 +26,10 @@ namespace Almatter.App.Services;
 /// another account can neither send to it nor pose as it. The listener acts
 /// on that exact word and nothing else, so the most another program running
 /// as the same user could do with it is bring Almatter's window forward.
+/// On Linux the pipe is a socket file in /tmp: another account could create
+/// that file first, which only stops a second launch from bringing the
+/// window forward (the listener gives up and logs it); the mutex, which
+/// decides whether Almatter starts, is out of its reach (see MutexOptions).
 /// </summary>
 internal static class SingleInstance
 {
@@ -35,8 +39,24 @@ internal static class SingleInstance
     // a socket file under /tmp that every account can list, the name does
     // not spell out the user name.
     private static readonly string Key = ComputeKey();
-    private static string MutexName => @"Local\Almatter-" + Key;
+    private static string MutexName => "Almatter-" + Key;
     private static string PipeName => "Almatter-" + Key;
+
+    // The mutex belongs to the current user and session. On Linux and macOS
+    // .NET otherwise keeps named mutexes as files in a folder under /tmp
+    // that every account can write to. Another local account that worked
+    // out the name (the hash above only hides the user name, it is not a
+    // secret) could then take the mutex first and keep Almatter from ever
+    // starting. With CurrentUserOnly the file lives in a folder only this
+    // user can open, and a mutex someone else created under the same name
+    // is refused instead of shared. On Windows it also restricts the
+    // mutex's permissions to this user; CurrentSessionOnly is the old
+    // "Local\" prefix.
+    private static readonly NamedWaitHandleOptions MutexOptions = new()
+    {
+        CurrentUserOnly = true,
+        CurrentSessionOnly = true,
+    };
 
     // Held, never released, until the process ends: Windows then frees it
     // (as "abandoned" if the app crashed, which TryClaim accepts).
@@ -50,7 +70,7 @@ internal static class SingleInstance
     {
         try
         {
-            var mutex = new Mutex(initiallyOwned: false, MutexName);
+            var mutex = new Mutex(initiallyOwned: false, MutexName, MutexOptions, out _);
             bool owned;
             try
             {
@@ -73,7 +93,9 @@ internal static class SingleInstance
         }
         catch (Exception ex)
         {
-            // Unable to tell: starting is better than refusing to start.
+            // Unable to tell, or the name is held by a mutex another account
+            // created (WaitHandleCannotBeOpenedException): starting is better
+            // than refusing to start.
             CrashLogger.Write("single instance: claim", ex);
             return true;
         }
