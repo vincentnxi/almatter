@@ -18,6 +18,7 @@ public partial class LoginWindow : Window
         ColorTokens.ApplyTheme(
             ThemeDefinition.Resolve(settings.ThemeMode, SystemTheme.PrefersDark, settings.ReducedContrast, settings.Accent, settings.NamedTheme));
         ThemeResources.Apply(this, settings);
+        Icon = AppIcon.ForWindows(settings.AppIconTint);
     }
 
     public LoginWindow(LoginViewModel viewModel) : this()

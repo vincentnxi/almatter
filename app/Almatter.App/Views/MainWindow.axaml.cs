@@ -48,6 +48,9 @@ public partial class MainWindow : Window
     private bool _reorderMoveToRegular;
 
     private IDesktopNotifier? _notifier;
+
+    /// <summary>The logo file in the chosen tint (see AppIcon), which the notification-area icon is made from; null when there is none.</summary>
+    private string? _shortcutIconPath;
     private SettingsWindow? _settingsWindow;
     private (string ChannelId, string PostId)? _pendingNotificationTarget;
 
@@ -87,7 +90,7 @@ public partial class MainWindow : Window
         // notifier routes its click messages through.
         Opened += (_, _) =>
         {
-            _notifier ??= DesktopNotifier.Create(this);
+            _notifier ??= DesktopNotifier.Create(this, _shortcutIconPath);
             _notifier.Clicked += OnNotificationClicked;
         };
         Closed += (_, _) => _notifier?.Dispose();
@@ -178,6 +181,18 @@ public partial class MainWindow : Window
             var sidebarColumn = AppGrid.ColumnDefinitions[0];
             sidebarColumn.Width = new GridLength(
                 Math.Clamp(vm.Settings.SidebarWidth, sidebarColumn.MinWidth, sidebarColumn.MaxWidth));
+
+            // The logo in the tint chosen in Apparence: this window's icon now,
+            // the shortcuts' file before the notification-area icon is made
+            // from it (Opened), and all of them again on every change.
+            Icon = AppIcon.ForWindows(vm.Settings.AppIconTint);
+            _shortcutIconPath = AppIcon.SyncShortcutIcon(vm.Settings.AppIconTint);
+            vm.AppIconTintChanged += (_, _) =>
+            {
+                AppIcon.ApplyToOpenWindows(vm.Settings.AppIconTint);
+                _shortcutIconPath = AppIcon.SyncShortcutIcon(vm.Settings.AppIconTint);
+                _notifier?.SetIcon(_shortcutIconPath);
+            };
 
             ApplyThemeResources(vm);
             vm.ThemeResourcesChanged += (_, _) => ApplyThemeResources(vm);
