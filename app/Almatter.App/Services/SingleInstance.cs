@@ -42,16 +42,16 @@ internal static class SingleInstance
     private static string MutexName => "Almatter-" + Key;
     private static string PipeName => "Almatter-" + Key;
 
-    // The mutex belongs to the current user and session. On Linux and macOS
-    // .NET otherwise keeps named mutexes as files in a folder under /tmp
-    // that every account can write to. Another local account that worked
-    // out the name (the hash above only hides the user name, it is not a
-    // secret) could then take the mutex first and keep Almatter from ever
-    // starting. With CurrentUserOnly the file lives in a folder only this
-    // user can open, and a mutex someone else created under the same name
-    // is refused instead of shared. On Windows it also restricts the
-    // mutex's permissions to this user; CurrentSessionOnly is the old
-    // "Local\" prefix.
+    // The mutex belongs to the current user and session, so another local
+    // account that worked out the name (the hash above only hides the user
+    // name, it is not a secret) cannot take it first and keep Almatter from
+    // starting. On Windows this restricts the mutex's permissions to this
+    // user and refuses one someone else created under the same name. On
+    // Linux, .NET 10 already keeps named mutexes in a folder only the user
+    // can open ($XDG_RUNTIME_DIR/.dotnet, else ~/.dotnet; checked under
+    // WSL on 2026-11-28, older .NET used a /tmp folder open to everyone):
+    // the option states the intent rather than relying on that default.
+    // CurrentSessionOnly is the old "Local\" prefix.
     private static readonly NamedWaitHandleOptions MutexOptions = new()
     {
         CurrentUserOnly = true,
