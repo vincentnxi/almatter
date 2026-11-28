@@ -66,6 +66,8 @@
     <!-- Set here rather than in runtimeconfig.template.json: a Native AOT
          publish ignores that file, and this item reaches both kinds of build. -->
     <RuntimeHostConfigurationOption Include="System.GC.ConserveMemory" Value="5" />
+    <!-- The unit tests (../Almatter.App.Tests) check internal helpers too. -->
+    <InternalsVisibleTo Include="Almatter.App.Tests" />
   </ItemGroup>
 
   <ItemGroup>

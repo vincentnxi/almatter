@@ -177,7 +177,13 @@ For a release build, use `cargo build --release -p almatter-ffi` and
 ```powershell
 cd core
 cargo test
+cd ..
+dotnet test app\Almatter.App.Tests
 ```
+
+The first command tests the Rust core; the second tests the app's logic that needs no
+window (message parsing, the formatting toolbar, mentions, copy and paste with links,
+settings).
 
 ### Update the emoji table
 
@@ -414,7 +420,13 @@ correspondante.
 ```powershell
 cd core
 cargo test
+cd ..
+dotnet test app\Almatter.App.Tests
 ```
+
+La première commande teste le cœur Rust ; la seconde teste la logique de l'application
+qui n'a pas besoin de fenêtre (lecture des messages, barre de mise en forme, mentions,
+copier-coller avec liens, réglages).
 
 ### Mettre à jour la table des emojis
 

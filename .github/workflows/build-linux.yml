@@ -67,6 +67,9 @@ jobs:
       - name: Build the app
         run: dotnet build app/Almatter.App/Almatter.App.csproj -c Debug
 
+      - name: Test the app
+        run: dotnet test app/Almatter.App.Tests/Almatter.App.Tests.csproj -c Debug
+
       # The csproj only copies the core's library when it finds it, so a
       # wrong file name there would still build — an app that cannot start.
       - name: Check the core sits next to the app
